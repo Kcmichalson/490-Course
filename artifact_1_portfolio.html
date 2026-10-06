@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Portfolio — Artifact 1</title>
+  <style>
+    /* ==========================================================================
+       1. Reset & Global Variables
+       ========================================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    :root {
+      --horizon-y: 46vh;
+      --card-orange: #ff5700;
+      --card-orange-glow: rgba(255, 87, 0, 0.55);
+      --sleeve-bg: #121319;
+      --sleeve-border: rgba(255, 255, 255, 0.12);
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #07070a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #fff;
+    }
+
+    /* ==========================================================================
+       2. Dynamic Background & Crimson Gradient System
+       ========================================================================== */
+    .bg-stage {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .bg-layer {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center top;
+      background-repeat: no-repeat;
+      opacity: 0;
+      transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .bg-layer.active {
+      opacity: 0.35; /* Balances the image visibility through the gradient */
+    }
+
+    .crimson-gradient-overlay {
+      position: absolute;
+      inset: 0;
+      background: 
+        radial-gradient(ellipse at 50% 35%, rgba(165, 14, 14, 0.55) 0%, rgba(30, 4, 8, 0.88) 72%),
+        linear-gradient(to bottom, rgba(40, 2, 8, 0.4) 0%, rgba(10, 0, 3, 0.96) 60%, #030305 100%);
+    }
+
+    /* ==========================================================================
+       3. Header & Navigation Controls
+       ========================================================================== */
+    .top-nav {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 18px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 50;
+    }
+
+    .course-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .course-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--card-orange);
+      box-shadow: 0 0 10px var(--card-orange);
+    }
+
+    .nav-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(10px);
+      color: #eee;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.18);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* ==========================================================================
+       4. Card Deck & Horizon Shelf
+       ========================================================================== */
+    .horizon-shelf {
+      position: absolute;
+      top: var(--horizon-y);
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      z-index: 20;
+    }
+
+    /* 1. Remove box-reflect from .card-deck */
+    .card-deck {
+      display: flex;
+      gap: 22px;
+      padding: 0 20px;
+    }
+
+    /* 2. Add the dynamic hardware-mirrored water unit */
+    .reflection-unit {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      transform-origin: 50% calc(100% + 3px);
+      transform: scaleY(-1);
+      opacity: 0.65;
+      filter: blur(0.6px);
+      z-index: 1;
+    }
+
+    /* Keep the reflection from catching cursor focus */
+    .reflection-unit * {
+      pointer-events: none !important;
+    }
+
+    
+
+    .artifact-slot {
+      position: relative;
+      width: 195px;
+      height: 115px;
+      cursor: pointer;
+    }
+
+    /* Dark Front Sleeve */
+    .sleeve {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, #181922 0%, #0d0e14 100%);
+      border: 1px solid var(--sleeve-border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      z-index: 4; /* Sits directly in front of tucked card */
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .artifact-slot:hover .sleeve {
+      border-color: rgba(255, 87, 0, 0.5);
+      box-shadow: 0 14px 35px rgba(0, 0, 0, 0.9), 0 0 15px rgba(255, 87, 0, 0.25);
+    }
+
+    /* Hidden Orange Inner Card (peeks out upon hover) */
+    .card {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 8px;
+      height: 250px;
+      background: linear-gradient(180deg, #ff691e 0%, var(--card-orange) 50%, #e04a00 100%);
+      border-radius: 10px 10px 6px 6px;
+      padding: 16px 14px;
+      box-sizing: border-box;
+      color: #fff;
+      z-index: 2; /* Sits inside/behind the sleeve */
+      opacity: 0;
+      transform: translateY(0);
+      transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.25), opacity 0.25s ease;
+      box-shadow: 0 0 35px var(--card-orange-glow);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    /* Card Slides Straight Up Out of the Bin */
+    .artifact-slot:hover .card {
+      opacity: 1;
+      transform: translateY(-145px);
+      pointer-events: auto;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 2px;
+      margin-bottom: 4px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .card-subtitle {
+      font-size: 11.5px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      opacity: 0.92;
+      line-height: 1.25;
+    }
+
+    .card-desc {
+      font-size: 11px;
+      line-height: 1.35;
+      margin-bottom: 12px;
+      opacity: 0.95;
+      flex-grow: 1;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+    }
+
+    .card-btn {
+      display: block;
+      width: 100%;
+      padding: 7px 0;
+      background: #ffffff;
+      color: #d84500;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-radius: 5px;
+      transition: background 0.15s ease, transform 0.1s ease;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-btn:hover {
+      background: #fff3ed;
+      transform: scale(1.02);
+    }
+
+    .artifact-slot:hover::before {
+      content: '';
+      position: absolute;
+      top: -295px;   /* Reaches the top edge of the elevated card */
+      bottom: 0;     /* Reaches the bottom edge of the sleeve */
+      left: -6px;    /* Slight horizontal buffer for diagonal mouse paths */
+      right: -6px;
+      z-index: 1;    /* Sits underneath the card and sleeve so clicks pass through */
+    }
+
+    /* ==========================================================================
+       5. Horizon Line & Water Body
+       ========================================================================== */
+    .water-line {
+      position: absolute;
+      top: calc(var(--horizon-y) + 116px);
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 5%, rgba(255, 87, 0, 0.4) 50%, transparent 95%);
+      z-index: 25;
+      pointer-events: none;
+    }
+
+    /* 3. Adjust water surface z-index so ripple scanlines tint the reflection */
+    .water-surface {
+      position: absolute;
+      top: calc(var(--horizon-y) + 117px);
+      left: 0;
+      width: 100%;
+      bottom: 0;
+      z-index: 22; /* Sits over the reflection to tint and ripple it */
+      background: linear-gradient(180deg, rgba(8, 2, 5, 0.25) 0%, rgba(2, 2, 4, 0.95) 85%);
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    /* Water Ripple scanlines overlay */
+    .water-ripples {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.4) 0px,
+        rgba(0, 0, 0, 0.4) 2px,
+        transparent 2px,
+        transparent 5px
+      );
+      opacity: 0.6;
+      animation: rippleDrift 8s linear infinite;
+    }
+
+    @keyframes rippleDrift {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(15px); }
+    }
+
+    /* ==========================================================================
+       6. Modals (About Me & Dev Log)
+       ========================================================================== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-content {
+      background: #14151e;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 580px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(255, 87, 0, 0.15);
+      animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalPop {
+      0% { transform: scale(0.94); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 22px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      color: #fff;
+    }
+
+    .modal-body {
+      padding: 22px 24px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .modal-body p {
+      margin-bottom: 14px;
+    }
+
+    .modal-body pre {
+      background: #090a0f;
+      padding: 14px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      color: #d1d5db;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       Background Layers:
+       Set data-bg on .artifact-slot to any image URL (e.g. 'spreadsheet.png')
+       ========================================================================== -->
+  <div class="bg-stage">
+    <div id="bgCurrent" class="bg-layer active"></div>
+    <div id="bgNext" class="bg-layer"></div>
+    <div class="crimson-gradient-overlay"></div>
+  </div>
+
+  <!-- Top Navigation -->
+  <header class="top-nav">
+    <div class="course-badge">
+      <div class="dot"></div>
+      <span>UWT AI Course • Fall 2026</span>
+    </div>
+    <div class="nav-actions">
+      <button class="nav-btn" id="btnDevLog">Dev Log (LOG.md)</button>
+      <button class="nav-btn" id="btnAbout">About Me</button>
+    </div>
+  </header>
+
+  <!-- Horizon Line & 5 Artifact Slots -->
+  <main class="horizon-shelf">
+    <div class="card-deck" id="cardDeck">
+
+      <!-- Artifact 1: Real Active Card -->
+      <div class="artifact-slot" data-bg="default">
+        <div class="card">
+          <div class="card-title">TITLE</div>
+          <div class="card-subtitle">Artifact 1: Portfolio</div>
+          <div class="card-desc">
+            A static course portfolio built with Gemini Flash Extended. Features interactive sliding sleeves, reactive liquid reflection, and dynamic background crossfades.
+          </div>
+          <a href="https://github.com" class="card-btn" target="_blank" rel="noopener">Inspect</a>
+        </div>
+        <div class="sleeve">Artifact 1</div>
+      </div>
+
+      <!-- Artifact 2: Placeholder -->
+      <div class="artifact-slot" data-bg="idea2">
+        <div class="card">
+          <div class="card-title">TITLE</div>
+          <div class="card-subtitle">Artifact 2: Something You Will Use</div>
+          <div class="card-desc">
+            A local transit notification bot polling Puget Sound commuter schedules to alert study groups of late arrivals in real time.
+          </div>
+          <a href="#" class="card-btn">Inspect</a>
+        </div>
+        <div class="sleeve">Artifact 2</div>
+      </div>
+
+      <!-- Artifact 3: Placeholder -->
+      <div class="artifact-slot" data-bg="idea3">
+        <div class="card">
+          <div class="card-title">TITLE</div>
+          <div class="card-subtitle">Artifact 3: AI Inside It</div>
+          <div class="card-desc">
+            An in-browser code diff reasoning tool highlighting edge cases and regression vulnerabilities using lightweight LLM completions.
+          </div>
+          <a href="#" class="card-btn">Inspect</a>
+        </div>
+        <div class="sleeve">Artifact 3</div>
+      </div>
+
+      <!-- Artifact 4: Placeholder -->
+      <div class="artifact-slot" data-bg="idea4">
+        <div class="card">
+          <div class="card-title">TITLE</div>
+          <div class="card-subtitle">Artifact 4: For Someone Else</div>
+          <div class="card-desc">
+            A high-contrast, tactile point-of-sale receipt organizer and calculator designed specifically for a local family business.
+          </div>
+          <a href="#" class="card-btn">Inspect</a>
+        </div>
+        <div class="sleeve">Artifact 4</div>
+      </div>
+
+      <!-- Artifact 5: Placeholder -->
+      <div class="artifact-slot" data-bg="idea5">
+        <div class="card">
+          <div class="card-title">TITLE</div>
+          <div class="card-subtitle">Artifact 5: The Moonshot</div>
+          <div class="card-desc">
+            An infinite spatial simulation canvas where autonomous agents coordinate multi-turn simulation games with live telemetry.
+          </div>
+          <a href="#" class="card-btn">Inspect</a>
+        </div>
+        <div class="sleeve">Artifact 5</div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Water Surface & Animated Horizon Line -->
+  <div class="water-line"></div>
+  <div class="water-surface">
+    <div class="water-ripples"></div>
+  </div>
+
+  <!-- About Me Modal -->
+  <div class="modal-backdrop" id="modalAbout">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>About Me</h2>
+        <button class="modal-close" data-close="modalAbout">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Hello! I am an undergraduate Computer Science & Systems student at the University of Washington Tacoma.
+        </p>
+        <p>
+          This portfolio tracks my progress across five core artifacts created throughout the quarter, focusing on pragmatic AI engineering, interactive UI systems, and purposeful software tooling.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dev Log Modal -->
+  <div class="modal-backdrop" id="modalDevLog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Development Log (LOG.md)</h2>
+        <button class="modal-close" data-close="modalDevLog">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre># Artifact 1 Log
+- Selected Model: Gemini 2.5 Flash with Extended Thinking (Free Web Chat).
+- Iteration 1: Generated initial static layout. Identified cards were permanently extended and shelf was positioned too low on screen.
+- Iteration 2: Re-anchored shelf to 46vh to provide equal stage space for upward card movement and downward water reflection.
+- Iteration 3: Rebuilt slot stacking (sleeve z-index: 4, card z-index: 2) so cards slide smoothly out of the bins on hover.
+- Iteration 4: Added dynamic background crossfading system across hover states.</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       JavaScript: Background Crossfade & Modal Controllers
+       ========================================================================== -->
+  <script>
+    // Embedded SVG spreadsheet data URI (displays right away without external assets)
+    const DEFAULT_SPREADSHEET_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700"><rect width="1200" height="700" fill="%231a1a24"/><g stroke="%232e3044" stroke-width="1">${Array.from({length: 30}, (_, i) => `<line x1="0" y1="${i * 24}" x2="1200" y2="${i * 24}" />`).join('')}${Array.from({length: 12}, (_, i) => `<line x1="${i * 105}" y1="0" x2="${i * 105}" y2="700" />`).join('')}</g><text x="20" y="16" fill="%236e7290" font-family="monospace" font-size="11">A1: Date | B1: Category | C1: Expense | D1: Currency | E1: Amount | F1: Notes</text></svg>`;
+
+    // Mapping for card hover background images
+    // Replace these with your own filenames (e.g., 'spreadsheet.png', 'my_image.jpg')
+    const BG_IMAGES = {
+      default: DEFAULT_SPREADSHEET_SVG,
+      idea2: DEFAULT_SPREADSHEET_SVG,
+      idea3: DEFAULT_SPREADSHEET_SVG,
+      idea4: DEFAULT_SPREADSHEET_SVG,
+      idea5: DEFAULT_SPREADSHEET_SVG
+    };
+
+    function setupCardReflections() {
+      document.querySelectorAll('.artifact-slot').forEach(slot => {
+        if (slot.querySelector('.reflection-unit')) return;
+
+        const reflectUnit = document.createElement('div');
+        reflectUnit.className = 'reflection-unit';
+        reflectUnit.innerHTML = slot.innerHTML;
+        slot.appendChild(reflectUnit);
+      });
+    }
+    setupCardReflections();
+
+    const currentLayer = document.getElementById('bgCurrent');
+    const nextLayer = document.getElementById('bgNext');
+    let activeKey = 'default';
+
+    // Set initial spreadsheet background
+    currentLayer.style.backgroundImage = `url('${BG_IMAGES.default}')`;
+
+    function transitionBg(key) {
+      if (key === activeKey) return;
+      const targetUrl = BG_IMAGES[key] || BG_IMAGES.default;
+
+      nextLayer.style.backgroundImage = `url('${targetUrl}')`;
+      nextLayer.classList.add('active');
+
+      setTimeout(() => {
+        currentLayer.style.backgroundImage = `url('${targetUrl}')`;
+        nextLayer.classList.remove('active');
+        activeKey = key;
+      }, 550);
+    }
+
+    // Attach hover events to artifact slots
+    document.querySelectorAll('.artifact-slot').forEach(slot => {
+      slot.addEventListener('mouseenter', () => {
+        const bgKey = slot.getAttribute('data-bg');
+        transitionBg(bgKey);
+      });
+    });
+
+    document.getElementById('cardDeck').addEventListener('mouseleave', () => {
+      transitionBg('default');
+    });
+
+    // Modal Controller
+    function setupModal(triggerId, modalId) {
+      const trigger = document.getElementById(triggerId);
+      const modal = document.getElementById(modalId);
+      if (!trigger || !modal) return;
+
+      trigger.addEventListener('click', () => modal.classList.add('open'));
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal || e.target.getAttribute('data-close') === modalId) {
+          modal.classList.remove('open');
+        }
+      });
+    }
+
+    setupModal('btnAbout', 'modalAbout');
+    setupModal('btnDevLog', 'modalDevLog');
+  </script>
+</body>
+</html>

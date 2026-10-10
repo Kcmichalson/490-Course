@@ -1,3 +1,10 @@
+<!--
+ * TCSS 490 Generative AI and Software Development
+ * Artifact 1: Course Portfolio Hub
+ * 
+ * Author: Kevin Michalson
+ * Version: Autumn 2026
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -687,37 +694,59 @@ As emphasized in TCSS 490, senior engineering involves deciding what can remain 
       idea5: DEFAULT_SPREADSHEET_SVG
     };
 
+    /**
+     * Clones the DOM content of each artifact slot into an inverted reflection unit
+     * to allow real-time CSS scaleY mirroring in the lower water deck.
+     *
+     * @author Kevin Michalson
+     * @version Autumn 2026
+     */
     function setupCardReflections() {
-      document.querySelectorAll('.artifact-slot').forEach(slot => {
-        if (slot.querySelector('.reflection-unit')) return;
+        const slotList = document.querySelectorAll('.artifact-slot');
 
-        const reflectUnit = document.createElement('div');
-        reflectUnit.className = 'reflection-unit';
-        reflectUnit.innerHTML = slot.innerHTML;
-        slot.appendChild(reflectUnit);
-      });
+        slotList.forEach(theSlot => {
+            if (!theSlot.querySelector('.reflection-unit')) {
+                const reflectUnit = document.createElement('div');
+                reflectUnit.className = 'reflection-unit';
+                reflectUnit.setAttribute('aria-hidden', 'true');
+                reflectUnit.innerHTML = theSlot.innerHTML;
+
+                // Strip tab focus from mirrored buttons
+                reflectUnit.querySelectorAll('button, a').forEach(theInteractiveEl => {
+                    theInteractiveEl.setAttribute('tabindex', '-1');
+                });
+
+                theSlot.appendChild(reflectUnit);
+            }
+        });
     }
     setupCardReflections();
 
     const currentLayer = document.getElementById('bgCurrent');
     const nextLayer = document.getElementById('bgNext');
-    let activeKey = 'default';
+    let myActiveKey = 'default';
 
     // Set initial spreadsheet background
     currentLayer.style.backgroundImage = `url('${BG_IMAGES.default}')`;
 
-    function transitionBg(key) {
-      if (key === activeKey) return;
-      const targetUrl = BG_IMAGES[key] || BG_IMAGES.default;
+    /**
+     * Executes a smooth crossfade transition between background image layers.
+     *
+     * @param theKey The identifier for the background image in BG_IMAGES.
+     */
+    function transitionBg(theKey) {
+        if (theKey !== myActiveKey) {
+            const targetUrl = BG_IMAGES[theKey] || BG_IMAGES.default;
 
-      nextLayer.style.backgroundImage = `url('${targetUrl}')`;
-      nextLayer.classList.add('active');
+            nextLayer.style.backgroundImage = `url('${targetUrl}')`;
+            nextLayer.classList.add('active');
 
-      setTimeout(() => {
-        currentLayer.style.backgroundImage = `url('${targetUrl}')`;
-        nextLayer.classList.remove('active');
-        activeKey = key;
-      }, 550);
+            setTimeout(() => {
+                currentLayer.style.backgroundImage = `url('${targetUrl}')`;
+                nextLayer.classList.remove('active');
+                myActiveKey = theKey;
+            }, 550);
+        }
     }
 
     // Attach hover events to artifact slots
@@ -732,25 +761,34 @@ As emphasized in TCSS 490, senior engineering involves deciding what can remain 
       transitionBg('default');
     });
 
-    // Modal Controller
-    function setupModal(triggerId, modalId) {
-      const trigger = document.getElementById(triggerId);
-      const modal = document.getElementById(modalId);
-      if (!trigger || !modal) return;
+    /**
+     * Binds click listeners to open and close a modal dialog element.
+     *
+     * @param theTriggerId The element ID of the button that opens the modal.
+     * @param theModalId The element ID of the modal backdrop container.
+     */
+    function setupModal(theTriggerId, theModalId) {
+        const triggerElement = document.getElementById(theTriggerId);
+        const modalElement = document.getElementById(theModalId);
 
-      trigger.addEventListener('click', () => modal.classList.add('open'));
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal || e.target.getAttribute('data-close') === modalId) {
-          modal.classList.remove('open');
+        if (triggerElement && modalElement) {
+            triggerElement.addEventListener('click', () => {
+                modalElement.classList.add('open');
+            });
+
+            modalElement.addEventListener('click', theEvent => {
+                const isBackdrop = theEvent.target === modalElement;
+                const isCloseBtn = theEvent.target.getAttribute('data-close') === theModalId;
+                if (isBackdrop || isCloseBtn) {
+                    modalElement.classList.remove('open');
+                }
+            });
         }
-      });
     }
 
     
 
-    setupModal('btnAbout', 'modalAbout');
-    setupModal('btnDevLog', 'modalDevLog');
-    setupInspectModal();
+    
 
     // Centralized artifact details and reflections
     const ARTIFACT_DATA = {
@@ -758,7 +796,7 @@ As emphasized in TCSS 490, senior engineering involves deciding what can remain 
         title: "Artifact 1: Portfolio",
         desc: "A static, responsive front-end portfolio site hosting interactive cards for the 5 course projects.",
         reflection: "Built using Gemini 2.5 Flash Extended. I learned how to iteratively prompt for complex CSS layouts, debugged WebKit reflection clipping using CSS scaleY(-1) mirroring, and resolved hover hit-test dropouts using a pseudo-element bridge.",
-        link: "https://github.com/Kcmichalson/TCSS490-AI-Course"
+        link: "https://github.com/Kcmichalson/490-Course"
       },
       2: {
         title: "Artifact 2: Something You Will Use",
@@ -786,37 +824,53 @@ As emphasized in TCSS 490, senior engineering involves deciding what can remain 
       }
     };
 
+    /**
+     * Configures the floating inspection modal to populate with metadata
+     * corresponding to whichever artifact card was clicked.
+     *
+     * @author Kevin Michalson
+     * @version Autumn 2026
+     */
     function setupInspectModal() {
-    const modal = document.getElementById('modalInspect');
-    if (!modal) return;
+        const modalElement = document.getElementById('modalInspect');
 
-    // 1. Open modal on "Inspect" button click
-    document.querySelectorAll('.inspect-trigger').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const artifactId = btn.getAttribute('data-artifact');
-        const data = ARTIFACT_DATA[artifactId];
-        if (!data) return;
+        if (modalElement) {
+            const inspectButtons = document.querySelectorAll('.inspect-trigger');
 
-        document.getElementById('inspectTitle').textContent = data.title;
-        document.getElementById('inspectDesc').textContent = data.desc;
-        document.getElementById('inspectReflection').textContent = data.reflection;
-        
-        const linkEl = document.getElementById('inspectLink');
-        linkEl.href = data.link;
-        linkEl.style.display = data.link === '#' ? 'none' : 'inline-block';
+            inspectButtons.forEach(theButton => {
+                theButton.addEventListener('click', theEvent => {
+                    theEvent.stopPropagation();
+                    const artifactId = theButton.getAttribute('data-artifact');
+                    const artifactRecord = ARTIFACT_DATA[artifactId];
 
-        modal.classList.add('open');
-      });
-    });
+                    if (artifactRecord) {
+                        document.getElementById('inspectTitle').textContent = artifactRecord.title;
+                        document.getElementById('inspectDesc').textContent = artifactRecord.desc;
+                        document.getElementById('inspectReflection').textContent = artifactRecord.reflection;
 
-    // 2. Close modal when clicking the 'X' button or backdrop
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal || e.target.closest('.modal-close')) {
-        modal.classList.remove('open');
-      }
-    });
-  }
+                        const linkElement = document.getElementById('inspectLink');
+                        linkElement.href = artifactRecord.link;
+                        linkElement.style.display = artifactRecord.link === '#' ? 'none' : 'inline-block';
+
+                        modalElement.classList.add('open');
+                    }
+                });
+            });
+
+            modalElement.addEventListener('click', theEvent => {
+                const isBackdrop = theEvent.target === modalElement;
+                const isCloseBtn = theEvent.target.closest('.modal-close');
+                if (isBackdrop || isCloseBtn) {
+                    modalElement.classList.remove('open');
+                }
+            });
+        }
+    }
+
+    setupModal('btnAbout', 'modalAbout');
+    setupModal('btnDevLog', 'modalDevLog');
+    setupInspectModal();
+    
   </script>
 </body>
 </html>

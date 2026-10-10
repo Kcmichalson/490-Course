@@ -867,6 +867,14 @@ As emphasized in TCSS 490, senior engineering involves deciding what can remain 
         }
     }
 
+    document.addEventListener('keydown', theEvent => {
+        if (theEvent.key === 'Escape') {
+            document.querySelectorAll('.modal-backdrop.open').forEach(theModal => {
+                theModal.classList.remove('open');
+            });
+        }
+    });
+
     setupModal('btnAbout', 'modalAbout');
     setupModal('btnDevLog', 'modalDevLog');
     setupInspectModal();

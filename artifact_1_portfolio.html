@@ -162,14 +162,15 @@
 
     
 
+    /* 1. Change cursor to default on the container */
     .artifact-slot {
       position: relative;
       width: 195px;
       height: 115px;
-      cursor: pointer;
+      cursor: default; /* Changed from pointer */
     }
 
-    /* Dark Front Sleeve */
+    /* 2. Reset sleeve cursor */
     .sleeve {
       position: absolute;
       inset: 0;
@@ -183,9 +184,10 @@
       font-size: 16px;
       font-weight: 600;
       letter-spacing: 0.5px;
-      z-index: 4; /* Sits directly in front of tucked card */
+      z-index: 4;
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
       transition: border-color 0.25s ease, box-shadow 0.25s ease;
+      cursor: default; /* Changed from pointer */
     }
 
     .artifact-slot:hover .sleeve {
@@ -254,6 +256,7 @@
       -webkit-box-orient: vertical;
     }
 
+    /* 3. Strip button bevel borders and assign hand pointer */
     .card-btn {
       display: block;
       width: 100%;
@@ -266,6 +269,10 @@
       text-transform: uppercase;
       letter-spacing: 1px;
       border-radius: 5px;
+      border: none;        /* Removes harsh bevel border */
+      outline: none;       /* Removes focus outline */
+      cursor: pointer;     /* Shows pointing hand only on the button */
+      font-family: inherit;
       transition: background 0.15s ease, transform 0.1s ease;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     }
@@ -451,12 +458,12 @@
       <!-- Artifact 1: Real Active Card -->
       <div class="artifact-slot" data-bg="default">
         <div class="card">
-          <div class="card-title">TITLE</div>
+          <div class="card-title">Portfolio</div>
           <div class="card-subtitle">Artifact 1: Portfolio</div>
           <div class="card-desc">
-            A static course portfolio built with Gemini Flash Extended. Features interactive sliding sleeves, reactive liquid reflection, and dynamic background crossfades.
+            A static, front-end portfolio site hosting cards for the 5 course projects.
           </div>
-          <a href="https://github.com" class="card-btn" target="_blank" rel="noopener">Inspect</a>
+          <button class="card-btn inspect-trigger" data-artifact="1">Inspect</button>
         </div>
         <div class="sleeve">Artifact 1</div>
       </div>
@@ -467,9 +474,9 @@
           <div class="card-title">TITLE</div>
           <div class="card-subtitle">Artifact 2: Something You Will Use</div>
           <div class="card-desc">
-            A local transit notification bot polling Puget Sound commuter schedules to alert study groups of late arrivals in real time.
+            A small, functional tool that will be useful after the week ends. Perhaps a tool to help me keep track of my long-term goals and compartmentalize it into easier objectives.
           </div>
-          <a href="#" class="card-btn">Inspect</a>
+          <button class="card-btn inspect-trigger" data-artifact="2">Inspect</button>
         </div>
         <div class="sleeve">Artifact 2</div>
       </div>
@@ -480,9 +487,9 @@
           <div class="card-title">TITLE</div>
           <div class="card-subtitle">Artifact 3: AI Inside It</div>
           <div class="card-desc">
-            An in-browser code diff reasoning tool highlighting edge cases and regression vulnerabilities using lightweight LLM completions.
+            A system where an AI model acts as an active component every time the application runs. Maybe something that can read my current position in a strategy game and give advice?
           </div>
-          <a href="#" class="card-btn">Inspect</a>
+          <button class="card-btn inspect-trigger" data-artifact="3">Inspect</button>
         </div>
         <div class="sleeve">Artifact 3</div>
       </div>
@@ -493,9 +500,9 @@
           <div class="card-title">TITLE</div>
           <div class="card-subtitle">Artifact 4: For Someone Else</div>
           <div class="card-desc">
-            A high-contrast, tactile point-of-sale receipt organizer and calculator designed specifically for a local family business.
+            A collaborative project built with teammates for an external user. Maybe a tool for an RSO or for someone's research?
           </div>
-          <a href="#" class="card-btn">Inspect</a>
+          <button class="card-btn inspect-trigger" data-artifact="4">Inspect</button>
         </div>
         <div class="sleeve">Artifact 4</div>
       </div>
@@ -506,9 +513,9 @@
           <div class="card-title">TITLE</div>
           <div class="card-subtitle">Artifact 5: The Moonshot</div>
           <div class="card-desc">
-            An infinite spatial simulation canvas where autonomous agents coordinate multi-turn simulation games with live telemetry.
+            A multiplayer mod for a popular strategy game that does not natively have multiplayer support.
           </div>
-          <a href="#" class="card-btn">Inspect</a>
+          <button class="card-btn inspect-trigger" data-artifact="5">Inspect</button>
         </div>
         <div class="sleeve">Artifact 5</div>
       </div>
@@ -548,12 +555,117 @@
         <button class="modal-close" data-close="modalDevLog">&times;</button>
       </div>
       <div class="modal-body">
-        <pre># Artifact 1 Log
-- Selected Model: Gemini 2.5 Flash with Extended Thinking (Free Web Chat).
-- Iteration 1: Generated initial static layout. Identified cards were permanently extended and shelf was positioned too low on screen.
-- Iteration 2: Re-anchored shelf to 46vh to provide equal stage space for upward card movement and downward water reflection.
-- Iteration 3: Rebuilt slot stacking (sleeve z-index: 4, card z-index: 2) so cards slide smoothly out of the bins on hover.
-- Iteration 4: Added dynamic background crossfading system across hover states.</pre>
+        <pre># TCSS 490 Artifact 1: Development Log (LOG.md)
+
+**Project:** Artifact 1 — Portfolio Hub  
+**Course:** TCSS 490: Generative AI and Software Development (Autumn 2026)  
+**Instructors:** Dr. Chris Marriott & Charles Bryan  
+**Student:** Kevin Michalson  
+**AI Assistant:** Gemini 2.5 Flash with Extended Thinking (Free Web Chat)  
+
+---
+
+## 1. Project Overview & Constraints
+The goal of Artifact 1 is to build a static front-end portfolio site serving as the persistent submission hub for all five course artifacts. 
+Constraints observed:
+- Zero backend dependencies (pure HTML, CSS, and vanilla JavaScript).
+- Constructed using a free web chat AI prior to receiving course Claude Code access in Week 2.
+- 5 artifact cards: Card 1 active and populated with this build, Cards 2–5 populated with brainstorming placeholders.
+- Deployed publicly on GitHub Pages with an active development log.
+
+---
+
+## 2. Iterative Prompting & Development History
+
+### Prompt 1: Course Validation & Static Architecture
+* **What I Asked:**
+  Provided the complete TCSS 490 Artifact 1 assignment brief. Asked whether Gemini Flash Extended is free and meets the course requirements for Week 1.
+* **What the AI Provided:**
+  Confirmed Gemini Flash Extended meets the free web chat requirement. Suggested a zero-dependency static stack (`index.html`, `styles.css`) for seamless GitHub Pages deployment and outlined semantic card components.
+
+### Prompt 2: UI Concept & Visual Mockup Translation
+* **What I Asked:**
+  Provided a custom graphical mockup (`Untitled.jpg`) detailing:
+  - Background cosmetic effect: A translucent crimson gradient over a background spreadsheet image.
+  - 5 dark artifact bins arranged across a horizontal shelf.
+  - Interactive cards sliding straight up out of their bins on hover.
+  - A reflective water surface below reflecting the bins, sliding cards, and cosmetic effects.
+  - Requested an "About Me" modal button in the top right.
+* **What the AI Provided:**
+  A first single-file layout attempting SVG turbulence filters and basic CSS structure.
+
+### Prompt 3: Layout Correction & State Management
+* **Where the Model Misread Me:**
+  - The model rendered all 5 orange cards permanently extended above the bins rather than hidden inside.
+  - The shelf was placed too close to the bottom of the viewport, pushing the water reflection off-screen.
+  - The spreadsheet was hardcoded into DOM markup rather than configured as a swappable background image.
+* **What I Asked:**
+  Course-corrected the AI with a browser screenshot. Clarified that cards must remain hidden inside the sleeves until hovered, the spreadsheet must be an image layer under the gradient that can crossfade between cards, and the water reflection must be visible.
+* **What the AI Provided:**
+  - Re-anchored the horizon shelf at `46vh`–`48vh`, splitting viewport space evenly between the upward card slide and downward liquid reflection.
+  - Implemented sleeve/card pocket stacking (`z-index: 4` on sleeve, `z-index: 2` on card, `opacity: 0`, and `translateY: 0` at rest).
+  - Built an image crossfade engine using two absolute layers (`#bgCurrent` and `#bgNext`) transitioning opacity on hover.
+  - Generated an inline SVG spreadsheet data URI so the background works out of the box without external assets.
+
+### Prompt 4: Diagnosing Reflection Clipping on Animated Elements
+* **Where the Model Misread Me / Browser Bug:**
+  On hover, the orange card slid upward, but the water reflection below only showed the static dark sleeve; the sliding card did not mirror into the water.
+* **Root Cause Analysis:**
+  Chromium calculates `-webkit-box-reflect` bounds strictly from `.card-deck`'s static layout box (115px). When a child translates upward (`translateY(-145px)`), Blink does not recompute box bounds for CSS transforms, clipping the reflection entirely.
+* **What I Asked:**
+  Reported that cards fail to reflect in the water when hovered and asked for a fix.
+* **What the AI Provided:**
+  - Replaced `-webkit-box-reflect` with a hardware-accelerated CSS mirroring system: a `.reflection-unit` styled with `transform-origin: 50% calc(100% + 3px)` and `transform: scaleY(-1)`.
+  - Added a JavaScript method (`setupCardReflections()`) that dynamically clones each slot's DOM tree into `.reflection-unit`. Because CSS transforms compound on nested mirrored elements, lifting the card up by `-145px` automatically drives its mirrored twin down by `+145px` into the water in lockstep.
+
+### Prompt 5: Resolving the Hover Hit-Test Gap
+* **Bug Encountered:**
+  When moving the cursor upward from the sleeve toward the rising card, the card immediately dropped back down into the bin.
+* **Root Cause Analysis:**
+  Lifting the card by `-145px` created a 38px empty layout gap between the top of the sleeve and the bottom of the card. Moving the cursor across this empty gap caused the browser to lose `:hover` focus on the container.
+* **What I Asked:**
+  Asked for a "sticky" bounding box that keeps the card elevated while moving the cursor across the gap between the sleeve and the card.
+* **What the AI Provided:**
+  Implemented a CSS pseudo-element hover bridge (`.artifact-slot:hover::before`) covering `top: -285px` down to `bottom: 0`. This maintained continuous pointer hit-testing without adding heavy JavaScript mouse-move listeners.
+
+### Prompt 6: Modals for Reflections & Rubric Audit
+* **What I Asked:**
+  Noticed the card was getting cramped with both description and reflection text. Asked to move reflections into a floating inspection modal triggered by the "Inspect" button.
+* **What the AI Provided:**
+  - Separated card summary copy from full reflection text via a centralized `ARTIFACT_DATA` JavaScript object.
+  - Created a shared inspection modal (`#modalInspect`) populated dynamically on click.
+  - Normalized `<button>` styles (`border: none; outline: none; cursor: pointer;`) and reset container cursors to `default`.
+
+---
+
+## 3. Reflection & Course Learning Objectives
+
+### LO 1: Select and Configure AI Coding Tools
+Using Gemini 2.5 Flash Extended in web chat enabled rapid iteration of visual concepts, CSS gradients, and DOM structures without the friction of complex build tooling. However, the model regularly defaulted to standard API patterns (such as `-webkit-box-reflect` or simple hover states) that broke down under non-standard spatial animations. High-quality output required giving the model precise constraints and challenging its initial structural assumptions.
+
+### LO 5: Apply Just-in-Time Learning Strategies
+Diagnosing why WebKit failed to mirror the transformed cards required investigating browser layout tree mechanics and hardware compositing. Similarly, solving the hover dropout issue with an invisible CSS pseudo-element (`::before`) demonstrated that deep CSS fundamentals often provide cleaner, more performant solutions than adding complex JavaScript state listeners.
+
+### Senior Engineering Boundaries ("The Edge of Understanding")
+As emphasized in TCSS 490, senior engineering involves deciding what can remain an intentional black box versus what must be thoroughly understood. While SVG ripple math and linear gradient color stops could safely be delegated to the AI, the DOM hierarchy, stacking contexts (`z-index`), event bubbling, and hit-testing zones required strict architectural control to prevent brittle UI regressions.</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Artifact Inspection Modal -->
+  <div class="modal-backdrop" id="modalInspect">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="inspectTitle">Artifact Details</h2>
+        <button class="modal-close" data-close="modalInspect">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="inspectDesc"></p>
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-top: 18px; margin-bottom: 6px; color: var(--card-orange);">Reflection & Takeaways</h3>
+        <p id="inspectReflection" style="white-space: pre-line;"></p>
+        <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);">
+          <a id="inspectLink" href="#" target="_blank" rel="noopener" class="nav-btn" style="display: inline-block; text-decoration: none;">Open Repository &rarr;</a>
+        </div>
       </div>
     </div>
   </div>
@@ -634,8 +746,77 @@
       });
     }
 
+    
+
     setupModal('btnAbout', 'modalAbout');
     setupModal('btnDevLog', 'modalDevLog');
+    setupInspectModal();
+
+    // Centralized artifact details and reflections
+    const ARTIFACT_DATA = {
+      1: {
+        title: "Artifact 1: Portfolio",
+        desc: "A static, responsive front-end portfolio site hosting interactive cards for the 5 course projects.",
+        reflection: "Built using Gemini 2.5 Flash Extended. I learned how to iteratively prompt for complex CSS layouts, debugged WebKit reflection clipping using CSS scaleY(-1) mirroring, and resolved hover hit-test dropouts using a pseudo-element bridge.",
+        link: "https://github.com/Kcmichalson/TCSS490-AI-Course"
+      },
+      2: {
+        title: "Artifact 2: Something You Will Use",
+        desc: "A small, functional tool that will be useful after the week ends. Perhaps a tool to help me keep track of my long-term goals and compartmentalize it into easier objectives.",
+        reflection: "Placeholder idea. Built in Week 2 using Claude Code.",
+        link: "#"
+      },
+      3: {
+        title: "Artifact 3: AI Inside It",
+        desc: "A system where an AI model acts as an active component every time the application runs. Maybe something that can read my current position in a strategy game and give advice?",
+        reflection: "Placeholder idea.",
+        link: "#"
+      },
+      4: {
+        title: "Artifact 4: For Someone Else",
+        desc: "A collaborative project built with teammates for an external user. Maybe a tool for an RSO or for someone's research?",
+        reflection: "Placeholder idea.",
+        link: "#"
+      },
+      5: {
+        title: "Artifact 5: The Moonshot",
+        desc: "A multiplayer mod for a popular strategy game that does not natively have multiplayer support.",
+        reflection: "Placeholder idea.",
+        link: "#"
+      }
+    };
+
+    function setupInspectModal() {
+    const modal = document.getElementById('modalInspect');
+    if (!modal) return;
+
+    // 1. Open modal on "Inspect" button click
+    document.querySelectorAll('.inspect-trigger').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const artifactId = btn.getAttribute('data-artifact');
+        const data = ARTIFACT_DATA[artifactId];
+        if (!data) return;
+
+        document.getElementById('inspectTitle').textContent = data.title;
+        document.getElementById('inspectDesc').textContent = data.desc;
+        document.getElementById('inspectReflection').textContent = data.reflection;
+        
+        const linkEl = document.getElementById('inspectLink');
+        linkEl.href = data.link;
+        linkEl.style.display = data.link === '#' ? 'none' : 'inline-block';
+
+        modal.classList.add('open');
+      });
+    });
+
+    // 2. Close modal when clicking the 'X' button or backdrop
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal || e.target.closest('.modal-close')) {
+        modal.classList.remove('open');
+      }
+    });
+  }
   </script>
 </body>
 </html>

@@ -728,9 +728,12 @@ today with M2a.
   (`Object.is`).
 - PASS Node tests 63/63 after these fixes, then 64/64 after the
   auto-sea-level fix.
+- PASS EU4 re-check after the auto-sea-level fix (verified by me, by eye):
+  with Auto sea level, northern France reads 34 m, matching my manual sea
+  level. The Dutch coast reading wasn't reported (my message had a
+  placeholder there). Coastlines look unchanged.
 - M2a complete: every checklist item passes, including both SPEC M2a
-  checks (item 1 and item 7, the latter after the auto-sea-level fix; I
-  haven't re-checked EU4 by eye since that fix).
+  checks (item 1, and item 7 re-checked after the fix).
 
 **By-eye checklist (in my browser at ~1280 px, http://127.0.0.1:8000)**
 1. File > Import Map Image… → `gebco_bathy_BW_heightmap.png`. It
@@ -757,8 +760,6 @@ today with M2a.
    fits.
 
 **Next**
-- Quick by-eye re-check: EU4 with Auto sea level, a northern France coast
-  should now read close to 0 m.
 - Plan M2b (edits layer vs. Reload and Map settings decided there). Not
   started.
 
@@ -812,7 +813,15 @@ today with M2a.
 * **Root Cause Discovered:**  
   The original auto rule (darkest + 1) assumed land starts right above the ocean gray. EU4 has empty gray levels in between, so every land pixel was lifted by the size of the gap.
 * **How It Was Verified:**  
-  Node tests 64/64 (new: ocean 40, land from 94 → sea level 94, lowest land ~0 m). Not yet re-checked by eye on EU4 since the fix (listed under Next).
+  Node tests 64/64 (new: ocean 40, land from 94 → sea level 94, lowest land ~0 m). Re-checked by eye on EU4 in Prompt 6.
+
+### Prompt 6
+* **User Prompt:**  
+  > *"EU4 re-check after the Auto fix: with Auto sea level, northern France reads 34 m and the Dutch coast reads [your number] m, matching my manual fix. Coastlines look unchanged. Record it in LOG.md as verified by me."*
+* **What the AI Provided:**  
+  Recorded the re-check as verified by me: northern France at 34 m, coastlines unchanged. The Dutch coast value was a placeholder, so it's noted as not reported rather than filled in. Removed the re-check from Next.
+* **How It Was Verified:**  
+  By me, by eye, on the EU4 heightmap with Auto sea level.
 
 ---
 

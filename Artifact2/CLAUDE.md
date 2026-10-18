@@ -12,9 +12,11 @@ personal worldbuilding tool, and I'm the only user.
 - The simulation runs in a Web Worker so the UI never freezes
 - Prefer no dependencies. If one is truly needed (e.g., a 16-bit PNG decoder),
   vendor it into lib/ and record why in LOG.md
-- Run locally (from Artifact2/): `py -m http.server 8000 --bind 127.0.0.1`,
-  then open http://127.0.0.1:8000. `--bind 127.0.0.1` keeps the dev server
-  reachable only from this computer. On this Windows machine `python3` is the
+- Run locally: `py serve.py` (from Artifact2/), then open
+  http://127.0.0.1:8000. serve.py (standard library only) binds to
+  127.0.0.1 so the dev server is reachable only from this computer, sends
+  `Cache-Control: no-store` so the browser never runs stale code, and serves
+  `.js` as `text/javascript`. On this Windows machine `python3` is the
   Microsoft Store stub; use `py` (or `python`)
 - Tests: `node --test "tests/*.test.js"` (sim code is pure, so it runs in
   Node; Node 22+ no longer accepts a bare directory like `tests/`). Name test
@@ -65,6 +67,10 @@ the main branch at https://kcmichalson.github.io/490-Course/Artifact2/
 - Pixel ↔ lat/lon math lives in src/sim/coords.js; use it everywhere instead
   of re-deriving it
 - Every slider gets a number input beside it for exact values
+- All UI colors are CSS variables in one place: the `:root` block at the top
+  of style.css. Canvas code reads them through src/render/theme.js. No
+  hard-coded UI colors elsewhere. (Map-mode data palettes, such as Köppen
+  colors, live with their mode renderers.)
 - Units: elevation in meters (ocean negative), temperature in °C,
   precipitation in mm/month, tidal range in meters, distances in km
 - Vectors: u > 0 = toward east, v > 0 = toward NORTH. Screen y points down,
@@ -76,10 +82,25 @@ the main branch at https://kcmichalson.github.io/490-Course/Artifact2/
 
 ## Workflow rules
 - Work one milestone at a time, in SPEC.md order. The app must run after each
+- Scope: build only what the milestone lists. Suggest extras in the plan
+  instead of adding them
 - Plan before coding each milestone; list ambiguities instead of guessing
+- Never infer names, URLs, dates, or facts about me or the course (repo
+  names, links, deadlines, what I did or think); ask
 - After each milestone: run tests, do that milestone's verification checks,
   update LOG.md (planned / changed / problems / checks), then stop and
   suggest a commit message
+- Every milestone's verification includes a visual pass at a ~1280 px wide
+  window: nothing clipped, nothing covering labels or controls
+- If the browser preview stalls (hidden pane, frames not running, stale
+  code), stop and ask me to bring the pane forward or reload before trying
+  workarounds
+- Keep a prompt log in LOG.md for every session (format: "Session 1 prompt
+  log"). For each of my prompts, including answers to multiple-choice
+  questions and messages sent mid-task: quote it (condense long pastes into
+  [brackets]), say what you provided, note honestly where you misread me and
+  any root causes found, and add a "How It Was Verified" line for every fix.
+  Update it before ending a turn that changed files
 - Git: I commit and push myself with GitHub Desktop. Don't run git commands
   (no commits, branches, resets, or pushes) unless I ask
 - When I need to check something in the browser, start the local server

@@ -6,16 +6,15 @@
 import { visibleCopies } from './viewport.js';
 import { simCellBounds, sourceToSimCell } from '../sim/coords.js';
 import { drawGraticule } from './graticule.js';
+import { readTheme } from './theme.js';
 
 const OVERLAY_DRAWERS = {
   graticule: drawGraticule,
 };
 
 // Shared placeholder until a mode's milestone provides a renderer.
-const OCEAN = '#1d4b75';
-
-function drawOceanPlaceholder(g, w, h) {
-  g.fillStyle = OCEAN;
+function drawOceanPlaceholder(g, w, h, theme) {
+  g.fillStyle = theme.placeholderOcean;
   g.fillRect(0, 0, w, h);
 }
 
@@ -29,7 +28,7 @@ export class MapView {
     this.cssWidth = 0;
     this.cssHeight = 0;
     this.dpr = 1;
-    this.background = getComputedStyle(canvas).getPropertyValue('--map-bg').trim() || '#14171c';
+    this.theme = readTheme();
     new ResizeObserver(() => this.measure()).observe(canvas.parentElement);
     this.measure();
   }
@@ -59,17 +58,25 @@ export class MapView {
     c.width = map.sourceWidth;
     c.height = map.sourceHeight;
     const g = c.getContext('2d', { alpha: false });
-    (mode.drawBase ?? drawOceanPlaceholder)(g, map.sourceWidth, map.sourceHeight);
+    (mode.drawBase ?? drawOceanPlaceholder)(g, map.sourceWidth, map.sourceHeight, this.theme);
     this.base = c;
     this.baseKey = key;
   }
 
-  draw({ map, view, mode, overlays, selected }) {
-    const { ctx, dpr, cssWidth: viewW, cssHeight: viewH } = this;
+  // Re-reads the CSS color variables (for theme switching in M11).
+  refreshTheme() {
+    this.theme = readTheme();
+    this.baseKey = '';
+  }
+
+  // reserved: screen rects (canvas CSS px) covered by on-map controls, which
+  // overlay labels avoid.
+  draw({ map, view, mode, overlays, selected, reserved = [] }) {
+    const { ctx, dpr, theme, cssWidth: viewW, cssHeight: viewH } = this;
     this.ensureBase(map, mode);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = this.background;
+    ctx.fillStyle = theme.mapBg;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     // Crisp source pixels when zoomed in, smooth downscaling when zoomed out.
@@ -89,12 +96,12 @@ export class MapView {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!map.wraps) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.strokeStyle = theme.mapBorder;
       ctx.lineWidth = 1;
       ctx.strokeRect(view.offsetX - 0.5, view.offsetY - 0.5, mapW + 1, mapH + 1);
     }
 
-    const env = { map, view, viewW, viewH, dpr };
+    const env = { map, view, viewW, viewH, dpr, theme, reserved };
     for (const [id, drawOverlay] of Object.entries(OVERLAY_DRAWERS)) {
       if (overlays[id]) drawOverlay(ctx, env);
     }
@@ -102,24 +109,24 @@ export class MapView {
   }
 
   // Outline of the selected sim cell, at least 10 px so it stays visible.
-  drawSelection({ map, view, viewW }, selected) {
+  drawSelection({ map, view, viewW, theme }, selected) {
     const cell = sourceToSimCell(map, selected.x, selected.y);
     if (!cell) return;
     const b = simCellBounds(map, cell.i, cell.j);
     const { ctx } = this;
     const mapW = map.sourceWidth * view.scale;
-    let w = (b.x1 - b.x0) * view.scale;
-    let h = (b.y1 - b.y0) * view.scale;
+    const cellW = (b.x1 - b.x0) * view.scale;
+    const cellH = (b.y1 - b.y0) * view.scale;
+    const w = Math.max(10, cellW);
+    const h = Math.max(10, cellH);
+    const y = view.offsetY + b.y0 * view.scale - (h - cellH) / 2;
     for (const k of visibleCopies(view, map.sourceWidth, viewW, map.wraps)) {
-      let x = view.offsetX + k * mapW + b.x0 * view.scale;
-      let y = view.offsetY + b.y0 * view.scale;
-      if (w < 10) { x -= (10 - w) / 2; w = 10; }
-      if (h < 10) { y -= (10 - h) / 2; h = 10; }
+      const x = view.offsetX + k * mapW + b.x0 * view.scale - (w - cellW) / 2;
       ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.strokeStyle = theme.selectionHalo;
       ctx.strokeRect(x, y, w, h);
       ctx.lineWidth = 1.5;
-      ctx.strokeStyle = '#ffd34d';
+      ctx.strokeStyle = theme.selection;
       ctx.strokeRect(x, y, w, h);
     }
   }

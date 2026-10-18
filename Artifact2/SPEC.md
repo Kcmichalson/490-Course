@@ -14,7 +14,9 @@ verification checks pass.
 ## 1. Map setup and coordinates
 
 - **New blank map** dialog with size presets: 2048×1024, 4096×2048,
-  5632×2048 (Paradox-style), or custom. Max source size 8192×4096.
+  5632×2048 (Paradox-style), or custom. Max source size 8192×4096; an
+  imported image larger than that gets an offer to downscale it, with a
+  notice saying so.
 - **Latitude range:** top-edge and bottom-edge latitude (default 90°N / 90°S).
   Needed because many maps (e.g., Paradox) crop the poles and aren't 2:1.
 - **West-edge longitude** (default −180°, so the map is centered on 0°),
@@ -43,8 +45,10 @@ verification checks pass.
 Importing a map drawn in an outside editor (paint.net, GIMP) is the primary
 workflow; painting in-app is secondary.
 
-- **Reload map image** (toolbar button + hotkey): re-reads the last imported
-  file and re-runs the import with the same settings. Uses the File System
+- **Reload map image** (toolbar button + Shift+R): re-reads the last imported
+  file and re-runs the import with the same settings. Same image size →
+  silent reload; different size → the import dialog reopens prefilled.
+  Fields left on Auto are re-detected; values I typed are kept. Uses the File System
   Access API in Chrome/Edge (keeps a file handle, no picker needed), falling
   back to the file picker in other browsers.
 - **Undo/redo** (Ctrl+Z / Ctrl+Y) covers brush strokes, imports, and map
@@ -65,7 +69,8 @@ workflow; painting in-app is secondary.
 ### 2.2 Supported formats
 PNG, BMP, WEBP, JPG via the browser image decoder. SVG is rasterized at the
 chosen map size. Browsers decode to 8-bit, so 16-bit PNG heightmaps need a
-vendored decoder to keep their precision.
+vendored decoder to keep their precision. **16-bit PNG support is deferred**
+(not in M2); 16-bit files import as 8-bit for now.
 
 ### 2.3 Silhouette import (land/ocean only)
 - Land detection: opaque = land / transparent = ocean, or high-contrast
@@ -89,6 +94,8 @@ vendored decoder to keep their precision.
   configurable max depth (default −6,000 m). If the ocean is one flat value,
   bathymetry is generated instead (2.7).
 - A light smoothing pass (1–2 px blur, start) removes 8-bit terracing.
+  After blurring, the coastline is restored (from the mask if there is one),
+  so smoothing never moves the coast.
 - Example: Paradox heightmaps range roughly 89 (#595959) to 203 (#CBCBCB).
 
 ### 2.5 Color palette import (stylized hand-drawn maps)
@@ -110,7 +117,8 @@ vendored decoder to keep their precision.
 ### 2.6 Separate land/sea mask (optional)
 Any heightmap import can take a second image as the land/sea mask. Paradox
 games define sea zones in separate files, so the heightmap alone may not show
-the true coastline.
+the true coastline. **The mask wins:** mask-land pixels at or below sea level
+become +1 m, and mask-ocean pixels above it get generated depth (2.7).
 
 ### 2.7 Bathymetry
 - Used when the input has no depth data: continental shelf from 0 to −200 m
@@ -122,6 +130,9 @@ the true coastline.
 ### 2.8 Downsampling to the simulation grid
 - Each sim cell stores: land fraction, mean land elevation, max elevation,
   mean ocean depth, and its category (land if land fraction > 0.5).
+- "Is this land?" is answered by one function everywhere. In M2a it means
+  elevation > 0; M2b's category layer takes it over, which allows land below
+  sea level later.
 - Islands smaller than a cell disappear from the simulation but stay
   visible in renders; their pixels take values from the nearest land cell.
 - Upscaling for display: bilinear for continuous layers, nearest/majority
@@ -557,7 +568,8 @@ Last-used settings, bookmarks, and palettes persist in localStorage.
 ## 15. Running locally and online
 
 - One codebase, two ways to run: locally through a simple static server
-  (`python3 -m http.server`), and online as a GitHub Pages site deployed
+  (`py serve.py`: standard library only, bound to 127.0.0.1, with
+  `Cache-Control: no-store`), and online as a GitHub Pages site deployed
   from the main branch (the app lives in the repo's Artifact2/ folder). No
   build step either way.
 - No file or folder names start with an underscore (GitHub's Jekyll
@@ -585,9 +597,11 @@ version of the online site (PWA).
 
 ## 17. Milestones and verification checks
 
-The app must run after every milestone. Test maps in test-maps/:
-an Earth grayscale heightmap (public domain), an Earth silhouette, and my
-own hand-drawn reference map.
+The app must run after every milestone. Test maps in test-maps/ (see its
+README for credits): a GEBCO Earth heightmap with ocean depth, an Earth
+silhouette thresholded from it, my own hand-drawn reference map (to be
+added), and, in the git-ignored test-maps/private/, a Paradox heightmap
+(game content, never committed).
 
 Each new map mode and toggle lands with the milestone that produces its data.
 
@@ -603,15 +617,22 @@ status bar with lat/lon, Go to lat/lon, Bookmarks.
 - The app loads with no console errors both locally and from the GitHub
   Pages URL.
 
-**M2 — Terrain input**
-Brushes, silhouette import with auto-relief, heightmap import, palette
-editor, land/sea mask, bathymetry, downsampling, Reload map image,
-undo/redo, New Map confirmation, Edit > Map settings. Modes: Original Art,
-Physical, Elevation, Slope & Ruggedness, Distance from Coast. Toggle:
-Shaded Relief.
+**M2a — Terrain imports** (imports first; the main workflow)
+Grayscale heightmap import (auto sea level and max values, max height in
+meters, curve, smoothing, optional land/sea mask), silhouette import with the
+auto-relief toggle, generated bathymetry, downsampling to the sim grid,
+Edit > Map settings, Reload map image (Shift+R), elevation in the status bar
+and tooltip. Modes: Original Art, Physical, Elevation.
 - Earth silhouette coastlines look right in Physical mode.
-- Palette import of my reference map ignores the text and wind arrows.
 - A Paradox heightmap's darkest land value maps to ~0 m and 203 to the max height.
+
+**M2b — Painting and editing**
+Palette editor, sculpt brushes, undo/redo, New Map confirmation, the
+category layer (lake, ice, shelf), an optional separate art image for
+Original Art. Modes: Slope & Ruggedness, Distance from Coast. Toggle: Shaded
+Relief. How brush edits survive Reload and Map settings is decided when M2b
+is planned (leaning: a separate edits layer re-applied afterward).
+- Palette import of my reference map ignores the text and wind arrows.
 
 **M3 — Planet sliders and wind**
 All planet sliders, season selector, circulation bands, ITCZ shift,
@@ -690,7 +711,8 @@ Section 11: ship presets, Route tool, Sailing Routes toggle, Sailing Time mode.
 
 **M11 — Polish and export**
 Animated wind particles, tide scrubber, season playback, PNG export,
-project save/load.
+project save/load. Themes: dark (default), light, parchment (each overrides
+the UI color variables in style.css).
 - An exported PNG matches the source map's dimensions exactly.
 - A saved project reloads identically.
 

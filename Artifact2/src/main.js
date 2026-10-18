@@ -117,6 +117,18 @@ function requestDraw() {
   requestAnimationFrame(frame);
 }
 
+// Screen rects of controls that sit on the map, so overlay labels avoid them.
+function reservedRects() {
+  const c = canvas.getBoundingClientRect();
+  return [$('overlay-control'), $('legend')]
+    .filter((el) => el && !el.hidden)
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height };
+    })
+    .filter((r) => r.w > 0 && r.h > 0);
+}
+
 function frame() {
   drawPending = false;
   mapView.draw({
@@ -125,6 +137,7 @@ function frame() {
     mode: getMode(state.modeId),
     overlays: state.overlays,
     selected: state.selected,
+    reserved: reservedRects(),
   });
   toolbar.setZoom(zoomPercent(state.view));
   updateHover();
@@ -241,6 +254,7 @@ function setLegend(on) {
   state.legendOn = on;
   savePrefs();
   refreshUI();
+  requestDraw(); // graticule labels re-check what the legend covers
 }
 
 function setMap(cfg) {

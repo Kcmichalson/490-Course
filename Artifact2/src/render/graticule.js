@@ -1,17 +1,21 @@
 // Graticule overlay: latitude/longitude lines with small degree labels.
 // Drawn in screen space every frame, so lines stay crisp at any zoom and
 // repeat across wrapped copies. The spacing tightens as you zoom in
-// (30° → 10° → 5° → 2° → 1°). Tropics and polar circles join in M3.
+// (30° → 10° → 5° → 2° → 1°). Labels skip spots covered by on-map controls
+// (the Overlays button, the legend). Tropics and polar circles join in M3.
 
 import { visibleCopies } from './viewport.js';
 import { normalizeLon } from '../sim/coords.js';
 
 const STEPS = [1, 2, 5, 10, 30];
 const MIN_SPACING_PX = 70;
-const LINE = 'rgba(255, 255, 255, 0.20)';
-const LINE_STRONG = 'rgba(255, 255, 255, 0.42)';
-const LABEL = 'rgba(255, 255, 255, 0.85)';
-const HALO = 'rgba(0, 0, 0, 0.55)';
+const LABEL_HEIGHT = 12;
+const LABEL_PAD = 4;
+
+function overlapsAny(box, rects) {
+  return rects.some((r) => box.x < r.x + r.w + LABEL_PAD && box.x + box.w + LABEL_PAD > r.x
+    && box.y < r.y + r.h + LABEL_PAD && box.y + box.h + LABEL_PAD > r.y);
+}
 
 function chooseStep(pxPerDeg) {
   return STEPS.find((s) => s * pxPerDeg >= MIN_SPACING_PX) ?? STEPS[STEPS.length - 1];
@@ -24,7 +28,7 @@ function lonLabel(lon) {
   return `${Math.abs(l)}°${l > 0 ? 'E' : 'W'}`;
 }
 
-export function drawGraticule(ctx, { map, view, viewW, viewH, dpr }) {
+export function drawGraticule(ctx, { map, view, viewW, viewH, dpr, theme, reserved = [] }) {
   const s = view.scale;
   const mapW = map.sourceWidth * s;
   const mapH = map.sourceHeight * s;
@@ -52,7 +56,7 @@ export function drawGraticule(ctx, { map, view, viewW, viewH, dpr }) {
     if (lat === map.latTop || lat === map.latBottom) continue; // map edges
     const y = top + ((map.latTop - lat) / latRange) * mapH;
     if (y < T - 1 || y > B + 1) continue;
-    ctx.strokeStyle = lat === 0 ? LINE_STRONG : LINE;
+    ctx.strokeStyle = lat === 0 ? theme.graticuleLineStrong : theme.graticuleLine;
     ctx.beginPath();
     ctx.moveTo(L, snap(y));
     ctx.lineTo(R, snap(y));
@@ -68,7 +72,7 @@ export function drawGraticule(ctx, { map, view, viewW, viewH, dpr }) {
       if (map.wraps ? lon === lonEnd : lon === map.lonWest || lon === lonEnd) continue;
       const x = copyX + ((lon - map.lonWest) / map.lonSpan) * mapW;
       if (x < L - 1 || x > R + 1) continue;
-      ctx.strokeStyle = Math.round(normalizeLon(lon)) === 0 ? LINE_STRONG : LINE;
+      ctx.strokeStyle = Math.round(normalizeLon(lon)) === 0 ? theme.graticuleLineStrong : theme.graticuleLine;
       ctx.beginPath();
       ctx.moveTo(snap(x), T);
       ctx.lineTo(snap(x), B);
@@ -77,14 +81,18 @@ export function drawGraticule(ctx, { map, view, viewW, viewH, dpr }) {
     }
   }
 
-  // Labels last, with a dark halo so they read over any map mode.
+  // Labels last, with a dark halo so they read over any map mode. A label
+  // under an on-map control is skipped rather than drawn beneath it.
   ctx.lineWidth = 3;
   ctx.lineJoin = 'round';
   for (const l of labels) {
+    const w = ctx.measureText(l.text).width;
+    const y0 = l.baseline === 'top' ? l.y : l.y - LABEL_HEIGHT + 2;
+    if (overlapsAny({ x: l.x, y: y0, w, h: LABEL_HEIGHT }, reserved)) continue;
     ctx.textBaseline = l.baseline;
-    ctx.strokeStyle = HALO;
+    ctx.strokeStyle = theme.labelHalo;
     ctx.strokeText(l.text, l.x, l.y);
-    ctx.fillStyle = LABEL;
+    ctx.fillStyle = theme.graticuleLabel;
     ctx.fillText(l.text, l.x, l.y);
   }
   ctx.restore();

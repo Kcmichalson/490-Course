@@ -6,7 +6,8 @@ bottom. Claude Code updates this at the end of every milestone.
 ## Milestone status
 
 - [x] M1 — Shell and grid
-- [ ] M2 — Terrain input
+- [ ] M2a — Terrain imports
+- [ ] M2b — Painting and editing
 - [ ] M3 — Planet sliders and wind
 - [ ] M4 — Temperature
 - [ ] M5 — Precipitation and rain shadows
@@ -238,13 +239,285 @@ bottom. Claude Code updates this at the end of every milestone.
   moved the view by the expected amount. (Measured while the browser pane
   was partly hidden; worth a quick look by eye.)
 - PASS No file or folder name in Artifact2/ starts with an underscore.
-- NOT YET The GitHub Pages check needs a push first.
+- PASS GitHub Pages: https://kcmichalson.github.io/490-Course/Artifact2/
+  loads with no console errors and the status bar shows "Worker: ready"
+  (checked by the user after pushing).
 
 **Next**
-- Commit and push, enable Pages for the repo, and open
-  https://kcmichalson.github.io/490-Course/Artifact2/ to confirm the app
-  loads with no console errors and the worker reports ready.
-- Then plan M2 (terrain input).
+- Plan M2 (terrain input).
+
+---
+
+## 2026-10-18 — Session 1 prompt log (M1 and portfolio hub update)
+
+**AI Assistant:** Claude Code (Claude Opus 5.5) in the Claude desktop app  
+**Repository:** https://github.com/Kcmichalson/490-Course (folder `Artifact2/`)  
+**Live Site:** https://kcmichalson.github.io/490-Course/Artifact2/
+
+Every prompt I sent this session, in order. Long pastes are condensed into
+[brackets]. Answers I gave through Claude's multiple-choice questions count
+as prompts. Each fix lists how it was verified.
+
+### Prompt 1
+* **User Prompt:**  
+  > *"Read CLAUDE.md, SPEC.md, and LOG.md. We're doing milestone M1 only. Don't write code yet. Propose: 1. The files you'll create for M1 (stubs only where later milestones need them) 2. The state model for a map: source size, latitude range, longitude span, wrap, and sim resolution 3. How pixel → lat/lon is computed, as a pure function in src/sim/ with Node tests 4. How zoom and pan will stay smooth on a 5632×2048 map 5. What the map mode buttons do before their modes exist 6. Any ambiguities in M1"*
+* **What the AI Provided:**  
+  Read the three docs (test-maps/ turned out to be empty) and wrote a plan: the M1 file list, a frozen map-config object, cell-registered pixel → lat/lon formulas with planned tests, draw-once/blit-per-frame zoom and pan, placeholder mode buttons, and 10 ambiguities. Then asked four multiple-choice questions.
+* **Where the Model Misread Me:**  
+  - It took the repo name from my local folder (`TCSS490-AI-Course`). The GitHub repo is `490-Course`, so the Pages URL in the docs was wrong (not caught until Prompt 11).
+  - It proposed putting `.nojekyll` at the repo root.
+  - The proposal did flag editing an existing map's settings (open item 7) and sim widths larger than the source (item 5). It missed that maps narrower than 512 px would have no valid sim width at all, undo/redo, and the Windows server MIME issue (I raised these in Prompt 3).
+
+### Prompt 2
+* **User Prompt (answers to Claude's questions):**  
+  > *Location: "Put the app, CLAUDE.md, SPEC.md, and LOG.md all in Artifact2/. Don't add .nojekyll anywhere; instead, never use file or folder names starting with an underscore. Don't read or modify anything outside Artifact2/. Update CLAUDE.md's Pages URL line and replace the .nojekyll rule with the underscore rule, remove .nojekyll from M1 in SPEC.md, and record this decision in LOG.md."*  
+  > *Row 0: "Row 0's top edge."* · *Wrap: "Only at 360°. For partial maps, add a later setting for what lies beyond the edges: open ocean (default) or 'continues like the edge.' It's used from M5 onward; just note it in SPEC.md for now."* · *Graticule: "Yes, as a togglable overlay checkbox (on by default) with small degree labels."*
+* **What the AI Provided:**  
+  Updated the plan with these decisions.
+
+### Prompt 3
+* **User Prompt (feedback on the plan):**  
+  > *[Gaps: maps under 512 px have no valid sim size, so the sim width should equal the source width; add Edit > Map settings to M2 in SPEC.md; add undo/redo and a New Map confirmation to M2; watch for Python's server sending JavaScript as text/plain on Windows.] [Three new map modes with placeholder buttons: Biomes (M6), Sea Surface Temperature (M7), Wind Speed and Pressure (M3).] [Layout update: menu bar, toolbar, map canvas, context bar with a slide-up Planet panel, status bar, dialogs for big tasks, "coming in M#" placeholders.] [Tools update: one tool dropdown (Navigate, Sculpt submenu, Cave, Route), optional floating tool palette, Reload map image in M2, startup hint.]*
+* **What the AI Provided:**  
+  Asked how the modes should group into the 5 category buttons and what the Route tool should do.
+* **Where the Model Misread Me:**  
+  Of the gaps above, the under-512 px case, undo/redo, and the Windows MIME issue were missing from its first plan. Map settings was already an open item there; my point was that SPEC.md didn't list it yet, so it could be forgotten.
+
+### Prompt 4
+* **User Prompt (answers to Claude's questions):**  
+  > *[Five categories with 29 modes: Terrain, Climate, Weather, Ocean, Life.] [Spec update: EU4-style mode bar with original SVG icons; toggles in 4 groups; click-a-tile climate chart, real-world climate analog, day length, season playback; new Water Bodies section (M9); new Sailing Routes and Travel Time section (new M10) with ship presets, speed formula, pathfinding, and checks; renumbered milestones (polish moves to M11); Moonshot; Not planned list. "Record all of this in LOG.md, including what I left out and why."]*
+* **What the AI Provided:**  
+  Rewrote the plan (rev 2) and listed open items: the reasons for the left-out features, a hotkey scheme, toggles in M1, Go to lat/lon and Bookmarks, startup, square-pixel hint, the test command, and what the Route tool means. Its category question offered two groupings for the 9 modes known at that point; I supplied the full 29-mode list in this answer.
+* **Where the Model Misread Me:**  
+  It read "for M1 itself, only the mode bar changes" as "the overlay dropdown shows only Graticule in M1". I wanted every toggle listed (Prompt 5).
+
+### Prompt 5
+* **User Prompt (plan feedback):**  
+  > *"Approved. Open items: A. Habitability: Not under the current perview of this project, that's a worldbuilding component, not a climate one. Model confidence: All models should be taken with a grain of salt by default and I do not think I could accurately acertain how accurate or ianccurate the model is. Compare settings: Should just be fine to make a change and ctrl z ctrl v. B. Default hotkeys are fine. Hotkeys must not fire while focus is in a text or number field, or while a dialog is open. C. List every toggle in the overlay dropdown, disabled with "coming in M#". D. Build Bookmarks and go to lan/lon in M1. E, F, G, H: defaults are fine. Apply the doc updates, then implement M1."*
+* **What the AI Provided:**  
+  Recorded the resolutions in the plan.
+* **Where the Model Misread Me:**  
+  It added a "Resolved" list but left the old "only Graticule" wording in the file table and section 5 of the plan.
+
+### Prompt 6
+* **User Prompt (plan feedback):**  
+  > *"Nearly Approved. Two fixes: the file table and §5 still say the overlay dropdown has only Graticule. Follow resolved item C instead (all toggles listed, disabled with "coming in M#"). Add to verification: typing "45N 30W" in Go to lat/lon or a value in a number field doesn't trigger hotkeys to switch modes, and the overlay dropdown lists every toggle with its milestone. Then apply the doc updates and implement M1."*
+* **What the AI Provided:**  
+  - Fixed both plan sections and added the two verification checks.
+  - Applied the doc updates: CLAUDE.md (Pages URL, underscore rule, conventions), SPEC.md (sections 1, 2, and 13; new sections 10 and 11; renumbering; milestones; Moonshot and Not planned), and this log (M1 decisions entry, milestone list).
+  - Started implementing M1: the pure modules (map config, coords, viewport, registries, hotkey guard) with Node tests, the renderer, the HTML/CSS shell, and the UI modules.
+* **Where the Model Misread Me:**  
+  While updating SPEC.md it wrote an M9 water-bodies check I hadn't asked for. It removed the check itself and told me; I supplied my own in Prompt 7.
+* **Root Cause Discovered:**  
+  Node.js wasn't installed, and `python3` on this machine is the Microsoft Store stub (`py` works).
+
+### Prompt 7 (sent while Claude was working)
+* **User Prompt:**  
+  > *"After M1 is verified: add to M9 checks "Earth: the Mediterranean, Black Sea, Baltic, Red Sea, Persian Gulf, and Hudson Bay come out as separate bodies; the Caspian is a lake; each label sits in open water." Also add the Cave-Prone Rock brush to the Sculpt submenu in §13.2 (arrives in M9)."*
+* **What the AI Provided:**  
+  Waited until the M1 checks passed, then added the check to M9, the brush to SPEC 13.2 and the M9 milestone text, and the brush to the tool registry so the Sculpt submenu shows it.
+* **How It Was Verified:**  
+  A search of SPEC.md found the brush in sections 9.1 and 13.2 and in M9; Node tests still passed 31/31.
+
+### Prompt 8 (sent while Claude was working)
+* **User Prompt:**  
+  > *"I've now installed Node.js LTS (default location); your check ran before the install. Re-check. If this session still can't see node (PATH updates only after a restart), run it by full path for now: "C:\Program Files\nodejs\node.exe" --test"*
+* **What the AI Provided:**  
+  Found Node v24.22.0 at the full path and ran the tests.
+* **Root Cause Discovered:**  
+  - `node --test tests/` fails on Node 22+, which treats a bare directory as a module path. Changed the command to `node --test "tests/*.test.js"` and updated CLAUDE.md.
+  - One new viewport test had the wrong expectation: at offset −300 px, the first map copy ends at x = 700, so two copies are needed to fill an 800 px view. The test was wrong, not the code.
+* **How It Was Verified:**  
+  The test run went from an error to 18/18 passing, then 31/31 after the viewport and registry tests were added and the expectation fixed.
+
+### Prompt 9 (sent while Claude was working)
+* **User Prompt:**  
+  > *"Add "--bind", "127.0.0.1" to the server's runtimeArgs in .claude/launch.json (and to CLAUDE.md's run command), so the dev server is only reachable from this computer."*
+* **What the AI Provided:**  
+  - Added `--bind 127.0.0.1` to `.claude/launch.json` and to the CLAUDE.md run command (`py -m http.server 8000 --bind 127.0.0.1`).
+  - The in-app browser only reads `launch.json` from the repo root (outside Artifact2/), so it ran the same command directly.
+  - Then ran the M1 browser verification.
+* **Root Causes Discovered (while testing M1):**  
+  - **Load-order crash:** `MapView` reports its first size from its constructor, before `drawPending` was declared (temporal dead zone), so the page stayed blank. Fixed by declaring render-loop state first.
+  - **Cached modules:** the browser kept running the old `main.js` after the fix, even after Ctrl+Shift+R; the console showed the old line numbers. Worked around by re-fetching each file with `cache: 'reload'`, then reloading.
+  - **Rounding bug:** the exact top edge read 89.99°N and the center 0.01°S, because `MapView` rounded the canvas size while pointer positions used the exact size. Fixed by keeping the exact size.
+  - **Edge float error:** the exact bottom edge then read "Off map". `pixelToLatLon` now tolerates 1e-6 px at the edges.
+  - **Hidden pane:** frames stopped while the browser pane was hidden or the window was covered, so probes timed out and screenshots went stale. Fixed by showing the pane, fronting the tab, reloading, and polling the status bar.
+  - **Synthetic drag:** a test drag never panned because `setPointerCapture` threw for a fake pointer id. Guarded with try/catch.
+* **How It Was Verified:**  
+  - **MIME check:** a HEAD request showed `.js` served as `application/javascript`, so no custom server was needed.
+  - **Load-order fix:** after the cache refresh the page built its toolbar, the status bar said "Worker: ready", and a reload added no new console errors.
+  - **Rounding fix:** a probe at the exact top edge read 90.00°N and the center 0.00° (it had read 89.99°N and 0.01°S).
+  - **Edge fix:** a new Node test, and the bottom edge of an 80°/−60° map read 60.00°S.
+  - **Drag guard:** a 300 px drag at 76% moved the center from 148.23°W to 122.96°W, the expected ~25.3°.
+  - **Remaining M1 checks:** run in the browser and listed under "Verification checks" in the M1 entry above.
+
+### Prompt 10
+* **User Prompt:**  
+  > *"In the LOG.md M1 entry, include under Problems: the cached-modules issue, the canvas-size rounding bug (89.99° vs 90.00°) and its fix, and the hidden-pane pause during testing. Also confirm the timer-based stand-in was only injected into the page for probing and isn't in the app's code."*
+* **What the AI Provided:**  
+  Expanded the Problems section with all three, and confirmed the stand-in only existed in the test page session.
+* **How It Was Verified:**  
+  Searching Artifact2/ found no reassignment of `requestAnimationFrame` and none of the probe helpers; the app only calls the browser's own `requestAnimationFrame` (`src/main.js`, two calls).
+
+### Prompt 11
+* **User Prompt:**  
+  > *"Now, please update the root index.html to update my artifact 2 card with this. It should share the same format as how the artifact 1 card works"*
+* **What the AI Provided:**  
+  Read the hub page's card markup, `ARTIFACT_DATA`, and Inspect modal, then asked three questions.
+* **Root Cause Discovered:**  
+  The hub links to `github.com/Kcmichalson/490-Course`, which exposed the repo-name misread from Prompt 1.
+
+### Prompt 12
+* **User Prompt (answers to Claude's questions):**  
+  > *Repo: "Yes, the github url is https://github.com/Kcmichalson/490-Course"* · *Card link: "Live app"* · *Title: "Fantasy Climate Mapper"*
+* **What the AI Provided:**  
+  A plan to rename the card, rewrite its text, and point the modal's link at the live app.
+* **Change of Plan (mine):**  
+  It followed my "Live app" answer and planned to point the modal's link at the app. In Prompt 13 I changed my mind and asked for both links, since the assignment needs the repository link.
+
+### Prompt 13
+* **User Prompt (plan feedback):**  
+  > *"Approved with changes: Artifact 2's modal shows two links: "Open App →" to https://kcmichalson.github.io/490-Course/Artifact2/ and "Open Repository →" to https://github.com/Kcmichalson/490-Course/tree/main/Artifact2 (the assignment asks for the repo link). Add an optional second link to the record format; Artifacts 1 and 3–5 behave exactly as before. Use this reflection instead of your draft: [paste your edited version] Then implement and run your verification."*
+* **What the AI Provided:**  
+  Updated the plan with an optional `appLink` field. It noticed the reflection was still the literal placeholder and asked for the text instead of guessing.
+
+### Prompt 14
+* **User Prompt (answer to Claude's question):**  
+  > *"I'll paste it (Other)"* (chosen without any text)
+* **What the AI Provided:**  
+  Asked again, explaining to paste the text into the "Other" box.
+
+### Prompt 15
+* **User Prompt (answer to Claude's question):**  
+  > *[My reflection for the Artifact 2 card, now on the hub page.]*
+* **What the AI Provided:**  
+  - Used the reflection word for word, joining the paste's wrapped lines (the modal shows line breaks as typed).
+  - Updated the hub page: card title and description, `ARTIFACT_DATA[2]`, a second modal button ("Open App →"), and the optional `appLink` field.
+  - Fixed the Pages URL in CLAUDE.md and this log.
+* **How It Was Verified:**  
+  - Served the repo root on port 8001. The Artifact 2 card and its water reflection show the new title.
+  - Inspect on Artifact 2 shows both buttons with the right URLs; Artifact 1 shows only "Open Repository"; Artifacts 3–5 show none. Reopening Artifact 1 after Artifact 2 hides the app button again.
+  - A screenshot of the modal showed the text and both buttons. No console errors.
+  - A search of Artifact2/ found no URL using the old repo name.
+
+### Prompt 16
+* **User Prompt:**  
+  > *"Also to confirm, teach said this on my index, artifact one. Does this achieve this? [Instructor's comment: keep logging where the model misread me after each prompt, and add a line on how I verified each fix.]"*
+* **What the AI Provided:**  
+  Said the log only partly did this: most fixes said how they were verified, but there was no prompt-by-prompt record and no notes on where the model misread me. It listed the misreads from this session.
+
+### Prompt 17
+* **User Prompt:**  
+  > *"Yes, you can look at what I did for the original log.md in the root repository, but please keep all prompts in this session in the artifact 2 folder log.md"*
+* **What the AI Provided:**  
+  Read the root LOG.md for its format and wrote this prompt log in Artifact2/LOG.md, adding a "How It Was Verified" line for each fix. Added a workflow rule to CLAUDE.md so every session keeps this log.
+
+### Prompt 18
+* **User Prompt:**  
+  > *[Final LOG.md updates: the live site works (loads with no console errors, "Worker: ready"), so mark the Pages check PASS and change Next to "Plan M2 (terrain input)". Accuracy fixes: Prompt 1's proposal did flag map settings (item 7) and sim width larger than the source (item 5), and only missed the under-512 px case, undo/redo, and the Windows MIME issue, so update Prompt 3's note to match; Prompt 4 wasn't a misread because I hadn't sent the 29-mode list yet; Prompt 12 followed my "Live app" answer and I changed my mind in Prompt 13.]*
+* **What the AI Provided:**  
+  Marked the Pages check PASS, set Next to "Plan M2 (terrain input)", and corrected the Prompt 1, 3, 4, and 12 notes.
+* **Where the Model Misread Me:**  
+  Its first draft of this log overstated three misreads (Prompts 1, 4, and 12); this prompt corrected them.
+* **How It Was Verified:**  
+  Re-read the edited sections; searched LOG.md to confirm the M1 checks have no "not yet" item left, the 29-mode list appears only as something I supplied, and Prompt 12 no longer lists a misread.
+
+### Prompt 19
+* **User Prompt:**  
+  > *[Between-sprint retro. Update CLAUDE.md workflow rules and record this in LOG.md: build only what the milestone lists and suggest extras in the plan; never infer names, URLs, dates, or facts about me or the course, ask; if the browser preview stalls, stop and ask me to bring the pane forward or reload before trying workarounds; add serve.py (standard library only) serving Artifact2 on 127.0.0.1:8000 with "Cache-Control: no-store" and update the run command and .claude/launch.json; every milestone's verification includes a visual pass at a ~1280 px wide window; fix now: the legend covers the latitude labels, and the toolbar should wrap or scroll on narrow windows; move all UI colors into CSS variables in one place, and add "Themes: dark (default), light, parchment" to M11.]*
+* **What the AI Provided:**  
+  Everything in the "Retro between M1 and M2" entry below: the CLAUDE.md rules, serve.py, the color variables, the layout fixes, and the M11 themes line.
+* **Root Cause Discovered:**  
+  The toolbar already wrapped, but the page grid's single column was sized to its widest content (about 667 px), so at narrow widths the whole layout ran past the window edge and got clipped. Also found and fixed a selection-outline offset on wrapped copies while moving its colors.
+* **How It Was Verified:**  
+  See the retro entry's checks. The canvas part of the visual pass is still pending: browser frames stalled, so per the new rule Claude stopped and asked me to bring the pane forward.
+
+### Prompt 20 (sent while Claude was working)
+* **User Prompt:**  
+  > *[Plan M2 as two halves, no code yet. M2a (imports first; my main workflow): grayscale heightmap import (auto sea level and max values, max height in meters, curve, smoothing, optional land/sea mask), silhouette import with the auto-relief toggle, generated bathymetry, downsampling to the sim grid, Edit > Map settings, Reload map image, and the Original Art, Physical, and Elevation modes. M2b: palette editor, sculpt brushes, undo/redo, New Map confirmation, Slope & Ruggedness and Distance from Coast modes, Shaded Relief toggle. Propose files, data layers, the import dialog flow, how full-resolution elevation and the sim grid stay in sync, and tests. List ambiguities.]*
+* **What the AI Provided:**  
+  Finished the retro first, then proposed the M2a/M2b plan in chat with ambiguities. No M2 code; SPEC.md's milestone list gets the M2a/M2b split once I approve the plan.
+
+### Prompt 21
+* **User Prompt:**  
+  > *[Approved the M2 plan with answers: I'll add test maps, with a git-ignored test-maps/private/ for my Paradox heightmap; defer 16-bit PNGs and note it in SPEC.md; offer to downscale images over 8192×4096 with a notice; the mask wins; restore the mask coastline after smoothing; decide brush edits vs. Reload/Map settings in M2b planning (leaning toward a separate edits layer); reload proposal yes; Shift+R yes; optional separate art image for Original Art in M2b; no cross-restart import cache (M11 covers it); planet radius regeneration yes; enclosed water counts as ocean for now. Put "is this land?" in one function so M2b's category layer can take over and allow land below sea level. Record the M2a/M2b split, then start M2a once the test maps are in.] [Usage note: near the maximum, so only minor changes for now.] Test maps are in: test-maps/gebco_bathy_heightmap.jpg (equirectangular, includes ocean depth, JPEG so expect speckle; sea level set manually), test-maps/gebco_bathy_BW_heightmap.png (white land on black, thresholded from the GEBCO image so they line up), and test-maps/private/eu4_heightmap.bmp (git-ignored, game content). "Confirm the ignore rule exists before I commit. Add a short test-maps note crediting GEBCO as the source."*
+* **What the AI Provided:**  
+  - Found that **no ignore rule existed yet** (no .gitignore anywhere), so the Paradox file would have been committed. Added `Artifact2/.gitignore` with `test-maps/private/`.
+  - Added test-maps/README.md crediting GEBCO, with a placeholder for the exact dataset/version and link. It doesn't guess either.
+  - SPEC.md: the M2a/M2b split in the milestones, 16-bit PNGs deferred, downscale offer over 8192×4096, mask wins, coastline restored after smoothing, Shift+R and reload rules, one "is this land?" function, the separate art image in M2b, and an updated test-maps line. This log's milestone list now shows M2a and M2b.
+  - Did not start M2a code, because of the usage note.
+* **Where the Model Misread Me:**  
+  None this prompt. (The SPEC test-maps line had said the Earth heightmap was "public domain"; it now points to the README credit instead of asserting a license.)
+* **How It Was Verified:**  
+  `git check-ignore -v` matched `test-maps/private/eu4_heightmap.bmp` to `Artifact2/.gitignore:2`; `git status --ignored` lists `test-maps/private/` as ignored, and the file was never tracked. (Read-only git checks, run because I asked for confirmation.)
+
+---
+
+## 2026-10-18 — Retro between M1 and M2
+
+**Planned** (my retro decisions)
+- Scope: build only what the milestone lists; suggest extras in the plan.
+- Never infer names, URLs, dates, or facts about me or the course; ask.
+  (This session's examples: the repo name taken from my folder name, and
+  extras like an unrequested M9 check.)
+- If the browser preview stalls (hidden pane, stale cache), stop and ask me
+  to bring the pane forward or reload before trying workarounds.
+- A no-cache dev server, so the browser never runs stale code.
+- Every milestone's verification includes a visual pass at ~1280 px wide.
+- Fix the legend covering the latitude labels and the toolbar on narrow
+  windows.
+- All UI colors in CSS variables in one place; themes later (M11).
+
+**Changed**
+- CLAUDE.md workflow rules: scope, never infer, the 1280 px visual pass, and
+  stopping on a stalled preview. Core conventions: UI colors live only in
+  `:root` in style.css, and canvas code reads them through
+  src/render/theme.js.
+- serve.py (standard library only) serves Artifact2/ on 127.0.0.1:8000 with
+  `Cache-Control: no-store` and sends `.js` as `text/javascript`. The run
+  command is now `py serve.py` (CLAUDE.md, SPEC §15, .claude/launch.json).
+- UI colors: 29 color variables at the top of style.css (surfaces, text,
+  accents and states, shadows, map area). No hex or rgba values remain
+  anywhere else in style.css or src/. The only exception is the favicon's
+  inline data URI in index.html, which can't use CSS variables.
+- Legend moved to the bottom-right. Graticule labels now skip any spot
+  covered by an on-map control (the Overlays button and the legend), so the
+  top-right longitude labels no longer sit under the Overlays button.
+- Narrow windows: the page grid column is now `minmax(0, 1fr)`, so the
+  toolbar wraps within the window. The status bar wraps too, and the
+  context bar's tool hint truncates instead of pushing the Planet button
+  off-screen.
+- Fixed while moving colors: the selection outline was offset on the second
+  and later wrapped copies, because its width and height were changed
+  inside the drawing loop.
+- SPEC M11: "Themes: dark (default), light, parchment".
+
+**Problems**
+- Narrow-window clipping wasn't the toolbar's wrapping, which already
+  worked. The page grid's single column was sized to its content (about
+  667 px), so at 480 px everything to the right was cut off.
+- The browser preview stalled again (frames not running), so the canvas
+  half of the visual pass is waiting on me to bring the pane forward.
+
+**Verification checks**
+- PASS serve.py: HEAD requests return `Cache-Control: no-store`, `.js` as
+  `text/javascript`, `.css` as `text/css`. Nothing is served on the LAN
+  address.
+- PASS Colors: a search of src/ for hex/rgba colors finds nothing; in
+  style.css they appear only inside `:root`.
+- PASS Node tests 31/31.
+- PASS Layout (DOM measurements) at 1280, 736, 480, and 360 px wide:
+  nothing in the menu bar, toolbar, context bar, or status bar extends past
+  the window. The toolbar wraps to 2 / 2 / 3 / 5 rows.
+- PASS At 1280 px the legend sits bottom-right (x 972–1272 of 1280), clear
+  of the left-edge latitude labels.
+- PENDING Canvas visual pass at 1280 px (graticule labels clear of the
+  Overlays button and legend, colors unchanged): waiting for the browser
+  pane to be brought forward.
+
+**Next**
+- Finish the canvas visual pass, then approve and start the M2a plan.
 
 ---
 
@@ -257,3 +530,13 @@ bottom. Claude Code updates this at the end of every milestone.
 **Problems**
 **Verification checks** (which SPEC.md checks passed or failed)
 **Next**
+
+## YYYY-MM-DD — Session N prompt log
+
+### Prompt N
+* **User Prompt:**  
+  > *"..."* (long pastes condensed into [brackets])
+* **What the AI Provided:**  
+* **Where the Model Misread Me:** (if it did)  
+* **Root Cause Discovered:** (if a bug was found)  
+* **How It Was Verified:** (for every fix)

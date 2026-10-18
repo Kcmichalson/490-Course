@@ -1,19 +1,48 @@
 /* Fantasy Climate Mapper — desktop-editor layout:
    menu bar / toolbar / map canvas / context bar / status bar */
 
+/* All UI colors live here, and only here. Canvas drawing reads the map-area
+   colors through src/render/theme.js. Map-mode data palettes (Köppen etc.)
+   live with their renderers. Themes (light, parchment) arrive in M11 by
+   overriding these variables. */
 :root {
+  /* Surfaces and text */
   --bg: #1b1e23;
   --panel: #23272e;
   --panel-2: #2b3039;
   --panel-3: #343a45;
+  --panel-translucent: rgba(35, 39, 46, 0.92);
+  --tooltip-bg: rgba(20, 23, 28, 0.94);
   --border: #3b414c;
   --text: #e6e8eb;
   --muted: #9aa3ae;
   --faint: #6f7783;
+
+  /* Accents and states */
   --accent: #4aa3ff;
+  --accent-hover: #6cb5ff;
   --accent-weak: rgba(74, 163, 255, 0.18);
+  --on-accent: #06121f;
   --danger: #ff7a7a;
+  --warning: #ffd34d;
+  --success: #7bd88f;
+
+  /* Shadows and backdrops */
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-strong: rgba(0, 0, 0, 0.5);
+  --backdrop: rgba(0, 0, 0, 0.5);
+
+  /* Map area (canvas reads these via src/render/theme.js) */
   --map-bg: #101318;
+  --map-border: rgba(255, 255, 255, 0.35);
+  --placeholder-ocean: #1d4b75;
+  --graticule-line: rgba(255, 255, 255, 0.20);
+  --graticule-line-strong: rgba(255, 255, 255, 0.42);
+  --graticule-label: rgba(255, 255, 255, 0.85);
+  --label-halo: rgba(0, 0, 0, 0.55);
+  --selection: #ffd34d;
+  --selection-halo: rgba(0, 0, 0, 0.6);
+
   --radius: 4px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: dark;
@@ -37,6 +66,9 @@ h2 { font-size: 15px; margin: 0 0 6px; }
 /* ---------- App grid ---------- */
 .app {
   display: grid;
+  /* minmax(0, 1fr): the single column never grows past the window, so each
+     bar wraps or truncates instead of pushing content off-screen. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   height: 100vh;
   height: 100dvh;
@@ -53,8 +85,8 @@ button {
 button:hover:not(:disabled) { background: var(--panel-3); }
 button:disabled, .is-coming { cursor: default; }
 button:disabled { opacity: 0.45; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #06121f; font-weight: 600; }
-button.primary:hover:not(:disabled) { background: #6cb5ff; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); }
 .icon-button {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 3px; min-width: 26px; min-height: 26px;
@@ -99,7 +131,7 @@ select:disabled { opacity: 0.45; }
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px var(--shadow);
 }
 .menu-sep { height: 1px; margin: 4px 0; background: var(--border); }
 .menu-item {
@@ -165,7 +197,6 @@ select:disabled { opacity: 0.45; }
 /* ---------- Map area ---------- */
 .map-area { position: relative; overflow: hidden; background: var(--map-bg); }
 .map-canvas {
-  --map-bg: #101318;
   position: absolute; inset: 0;
   width: 100%; height: 100%;
   display: block;
@@ -175,14 +206,14 @@ select:disabled { opacity: 0.45; }
 .map-canvas.is-panning { cursor: grabbing; }
 
 .overlay-control { position: absolute; top: 8px; right: 8px; z-index: 5; }
-.overlay-button { display: inline-flex; align-items: center; gap: 6px; background: rgba(35, 39, 46, 0.92); }
+.overlay-button { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-translucent); }
 .popover {
   position: absolute;
   z-index: 20;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px var(--shadow);
   padding: 8px 10px;
 }
 .popover[hidden] { display: none; }
@@ -196,10 +227,12 @@ select:disabled { opacity: 0.45; }
 .check.is-coming { color: var(--faint); cursor: default; }
 .check .badge { margin-left: auto; }
 
+/* Bottom-right: the left edge holds the graticule's latitude labels and the
+   top edge its longitude labels. */
 .legend {
-  position: absolute; left: 8px; bottom: 8px; z-index: 4;
-  max-width: 300px;
-  background: rgba(35, 39, 46, 0.92);
+  position: absolute; right: 8px; bottom: 8px; z-index: 4;
+  max-width: min(300px, calc(100% - 16px));
+  background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 10px;
@@ -211,7 +244,7 @@ select:disabled { opacity: 0.45; }
 .tooltip {
   position: absolute; left: 0; top: 0; z-index: 10;
   pointer-events: none;
-  background: rgba(20, 23, 28, 0.94);
+  background: var(--tooltip-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px 8px;
@@ -245,14 +278,14 @@ select:disabled { opacity: 0.45; }
   border-top: 1px solid var(--border);
 }
 .ctx-message { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ctx-message.is-flash { color: #ffd34d; }
-.ctx-tool { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.planet-button { display: inline-flex; align-items: center; gap: 6px; }
+.ctx-message.is-flash { color: var(--warning); }
+.ctx-tool { flex: 0 1 auto; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.planet-button { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 .planet-button[aria-expanded="true"] { background: var(--accent-weak); border-color: var(--accent); }
 
 /* ---------- Status bar ---------- */
 .statusbar {
-  display: flex; align-items: center; gap: 16px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px;
   padding: 2px 8px;
   background: var(--bg);
   border-top: 1px solid var(--border);
@@ -264,7 +297,7 @@ select:disabled { opacity: 0.45; }
 }
 .statusbar .sb-cursor { color: var(--text); min-width: 170px; }
 .statusbar .sb-spacer { flex: 1; }
-.statusbar .sb-ok { color: #7bd88f; }
+.statusbar .sb-ok { color: var(--success); }
 .statusbar .sb-error { color: var(--danger); }
 
 /* ---------- Bookmarks ---------- */
@@ -289,9 +322,9 @@ select:disabled { opacity: 0.45; }
   border-radius: 6px;
   padding: 16px 18px;
   width: min(560px, calc(100vw - 32px));
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 48px var(--shadow-strong);
 }
-.dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+.dialog::backdrop { background: var(--backdrop); }
 fieldset { border: 1px solid var(--border); border-radius: var(--radius); margin: 10px 0 0; padding: 6px 10px 10px; }
 legend { color: var(--muted); padding: 0 4px; }
 .field-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 6px; }

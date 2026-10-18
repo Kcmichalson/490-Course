@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fantasy Climate Mapper</title>
+  <meta name="description" content="Simulates winds, currents, temperature, rainfall, Köppen climates, and tides for hand-made fantasy maps. Runs entirely in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%231d4b75'/%3E%3Cpath d='M5 15c3-5 6 1 9-3s4 1 5 1' stroke='%23e6e8eb' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <nav id="menubar" class="menubar" role="menubar" aria-label="Main menu"></nav>
+
+    <div id="toolbar" class="toolbar" role="toolbar" aria-label="Tools and map modes"></div>
+
+    <main id="map-area" class="map-area">
+      <canvas id="map-canvas" class="map-canvas" aria-label="Map. Drag to pan, scroll to zoom, click a tile to inspect it."></canvas>
+      <div id="overlay-control" class="overlay-control"></div>
+      <aside id="legend" class="legend" aria-live="polite"></aside>
+      <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+      <section id="planet-panel" class="planet-panel" aria-label="Planet settings" aria-hidden="true">
+        <header class="planet-panel-head">
+          <h2>Planet</h2>
+          <button type="button" class="icon-button" id="planet-close" aria-label="Close planet panel"></button>
+        </header>
+        <p class="muted">Planet radius, rotation period, spin direction, axial tilt, season, and lunar pull arrive in M3, each as a slider with a number input.</p>
+      </section>
+    </main>
+
+    <div id="contextbar" class="contextbar"></div>
+    <footer id="statusbar" class="statusbar" aria-live="off"></footer>
+  </div>
+
+  <div id="menu-layer" class="menu-layer"></div>
+
+  <dialog id="newmap-dialog" class="dialog" aria-labelledby="newmap-title">
+    <form method="dialog" id="newmap-form" novalidate>
+      <h2 id="newmap-title">New map</h2>
+      <p class="muted">Starts as open ocean. Painting land and importing maps arrive in M2.</p>
+
+      <fieldset>
+        <legend>Size</legend>
+        <div class="field-row">
+          <label for="nm-preset">Preset</label>
+          <select id="nm-preset"></select>
+        </div>
+        <div class="field-row">
+          <label for="nm-width">Width</label>
+          <input id="nm-width" type="number" min="16" max="8192" step="1" inputmode="numeric"> <span class="unit">px</span>
+          <label for="nm-height">Height</label>
+          <input id="nm-height" type="number" min="16" max="4096" step="1" inputmode="numeric"> <span class="unit">px</span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Latitude</legend>
+        <div class="field-row">
+          <label for="nm-lat-top">Top edge</label>
+          <input id="nm-lat-top" type="number" min="-90" max="90" step="any"> <span class="unit">°</span>
+          <label for="nm-lat-bottom">Bottom edge</label>
+          <input id="nm-lat-bottom" type="number" min="-90" max="90" step="any"> <span class="unit">°</span>
+        </div>
+        <p class="hint" id="nm-square-hint"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Longitude</legend>
+        <div class="field-row">
+          <label for="nm-lon-west">West edge</label>
+          <input id="nm-lon-west" type="number" min="-360" max="360" step="any"> <span class="unit">°</span>
+          <label for="nm-lon-span">Span</label>
+          <input id="nm-lon-span" type="number" min="0" max="360" step="any"> <span class="unit">°</span>
+        </div>
+        <div class="field-row">
+          <label class="check"><input id="nm-wraps" type="checkbox"> Wrap east–west</label>
+          <span class="hint" id="nm-wrap-hint"></span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Simulation</legend>
+        <div class="field-row">
+          <label for="nm-sim">Resolution</label>
+          <select id="nm-sim"></select>
+          <span class="hint" id="nm-sim-hint"></span>
+        </div>
+      </fieldset>
+
+      <ul class="errors" id="nm-errors" aria-live="polite"></ul>
+
+      <div class="dialog-actions">
+        <button type="button" value="cancel" id="nm-cancel">Cancel</button>
+        <button type="submit" value="create" id="nm-create" class="primary">Create map</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="shortcuts-dialog" class="dialog" aria-labelledby="shortcuts-title">
+    <form method="dialog">
+      <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+      <p class="muted">Hotkeys don't fire while you're typing in a field or while a dialog is open.</p>
+      <table class="shortcut-table"><tbody id="shortcut-rows"></tbody></table>
+      <div class="dialog-actions">
+        <button type="submit" class="primary">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

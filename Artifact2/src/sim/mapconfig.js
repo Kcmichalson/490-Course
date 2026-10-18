@@ -1,0 +1,126 @@
+// Map configuration: the size and geographic extent of a map.
+// Pure data and functions (no DOM), shared by the UI, the worker, and tests.
+//
+// A map config is a plain object that is replaced wholesale, never mutated:
+// {
+//   sourceWidth, sourceHeight  // px, the original map size
+//   latTop, latBottom          // deg, top EDGE of row 0 / bottom EDGE of last row
+//   lonWest, lonSpan           // deg, left EDGE of column 0 / total width
+//   wraps                      // east-west wrap, only valid when lonSpan is 360
+//   simWidth                   // simulation grid width in cells
+// }
+
+export const MIN_SOURCE_SIZE = 16;
+export const MAX_SOURCE_WIDTH = 8192;
+export const MAX_SOURCE_HEIGHT = 4096;
+export const SIM_WIDTHS = [512, 1024, 2048];
+
+export const SIZE_PRESETS = [
+  { id: '2048x1024', label: '2048 × 1024', width: 2048, height: 1024 },
+  { id: '4096x2048', label: '4096 × 2048', width: 4096, height: 2048 },
+  { id: '5632x2048', label: '5632 × 2048 (Paradox-style)', width: 5632, height: 2048 },
+];
+
+export const DEFAULT_MAP = Object.freeze({
+  sourceWidth: 2048,
+  sourceHeight: 1024,
+  latTop: 90,
+  latBottom: -90,
+  lonWest: -180,
+  lonSpan: 360,
+  wraps: true,
+  simWidth: 1024,
+});
+
+const EPS = 1e-9;
+
+export function isFullSpan(lonSpan) {
+  return Math.abs(lonSpan - 360) < EPS;
+}
+
+// Sim widths offered for a source width: the standard widths that fit, or the
+// source width itself when the source is narrower than the smallest one.
+export function allowedSimWidths(sourceWidth) {
+  const w = Math.floor(sourceWidth);
+  if (w < SIM_WIDTHS[0]) return [w];
+  return SIM_WIDTHS.filter((s) => s <= w);
+}
+
+// Returns a list of human-readable problems; empty means valid.
+export function validateMapConfig(cfg) {
+  const errors = [];
+  const num = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  const { sourceWidth: w, sourceHeight: h } = cfg;
+  if (!Number.isInteger(w) || w < MIN_SOURCE_SIZE || w > MAX_SOURCE_WIDTH) {
+    errors.push(`Width must be a whole number from ${MIN_SOURCE_SIZE} to ${MAX_SOURCE_WIDTH} px.`);
+  }
+  if (!Number.isInteger(h) || h < MIN_SOURCE_SIZE || h > MAX_SOURCE_HEIGHT) {
+    errors.push(`Height must be a whole number from ${MIN_SOURCE_SIZE} to ${MAX_SOURCE_HEIGHT} px.`);
+  }
+
+  if (!num(cfg.latTop) || !num(cfg.latBottom)) {
+    errors.push('Latitudes must be numbers.');
+  } else {
+    if (cfg.latTop > 90 || cfg.latTop < -90 || cfg.latBottom > 90 || cfg.latBottom < -90) {
+      errors.push('Latitudes must be between 90°S (−90) and 90°N (90).');
+    }
+    if (cfg.latTop <= cfg.latBottom) {
+      errors.push('The top-edge latitude must be north of the bottom-edge latitude.');
+    }
+  }
+
+  if (!num(cfg.lonWest) || cfg.lonWest < -360 || cfg.lonWest > 360) {
+    errors.push('West-edge longitude must be a number from −360 to 360.');
+  }
+  if (!num(cfg.lonSpan) || cfg.lonSpan <= 0 || cfg.lonSpan > 360 + EPS) {
+    errors.push('Longitude span must be greater than 0° and at most 360°.');
+  }
+  if (cfg.wraps && !isFullSpan(cfg.lonSpan)) {
+    errors.push('East-west wrap needs a 360° longitude span.');
+  }
+
+  if (Number.isInteger(w) && !allowedSimWidths(w).includes(cfg.simWidth)) {
+    errors.push(`Simulation width must be one of: ${allowedSimWidths(w).join(', ')}.`);
+  }
+  return errors;
+}
+
+// Builds a frozen, valid config from partial options. Sizes are rounded,
+// wrap is switched off for partial spans, and an unavailable sim width falls
+// back to the largest allowed width not above it (or the smallest allowed).
+// Throws if the result is still invalid (e.g. bad latitudes).
+export function createMapConfig(opts = {}) {
+  const cfg = { ...DEFAULT_MAP, ...opts };
+  cfg.sourceWidth = Math.round(Number(cfg.sourceWidth));
+  cfg.sourceHeight = Math.round(Number(cfg.sourceHeight));
+  for (const k of ['latTop', 'latBottom', 'lonWest', 'lonSpan', 'simWidth']) cfg[k] = Number(cfg[k]);
+  cfg.wraps = Boolean(cfg.wraps) && isFullSpan(cfg.lonSpan);
+  if (isFullSpan(cfg.lonSpan)) cfg.lonSpan = 360;
+
+  if (Number.isInteger(cfg.sourceWidth) && cfg.sourceWidth >= MIN_SOURCE_SIZE) {
+    const allowed = allowedSimWidths(cfg.sourceWidth);
+    if (!allowed.includes(cfg.simWidth)) {
+      const below = allowed.filter((s) => s <= cfg.simWidth);
+      cfg.simWidth = below.length ? below[below.length - 1] : allowed[0];
+    }
+  }
+
+  const errors = validateMapConfig(cfg);
+  if (errors.length) throw new Error(errors.join(' '));
+  return Object.freeze(cfg);
+}
+
+// Sim grid size: the configured width, height from the source aspect ratio.
+export function simGridSize(cfg) {
+  return {
+    width: cfg.simWidth,
+    height: Math.max(1, Math.round((cfg.simWidth * cfg.sourceHeight) / cfg.sourceWidth)),
+  };
+}
+
+// Latitude span that would make source pixels square in degrees, for the
+// New Map dialog hint (e.g. 5632×2048 at 360° → 130.9°, i.e. ±65.45°).
+export function squarePixelLatSpan(sourceWidth, sourceHeight, lonSpan) {
+  return (lonSpan * sourceHeight) / sourceWidth;
+}

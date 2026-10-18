@@ -1,0 +1,6 @@
+{
+  "name": "fantasy-climate-mapper",
+  "private": true,
+  "description": "Marks .js files as ES modules so `node --test` can load them. No dependencies, no build step.",
+  "type": "module"
+}

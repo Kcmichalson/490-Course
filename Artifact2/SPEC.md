@@ -17,16 +17,44 @@ verification checks pass.
   5632×2048 (Paradox-style), or custom. Max source size 8192×4096.
 - **Latitude range:** top-edge and bottom-edge latitude (default 90°N / 90°S).
   Needed because many maps (e.g., Paradox) crop the poles and aren't 2:1.
-- **Longitude span** (default 360°) and an **east-west wrap** toggle
-  (default on). Non-wrapping maps treat the left/right edges as open boundaries.
-- **Simulation resolution:** 512, 1024 (default), or 2048 cells wide. Height
-  follows the source aspect ratio.
+- **West-edge longitude** (default −180°, so the map is centered on 0°),
+  **longitude span** (default 360°), and an **east-west wrap** toggle
+  (default on). Wrap is only allowed when the span is 360°: a map covering
+  part of the globe can't honestly wrap. Non-wrapping maps treat the
+  left/right edges as open boundaries.
+- **Beyond the edges** (future setting, used from M5 onward): for partial
+  maps, what lies past the map edges: open ocean (default) or "continues
+  like the edge."
+- **Simulation resolution:** 512, 1024 (default), or 2048 cells wide, never
+  wider than the source. If the source is narrower than 512 px, the sim width
+  equals the source width. Height follows the source aspect ratio.
 - Projection is equirectangular: latitude and longitude are linear in y and x.
+- Rows and columns are cell-registered: the top edge of row 0 is the
+  top-edge latitude and the left edge of column 0 is the west-edge longitude.
+  Cell centers sit half a cell inside, so no sim cell sits exactly on a pole.
+  The inspector reads the continuous cursor position, so the top edge of the
+  map reads exactly the top-edge latitude.
 - Cell size in km comes from the planet radius (section 3). East-west cell
   width shrinks with cos(latitude); anything distance-based (advection,
   decay lengths, search radii) must account for this.
 
 ## 2. Terrain input
+
+Importing a map drawn in an outside editor (paint.net, GIMP) is the primary
+workflow; painting in-app is secondary.
+
+- **Reload map image** (toolbar button + hotkey): re-reads the last imported
+  file and re-runs the import with the same settings. Uses the File System
+  Access API in Chrome/Edge (keeps a file handle, no picker needed), falling
+  back to the file picker in other browsers.
+- **Undo/redo** (Ctrl+Z / Ctrl+Y) covers brush strokes, imports, and map
+  settings changes. The map state is replaced wholesale, never mutated, so
+  undo is a stack of snapshots.
+- **New Map confirmation:** New Map asks before discarding painted or
+  imported terrain.
+- **Edit > Map settings** dialog: change the latitude range, west-edge
+  longitude, span, wrap, and sim resolution of an existing map without
+  re-importing (e.g., to fix the latitude range after importing a Paradox map).
 
 ### 2.1 Blank map and sculpting brushes
 - Brushes: Draw Land, Erase to Ocean, Raise, Lower, Carve Trench, Smooth.
@@ -358,7 +386,50 @@ generator reflects that.
   plausibility score as information only ("unlikely by physics"), and never
   blocks placement.
 
-## 10. Simulation pipeline and performance
+## 10. Water bodies
+
+Named, classified bodies of water, shared by tides, ocean currents, the Water
+Bodies map mode, and the Water Body Labels toggle (M9).
+
+- **Lakes vs. ocean:** a flood fill from the world ocean separates connected
+  ocean water from enclosed lakes. Palette "Lake" pixels are always lakes.
+- **Splitting at straits:** a distance-from-land watershed splits connected
+  water where it narrows. A sensitivity slider sets how narrow a neck must be
+  (relative to the basins on either side) to count as a split. Where no neck
+  exists, fall back to the shortest land-to-land line across the opening.
+- **Classification:** ocean / sea / gulf / bay / fjord / strait / lake, by
+  size, enclosure, and mouth width, nested in a hierarchy (a bay inside a
+  gulf inside a sea inside an ocean).
+- **Labels:** each body is labeled at its point farthest from land.
+- **Editing:** the user can merge, split, rename, and lock bodies. Locked
+  bodies survive regeneration and are saved with the project.
+
+## 11. Sailing routes and travel time
+
+Route finding for ships, using the simulated winds and currents (M10).
+
+- **Ship presets**, each with a max speed and a table of speed by angle to
+  the wind:
+  - Galley: oars, slow, nearly wind-independent, prefers coasts
+  - Ancient square-rigger: no progress closer than ~70° to the wind
+  - Lateen / medieval: ~55°
+  - Age-of-sail full-rigger: ~60°, faster
+  - Custom
+- **Speed on a heading** = max speed × table(angle to wind) × wind strength,
+  plus the ocean current's component along the heading.
+- **Coastal breezes:** within ~20 km of land (start), allow slow upwind
+  progress, so ships can work along coasts against the prevailing wind
+  (land and sea breezes).
+- **Pathfinding:** Dijkstra / A* over ocean cells with 16 directions;
+  cost = km / speed, so A→B and B→A differ. Tacking emerges from zig-zags.
+  East-west steps use the cos(latitude) cell width.
+- Uses the selected month's winds and currents; the route panel also shows
+  the best and worst months.
+- **UI:** with the Route tool, click two ports to get a route line (Sailing
+  Routes toggle), distance, and days. **Sailing Time** mode: travel time from
+  a clicked port to every ocean cell.
+
+## 12. Simulation pipeline and performance
 
 Order:
 
@@ -372,7 +443,11 @@ Order:
 8. Köppen (12 monthly runs, lazy and cached)
 
 Tides run separately and depend only on terrain and planet settings.
+Water bodies (section 10) depend only on terrain; once they exist (M9), tides
+and currents read them.
 Sea cave generation runs after both tides and step 5 (it needs the final wind).
+Sailing routes and travel time run on demand from the final wind and currents
+for the selected month.
 Before M8 exists, step 5 passes the base wind through unchanged.
 
 Performance:
@@ -384,97 +459,194 @@ Performance:
 - Cache results per season; only recompute the steps downstream of what
   changed.
 
-## 11. Visualization and UI
+## 13. Visualization and UI
 
-**Map modes** (pick one, Paradox-style button row):
-- Original Art (the imported image, so overlays sit on the user's own map)
-- Physical / Heightmap (bathymetry blues; land greens → browns → white)
-- Köppen Climate & Biomes (with legend)
-- Surface Temperature (blue → red, current season)
-- Precipitation & Rain Shadows (tan → dark blue)
-- Tidal Range & Coastal Dynamics (micro/meso/macro coast colors, intertidal band)
+### 13.1 Layout (modeled on old desktop map editors)
+From top to bottom:
+1. **Menu bar:** File (New Map, Import, Reload map image, Save/Load Project,
+   Export), Edit (Undo, Redo, Map settings), View (overlay toggles, hover
+   tooltip, tool palette, zoom in/out, fit, go to lat/lon), Tools (Navigate,
+   Sculpt, Cave tool, Route tool), Help (legend, keyboard shortcuts).
+2. **Toolbar:** tool dropdown (far left, shows the current tool),
+   "View: <mode name>" label, the 5 map-mode category tabs and the active
+   category's mode icons, season selector with play button, zoom
+   percentage, Go to lat/lon, Bookmarks (saved camera views).
+3. **Map canvas** fills all remaining space. The toggles panel is a dropdown
+   at the map's top-right corner.
+4. **Context bar:** hint text plus controls for the active tool or selection
+   (e.g., brush size/strength, the climate chart for the selected tile). A
+   **Planet** button opens the planet panel, which slides up from this bar.
+   Startup hint: "Import a map or paint land to begin."
+5. **Status bar** (very bottom): cursor lat/lon, elevation, and climate code.
 
-**Overlays** (checkboxes, stackable):
-- Wind arrows (curved arrows or animated particles) with optional band labels
-- Ocean current arrows (red = warm, blue = cold, green = upwelling)
-- Sea caves (auto and manual markers drawn differently; tidal caves show
+Large tasks (New Map, palette editor, map settings) open as dialogs. Every
+slider has a number input beside it for exact values. Menu items, tools,
+modes, and toggles that don't exist yet are shown disabled with
+"coming in M#".
+
+### 13.2 Tools
+- One **tool dropdown** at the left of the toolbar instead of always-visible
+  tool buttons: **Navigate** (default; drag pans, click inspects), **Sculpt**
+  submenu (Draw Land, Raise, Lower, Carve Trench, Smooth, Erase; M2;
+  plus Cave-Prone Rock, M9, see section 9.1),
+  **Cave tool** (M9), **Route tool** (M10).
+- Esc returns to Navigate. Space+drag and middle-drag pan in every tool.
+- **View > Tool palette:** optional floating GIMP-style palette, hidden by default.
+
+### 13.3 Map modes (EU4-style mode bar)
+Category tabs, each with a grid of icon buttons. Each button's tooltip shows
+the mode name, the milestone it arrives in, and its hotkey. Icons are simple
+original inline SVGs (no copied game art, no external assets). Hotkeys:
+1–5 pick a category, Q W E R T Y U pick the nth mode in it. Hotkeys never fire
+while focus is in a text or number field or while a dialog is open.
+Each mode's exact colors and formula are defined when its milestone is planned.
+
+| Category | Mode (milestone) |
+|---|---|
+| Terrain | Original Art (M2): the imported image, so overlays sit on the user's own map · Physical (M2): bathymetry blues, land greens → browns → white · Elevation (M2): grayscale · Slope & Ruggedness (M2) · Distance from Coast (M2) · Art Check (M6): hand-drawn vs. simulated |
+| Climate | Köppen (M6, with legend) · Biomes (M6): natural, painterly colors for desert, grassland, forest, rainforest, tundra, ice; exportable as base art · Temperature (M4): blue → red, current season · Temperature Range (M4) · Growing Season (M4) · Frost/Snow/Permafrost (M4) · Winter Severity (M4) |
+| Weather | Precipitation (M5): tan → dark blue · Precipitation Seasonality (M5) · Aridity (M5) · Cloud Cover (M5) · Wind Speed & Pressure (M3): calm zones, pressure belts, later monsoon highs/lows · Air Masses (M8) |
+| Ocean | Sea Surface Temperature (M7) · Water Bodies (M9) · Tidal Range (M9): micro/meso/macro coast colors, intertidal band · Marine Productivity (M7) · Sailing Time (M10) |
+| Life | Vegetation Density (M6) · Agricultural Potential (M6) · Travel Difficulty (M8) · Natural Hazards (M8) · Wildfire Risk (M6) |
+
+### 13.4 Toggles (stackable overlays)
+A checkbox panel in the map's top-right dropdown, grouped below. Toggles are
+drawn as lines, symbols, hatching, or transparency so several stay readable
+together.
+- **Reference:** Graticule (M1; tropics and polar circles from axial tilt
+  join in M3), Shaded Relief (M2, blended over the mode), Water Body Labels (M9)
+- **Atmosphere:** Wind Arrows (M3; curved arrows, animated particles in M11,
+  optional band labels), Pressure & ITCZ (M3; H/L symbols and the ITCZ line),
+  Polar Front & Storm Tracks (M8), Climate Boundaries (M4; snowline, tree
+  line, permafrost line, predicted ice edge), Hurricane Zones (M7),
+  Coastal Fog (M7)
+- **Ocean:** Ocean Currents (M7; red = warm, blue = cold, green = upwelling),
+  Seasonal Sea-Ice Edges (M7), Sailing Routes (M10)
+- **Coast:** Coastline Type (M9), Wave Exposure (M9), Harbor Suitability (M9),
+  Sea Caves (M9; auto and manual markers drawn differently; tidal caves show
   open/flooded state from the tide scrubber)
-- Pressure centers (H/L symbols) and the ITCZ line
 
-**Tile inspector** (hover tooltip): latitude/longitude, elevation, summer and
-winter temperature, annual precipitation, wind direction and speed, current
-type, tidal range, Köppen code. Hovering a cave marker shows its type,
-name, notes, whether it's auto or manual, plausibility score, and (for tidal
-caves) hours accessible per tidal cycle.
+### 13.5 Lookups and controls
+- **Tile inspector** (hover tooltip, optional via View menu): latitude/
+  longitude, elevation, summer and winter temperature, annual precipitation,
+  wind direction and speed, current type, tidal range, Köppen code, day
+  length (M3), and a real-world climate analog from a small built-in table
+  of real cities (M6). Hovering a cave marker shows its type, name, notes,
+  whether it's auto or manual, plausibility score, and (for tidal caves)
+  hours accessible per tidal cycle.
+- **Click a tile** (without dragging) in Navigate: the context bar shows a
+  monthly temperature and precipitation chart (M6).
+- **Season selector** (M3) with a **play button** that animates the year (M11).
+- **Navigation:** zoom at cursor and pan (needed for 5000+ px maps),
+  fit-to-screen, zoom percentage, Go to lat/lon, Bookmarks.
 
-**Navigation:** zoom and pan (needed for 5000+ px maps), fit-to-screen.
+Last-used settings, bookmarks, and palettes persist in localStorage.
 
-**Panels:** map setup, terrain tools, import dialogs (silhouette, heightmap,
-palette, mask), planet sliders, season control, layer toggles, legend.
-
-Last-used settings and palettes persist in localStorage.
-
-## 12. Export, save, and load
+## 14. Export, save, and load
 
 - Export any map mode as PNG at the original source resolution (overlays
   optional), or at sim resolution.
-- Save Project: downloads a .json with all settings, the palette, and the
-  edited terrain embedded as a PNG with elevation packed into RGB channels
-  (keeps full precision). Manual and pinned caves are saved; auto caves
-  regenerate from the seed.
+- Save Project: downloads a .json with all settings, the palette, bookmarks,
+  water body edits, and the edited terrain embedded as a PNG with elevation
+  packed into RGB channels (keeps full precision). Manual and pinned caves
+  are saved; auto caves regenerate from the seed.
 - Export the cave list as JSON or CSV (position in source pixels and
   lat/lon, type, name, notes).
 - Load Project restores everything.
 
-## 13. Out of scope for v1 (future ideas)
+## 15. Running locally and online
 
-amphidromic tidal phase, storms and hurricanes, rivers and lakes from
-runoff, deep ocean circulation and salinity, multiple moons, 3D globe view.
+- One codebase, two ways to run: locally through a simple static server
+  (`python3 -m http.server`), and online as a GitHub Pages site deployed
+  from the main branch (the app lives in the repo's Artifact2/ folder). No
+  build step either way.
+- No file or folder names start with an underscore (GitHub's Jekyll
+  processing would skip them).
+- Fully client-side: no backend, no accounts, no uploads. Imported maps stay
+  on the user's machine in both versions.
+- The app works offline once loaded locally (no CDN or network dependencies).
+- Pushing to main redeploys the site, so only push when the app runs.
 
-## 14. Milestones and verification checks
+## 16. Out of scope for v1 (future ideas)
+
+amphidromic tidal phase, simulating individual storms and hurricanes (v1
+only maps hurricane zones and storm tracks as climate overlays), deep ocean
+circulation and salinity, multiple moons, 3D globe view, a single-file build
+that opens by double-clicking (no server), and an installable offline
+version of the online site (PWA).
+
+**Moonshot** (optional, after M9): rivers, drainage basins, and lakes from runoff.
+
+**Not planned:**
+- Habitability: a worldbuilding judgment, not a climate output.
+- Model confidence: every result here is a rough guide by default, and its
+  accuracy can't be measured meaningfully.
+- Compare-settings view: make a change, then undo/redo to compare.
+
+## 17. Milestones and verification checks
 
 The app must run after every milestone. Test maps in test-maps/:
 an Earth grayscale heightmap (public domain), an Earth silhouette, and my
 own hand-drawn reference map.
 
+Each new map mode and toggle lands with the milestone that produces its data.
+
 **M1 — Shell and grid**
-New-map dialog, open-ocean render, zoom/pan, map mode buttons
-(placeholders), tile inspector with lat/lon.
-- Inspector shows the top-edge latitude on row 0 and the midpoint latitude
-  at the vertical center; longitude wraps when enabled.
+App layout (section 13.1), New Map dialog, open-ocean render, zoom/pan,
+tool dropdown (Navigate only), placeholder mode bar with all 29 modes,
+toggles dropdown listing every toggle (Graticule live), tile inspector and
+status bar with lat/lon, Go to lat/lon, Bookmarks.
+- Inspector shows the top-edge latitude at the top edge of row 0 and the
+  midpoint latitude at the vertical center; longitude wraps when enabled.
+- Hotkeys don't fire while typing in a text/number field or while a dialog
+  is open.
+- The app loads with no console errors both locally and from the GitHub
+  Pages URL.
 
 **M2 — Terrain input**
 Brushes, silhouette import with auto-relief, heightmap import, palette
-editor, land/sea mask, bathymetry, downsampling, Physical and Original Art modes.
+editor, land/sea mask, bathymetry, downsampling, Reload map image,
+undo/redo, New Map confirmation, Edit > Map settings. Modes: Original Art,
+Physical, Elevation, Slope & Ruggedness, Distance from Coast. Toggle:
+Shaded Relief.
 - Earth silhouette coastlines look right in Physical mode.
 - Palette import of my reference map ignores the text and wind arrows.
 - A Paradox heightmap's darkest land value maps to ~0 m and 203 to the max height.
 
 **M3 — Planet sliders and wind**
-All planet sliders, circulation bands, ITCZ shift, pressure belts, wind
-arrow overlay with band labels.
+All planet sliders, season selector, circulation bands, ITCZ shift,
+pressure belts, wind arrow overlay with band labels, Pressure & ITCZ toggle,
+tropics and polar circles on the graticule, day length in the inspector.
+Mode: Wind Speed & Pressure.
 - At default settings, the arrows match my hand-drawn reference map.
 - 72 h rotation → 1 cell; 6 h → 7 bands. Retrograde flips east/west.
 - At northern summer solstice the ITCZ sits north of the equator.
 - Node tests cover wind direction signs in each band and hemisphere.
 
 **M4 — Temperature**
+Modes: Temperature, Temperature Range, Growing Season, Frost/Snow/Permafrost,
+Winter Severity. Toggle: Climate Boundaries.
 - Earth annual mean: ~25–28 °C at the equator, below −15 °C near the poles.
 - Interior Siberia/Canada winters far colder than coasts at the same latitude.
 - Mountains are colder than surrounding lowlands.
 
 **M5 — Precipitation and rain shadows**
+Modes: Precipitation, Precipitation Seasonality, Aridity, Cloud Cover.
 - Sahara and Arabia < 10 mm/month; Amazon, Congo, and Indonesia
   ≥ 150 mm/month; Western Europe 50–100 mm/month.
 - Dry lee sides behind the Andes and Rockies.
 - My reference map: the western continent is dry west of its mountain spine
   in the northern tropics, with a wet east coast.
 
-**M6 — Köppen**
+**M6 — Köppen and biomes**
+Modes: Köppen, Biomes, Vegetation Density, Agricultural Potential, Wildfire
+Risk, Art Check. Click-a-tile climate chart, real-world climate analog.
 - Earth broadly matches a real Köppen map: Af Amazon, BWh Sahara,
   Cfb Western Europe, Csa Mediterranean, Dfc Canada/Siberia, ET Arctic coasts.
 
 **M7 — Ocean currents and upwelling**
+Modes: Sea Surface Temperature, Marine Productivity. Toggles: Ocean
+Currents, Seasonal Sea-Ice Edges, Coastal Fog, Hurricane Zones.
 - Clockwise gyres in the northern hemisphere, counter-clockwise in the south.
 - Gulf Stream warm; California, Humboldt, and Benguela currents cold with
   upwelling.
@@ -482,11 +654,19 @@ arrow overlay with band labels.
   Atacama and Namib coasts drier.
 
 **M8 — Monsoons, friction, deflection**
+Modes: Air Masses, Travel Difficulty, Natural Hazards. Toggle: Polar Front &
+Storm Tracks.
 - Northern summer: onshore winds and heavy rain over India and Southeast
   Asia. Northern winter: offshore winds.
 - Wind is visibly weaker over land.
 
-**M9 — Tides and sea caves**
+**M9 — Tides, sea caves, and water bodies**
+Tides, sea caves and the Cave tool, water bodies (section 10). Modes: Tidal
+Range, Water Bodies. Toggles: Water Body Labels, Coastline Type, Wave
+Exposure, Harbor Suitability, Sea Caves. Sculpt brush: Cave-Prone Rock.
+- Earth: the Mediterranean, Black Sea, Baltic, Red Sea, Persian Gulf, and
+  Hudson Bay come out as separate bodies; the Caspian is a lake; each label
+  sits in open water.
 - Bay of Fundy, Severn Estuary, and northwest France macro-tidal.
 - Mediterranean, Baltic, and Black Sea micro-tidal; lakes zero.
 - Earth: caves cluster on steep, exposed coasts such as western Ireland,
@@ -497,7 +677,21 @@ arrow overlay with band labels.
 - Same seed gives the same caves; a small brush edit only changes caves near it.
 - Manual caves survive regeneration; pinning converts an auto cave to manual.
 
-**M10 — Polish and export**
-Animated wind particles, tide scrubber, PNG export, project save/load.
+**M10 — Sailing routes and travel time**
+Section 11: ship presets, Route tool, Sailing Routes toggle, Sailing Time mode.
+- Earth heightmap, Atlantic: outbound Europe → Caribbean runs via the
+  Canaries in the trades; the return goes north through the westerlies
+  (volta do mar).
+- The Indian Ocean crossing is fast with the summer monsoon and the return
+  is fast in winter.
+- Stretch check, only if M8 reproduces the Etesian winds: in summer,
+  Rome → Alexandria is several times faster than the return, and the return
+  hugs the Levant, Anatolia, and Greece.
+
+**M11 — Polish and export**
+Animated wind particles, tide scrubber, season playback, PNG export,
+project save/load.
 - An exported PNG matches the source map's dimensions exactly.
 - A saved project reloads identically.
+
+**Moonshot** (optional, after M9): rivers, drainage basins, lakes.

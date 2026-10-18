@@ -85,9 +85,9 @@ bottom. Claude Code updates this at the end of every milestone.
 
 **Changed (decisions recorded before implementing)**
 - Location: the app, CLAUDE.md, SPEC.md, and LOG.md all live in Artifact2/
-  of the TCSS490-AI-Course repo. Pages URL is
-  https://<user>.github.io/TCSS490-AI-Course/Artifact2/. Claude Code doesn't
-  read or modify anything outside Artifact2/.
+  of the 490-Course repo (github.com/Kcmichalson/490-Course). Pages URL is
+  https://kcmichalson.github.io/490-Course/Artifact2/. Claude Code doesn't
+  read or modify anything outside Artifact2/ unless asked.
 - No `.nojekyll`. Instead, no file or folder name may start with an
   underscore (the only thing Jekyll would skip). Removed from M1.
 - Row convention: cell-registered. The top edge of row 0 is latTop and its
@@ -139,6 +139,15 @@ bottom. Claude Code updates this at the end of every milestone.
   Black Sea, Baltic, Red Sea, Persian Gulf, Hudson Bay separate; Caspian a
   lake; labels in open water) and the Cave-Prone Rock brush (M9) to the
   Sculpt submenu (SPEC 13.2 and the tool registry).
+- Repo name correction: the GitHub repo is Kcmichalson/490-Course (the local
+  folder is TCSS490-AI-Course), so the Pages URL is
+  https://kcmichalson.github.io/490-Course/Artifact2/. Fixed in CLAUDE.md
+  and this log.
+- Portfolio hub (repo-root index.html, changed at the user's request): the
+  Artifact 2 card is now "Fantasy Climate Mapper" with a new description and
+  the user's reflection. Its Inspect modal shows "Open App →" (Pages URL) and
+  "Open Repository →" (the Artifact2 folder on GitHub). The record format
+  gained an optional `appLink`; Artifacts 1 and 3–5 are unchanged.
 
 **Built**
 - Desktop-editor shell: menu bar, toolbar (tool dropdown, view label,
@@ -233,7 +242,7 @@ bottom. Claude Code updates this at the end of every milestone.
 
 **Next**
 - Commit and push, enable Pages for the repo, and open
-  https://<user>.github.io/TCSS490-AI-Course/Artifact2/ to confirm the app
+  https://kcmichalson.github.io/490-Course/Artifact2/ to confirm the app
   loads with no console errors and the worker reports ready.
 - Then plan M2 (terrain input).
 

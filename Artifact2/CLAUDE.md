@@ -22,8 +22,9 @@ personal worldbuilding tool, and I'm the only user.
 
 ## Runs locally AND on GitHub Pages
 The same files must work both ways with no changes. The app lives in the
-Artifact2/ folder of the TCSS490-AI-Course repo; GitHub Pages serves it from
-the main branch at https://<user>.github.io/TCSS490-AI-Course/Artifact2/
+Artifact2/ folder of the 490-Course repo (github.com/Kcmichalson/490-Course;
+the local folder is named TCSS490-AI-Course). GitHub Pages serves it from
+the main branch at https://kcmichalson.github.io/490-Course/Artifact2/
 - Everything for this project stays inside Artifact2/. Don't read or modify
   anything outside it
 - All paths are relative (`./src/main.js`), never root-absolute (`/src/main.js`),

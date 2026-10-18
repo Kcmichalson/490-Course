@@ -475,13 +475,13 @@
         <div class="sleeve">Artifact 1</div>
       </div>
 
-      <!-- Artifact 2: Climate Modeller -->
+      <!-- Artifact 2: Fantasy Climate Mapper -->
       <div class="artifact-slot" data-bg="idea2">
         <div class="card">
-          <div class="card-title">Fantasy Climate Modeller</div>
+          <div class="card-title">Fantasy Climate Mapper</div>
           <div class="card-subtitle">Artifact 2: Something You Will Use</div>
           <div class="card-desc">
-            A small, functional tool that will be useful after the week ends. Perhaps a tool to help me keep track of my long-term goals and compartmentalize it into easier objectives.
+            A browser tool that simulates winds, rain, climates, and tides for hand-made fantasy maps.
           </div>
           <button class="card-btn inspect-trigger" data-artifact="2">Inspect</button>
         </div>
@@ -839,6 +839,7 @@
         <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-top: 18px; margin-bottom: 6px; color: var(--card-orange);">Reflection & Takeaways</h3>
         <p id="inspectReflection" style="white-space: pre-line;"></p>
         <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);">
+          <a id="inspectAppLink" href="#" target="_blank" rel="noopener" class="nav-btn" style="display: none; text-decoration: none; margin-right: 8px;">Open App &rarr;</a>
           <a id="inspectLink" href="#" target="_blank" rel="noopener" class="nav-btn" style="display: inline-block; text-decoration: none;">Open Repository &rarr;</a>
         </div>
       </div>
@@ -957,7 +958,9 @@
 
     
 
-    // Centralized artifact details and reflections
+    // Centralized artifact details and reflections.
+    // Fields: title, desc, reflection, link (repository; '#' hides it),
+    // and optional appLink (live app; adds an "Open App" button).
     const ARTIFACT_DATA = {
       1: {
         title: "Artifact 1: Portfolio",
@@ -967,9 +970,10 @@
       },
       2: {
         title: "Artifact 2: Something You Will Use",
-        desc: "A small, functional tool that will be useful after the week ends. Perhaps a tool to help me keep track of my long-term goals and compartmentalize it into easier objectives.",
-        reflection: "Placeholder idea. Built in Week 2 using Claude Code.",
-        link: "https://github.com/Kcmichalson/490-Course/blob/main/Artifact2/index.html"
+        desc: "A browser app that simulates plausible winds, ocean currents, temperature, rainfall, Köppen climates, and tides for hand-made fantasy maps. Runs entirely in the browser; Milestone 1 of 11 is complete.",
+        reflection: "Built with Claude Code (Opus 5.5) in the desktop app. I took some time deciding between using the app and a plugin for IntelliJ but decided on the app since I'd rather keep AI disconnected from my default IDE workflow for my other classes. Most of my time went into planning: I wrote CLAUDE.md, SPEC.md, and LOG.md before any code, then sent it to Claude for its feedback, read its proposal for each step, which caught real problems early, like the docs pointing at the wrong repo, no undo/redo in the spec, and tiny maps having no valid simulation size. I reviewed and approved every edit to any markdown files, and reviewed every command run by the agent in the terminal, checking its output mattered: my test that the top edge reads exactly 90°N exposed a rounding bug (89.99°) that the automated tests missed. The full plan is 11 milestones, so this is the foundation, but it's a tool I'll keep building.",
+        link: "https://github.com/Kcmichalson/490-Course/tree/main/Artifact2",
+        appLink: "https://kcmichalson.github.io/490-Course/Artifact2/"
       },
       3: {
         title: "Artifact 3: AI Inside It",
@@ -1018,6 +1022,10 @@
                         const linkElement = document.getElementById('inspectLink');
                         linkElement.href = artifactRecord.link;
                         linkElement.style.display = artifactRecord.link === '#' ? 'none' : 'inline-block';
+
+                        const appLinkElement = document.getElementById('inspectAppLink');
+                        appLinkElement.href = artifactRecord.appLink || '#';
+                        appLinkElement.style.display = artifactRecord.appLink ? 'inline-block' : 'none';
 
                         modalElement.classList.add('open');
                     }

@@ -452,6 +452,28 @@ as prompts. Each fix lists how it was verified.
 * **How It Was Verified:**  
   `git check-ignore -v` matched `test-maps/private/eu4_heightmap.bmp` to `Artifact2/.gitignore:2`; `git status --ignored` lists `test-maps/private/` as ignored, and the file was never tracked. (Read-only git checks, run because I asked for confirmation.)
 
+### Prompt 22
+* **User Prompt:**  
+  > *"The browser pane is in front now. Run the 1280 px canvas visual pass and mark it in LOG.md."* (after asking what to finish with the last 10% of usage before M2a)
+* **What the AI Provided:**  
+  Ran the 1280 px pass. Frames were stalled at first; selecting the tab and showing the browser pane (the plan pane had been in front) got them running. It sampled canvas pixels for colors and for label pixels under the legend and the Overlays button. Frames stalled again before the zoomed-in and wrapped-selection checks, so it stopped and recorded a partial PASS plus two pending checks in the retro entry.
+* **How It Was Verified:**  
+  Canvas pixel reads (getImageData): background (16, 19, 24) and ocean (29, 75, 117) match the CSS variables exactly; left-edge label pixels reach brightness 219; the area under the legend peaks at 74 (no labels).
+
+### Prompt 23
+* **User Prompt:**  
+  > *"I checked both by eye in my own browser: labels are skipped under the Overlays button (10°E at 182% zoom), and the selection outline lines up on every wrapped copy (squares exactly one map-width apart at the same position). Mark both PASS in LOG.md, noted as checked by me."*
+* **What the AI Provided:**  
+  Marked both checks PASS in the retro entry, noted as checked by me, and set Next to "Start M2a".
+* **How It Was Verified:**  
+  By me, by eye, in my own browser (as described above).
+
+### Prompt 24
+* **User Prompt:**  
+  > *"This will be the end of the first session until we start again later today. Please note that down, and write down anything else of note."*
+* **What the AI Provided:**  
+  Added the "End of Session 1" entry below, covering status, a start-of-session checklist, and open items.
+
 ---
 
 ## 2026-10-18 — Retro between M1 and M2
@@ -512,12 +534,68 @@ as prompts. Each fix lists how it was verified.
   the window. The toolbar wraps to 2 / 2 / 3 / 5 rows.
 - PASS At 1280 px the legend sits bottom-right (x 972–1272 of 1280), clear
   of the left-edge latitude labels.
-- PENDING Canvas visual pass at 1280 px (graticule labels clear of the
-  Overlays button and legend, colors unchanged): waiting for the browser
-  pane to be brought forward.
+- PASS (partial) Canvas visual pass at 1280 px, by sampling canvas pixels
+  on the 5632×2048 map at 22%: the background outside the map is exactly
+  `--map-bg` (16, 19, 24), and open ocean is exactly `--placeholder-ocean`
+  (29, 75, 117), so colors are unchanged after the move to variables.
+  Latitude labels are drawn at the left edge (brightness 219), and nothing
+  under the legend is brighter than ocean plus grid lines (74), so the
+  legend covers no labels.
+- PASS Longitude labels are skipped under the Overlays button (checked by
+  me by eye in my own browser: the 10°E label at 182% zoom).
+- PASS The selection outline lines up on every wrapped copy (checked by me
+  by eye: the squares sit exactly one map-width apart at the same position).
+  Claude's automated attempt at these two had stalled in the browser pane.
 
 **Next**
-- Finish the canvas visual pass, then approve and start the M2a plan.
+- Start M2a (plan approved; test maps are in).
+
+---
+
+## 2026-10-18 — End of Session 1
+
+Session 1 ends here (paused near the usage limit); Session 2 starts later
+today with M2a.
+
+**Where things stand**
+- M1 is done and verified, including the live site at
+  https://kcmichalson.github.io/490-Course/Artifact2/. The retro changes are
+  in, and the M2 plan is approved and split into M2a/M2b in SPEC.md.
+- Uncommitted at the end of the session: the retro (serve.py, color
+  variables, layout fixes, workflow rules), the M2a/M2b split, .gitignore,
+  test-maps/README.md, and these log entries. I commit and push myself.
+- Test maps are in test-maps/ (GEBCO heightmap and silhouette), plus the
+  git-ignored test-maps/private/eu4_heightmap.bmp. My hand-drawn reference
+  map isn't added yet; the M2b palette check and the M3/M5 checks need it.
+
+**Start of Session 2 checklist**
+- Read CLAUDE.md, SPEC.md, and this log. Start a "Session 2 prompt log".
+- Start the server with `py serve.py` and open http://127.0.0.1:8000. The
+  Session 1 server stops when the session ends.
+- Run the tests with `node --test "tests/*.test.js"` (31 should pass). If
+  `node` still isn't on PATH, use `"C:\Program Files\nodejs\node.exe"`.
+- Keep the browser pane in front during browser checks. Frames stall when
+  it's hidden or the Claude window is covered; if that happens, stop and ask.
+
+**First steps for M2a**
+- Milestone badges: the mode/tool/overlay registries and comingsoon.js use
+  whole-number milestones, so M2b items show "coming in M2". Switch to
+  M2a/M2b labels (and keep `CURRENT_MILESTONE` meaningful) as M2a's first
+  change, with registry tests updated.
+- Then follow the approved plan: pure src/sim modules with tests first
+  (heightmap, silhouette, distance, noise, blur, relief, bathymetry,
+  downsample, the import pipeline, one `isLand` function), then the worker
+  jobs, import dialog, Map settings, Reload (Shift+R), and the Original Art,
+  Physical, and Elevation modes.
+
+**Other notes**
+- The in-app browser only reads `.claude/launch.json` from the repo root,
+  so the server is started directly with `py serve.py`;
+  Artifact2/.claude/launch.json records the same command.
+- Read-only git checks (like `git check-ignore`) were run once, because I
+  asked for confirmation. Otherwise Claude runs no git commands.
+- test-maps/README.md credits GEBCO. I removed the dataset/version
+  placeholder line myself.
 
 ---
 

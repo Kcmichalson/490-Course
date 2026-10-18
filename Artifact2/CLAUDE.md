@@ -92,9 +92,11 @@ the main branch at https://kcmichalson.github.io/490-Course/Artifact2/
   suggest a commit message
 - Every milestone's verification includes a visual pass at a ~1280 px wide
   window: nothing clipped, nothing covering labels or controls
-- If the browser preview stalls (hidden pane, frames not running, stale
-  code), stop and ask me to bring the pane forward or reload before trying
-  workarounds
+- For visual checks, give me a short checklist to verify by eye in my own
+  browser instead of probing the preview
+- If I ask you to use the browser preview and it stalls (hidden pane, frames
+  not running, stale code), stop and ask me to bring the pane forward or
+  reload before trying workarounds
 - Keep a prompt log in LOG.md for every session (format: "Session 1 prompt
   log"). For each of my prompts, including answers to multiple-choice
   questions and messages sent mid-task: quote it (condense long pastes into

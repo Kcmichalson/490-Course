@@ -584,8 +584,11 @@ Last-used settings, bookmarks, and palettes persist in localStorage.
 amphidromic tidal phase, simulating individual storms and hurricanes (v1
 only maps hurricane zones and storm tracks as climate overlays), deep ocean
 circulation and salinity, multiple moons, 3D globe view, a single-file build
-that opens by double-clicking (no server), and an installable offline
-version of the online site (PWA).
+that opens by double-clicking (no server), an installable offline
+version of the online site (PWA), and non-equirectangular maps: Mercator,
+and custom latitude control points ("this row is 36°N") for distorted maps
+such as Paradox's, whose far south stays squashed even after setting the
+latitude range.
 
 **Moonshot** (optional, after M9): rivers, drainage basins, and lakes from runoff.
 
@@ -599,9 +602,10 @@ version of the online site (PWA).
 
 The app must run after every milestone. Test maps in test-maps/ (see its
 README for credits): a GEBCO Earth heightmap with ocean depth, an Earth
-silhouette thresholded from it, my own hand-drawn reference map (to be
-added), and, in the git-ignored test-maps/private/, a Paradox heightmap
-(game content, never committed).
+silhouette thresholded from it, and generated black/white archipelago and
+continent maps (1024×512). In the git-ignored test-maps/private/ (never
+committed): a Paradox heightmap (game content) and the reference map
+(`reference_map.png`, a third-party hand-drawn map).
 
 Each new map mode and toggle lands with the milestone that produces its data.
 
@@ -632,14 +636,14 @@ category layer (lake, ice, shelf), an optional separate art image for
 Original Art. Modes: Slope & Ruggedness, Distance from Coast. Toggle: Shaded
 Relief. How brush edits survive Reload and Map settings is decided when M2b
 is planned (leaning: a separate edits layer re-applied afterward).
-- Palette import of my reference map ignores the text and wind arrows.
+- Palette import of the reference map ignores the text and wind arrows.
 
 **M3 — Planet sliders and wind**
 All planet sliders, season selector, circulation bands, ITCZ shift,
 pressure belts, wind arrow overlay with band labels, Pressure & ITCZ toggle,
 tropics and polar circles on the graticule, day length in the inspector.
 Mode: Wind Speed & Pressure.
-- At default settings, the arrows match my hand-drawn reference map.
+- At default settings, the arrows match the reference map.
 - 72 h rotation → 1 cell; 6 h → 7 bands. Retrograde flips east/west.
 - At northern summer solstice the ITCZ sits north of the equator.
 - Node tests cover wind direction signs in each band and hemisphere.
@@ -656,7 +660,7 @@ Modes: Precipitation, Precipitation Seasonality, Aridity, Cloud Cover.
 - Sahara and Arabia < 10 mm/month; Amazon, Congo, and Indonesia
   ≥ 150 mm/month; Western Europe 50–100 mm/month.
 - Dry lee sides behind the Andes and Rockies.
-- My reference map: the western continent is dry west of its mountain spine
+- The reference map: the western continent is dry west of its mountain spine
   in the northern tropics, with a wet east coast.
 
 **M6 — Köppen and biomes**
@@ -712,7 +716,8 @@ Section 11: ship presets, Route tool, Sailing Routes toggle, Sailing Time mode.
 **M11 — Polish and export**
 Animated wind particles, tide scrubber, season playback, PNG export,
 project save/load. Themes: dark (default), light, parchment (each overrides
-the UI color variables in style.css).
+the UI color variables in style.css). A collapsible legend (at narrow widths
+it covers a large part of the map).
 - An exported PNG matches the source map's dimensions exactly.
 - A saved project reloads identically.
 

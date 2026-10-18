@@ -6,7 +6,7 @@ bottom. Claude Code updates this at the end of every milestone.
 ## Milestone status
 
 - [x] M1 — Shell and grid
-- [ ] M2a — Terrain imports
+- [x] M2a — Terrain imports
 - [ ] M2b — Painting and editing
 - [ ] M3 — Planet sliders and wind
 - [ ] M4 — Temperature
@@ -565,8 +565,10 @@ today with M2a.
   variables, layout fixes, workflow rules), the M2a/M2b split, .gitignore,
   test-maps/README.md, and these log entries. I commit and push myself.
 - Test maps are in test-maps/ (GEBCO heightmap and silhouette), plus the
-  git-ignored test-maps/private/eu4_heightmap.bmp. My hand-drawn reference
-  map isn't added yet; the M2b palette check and the M3/M5 checks need it.
+  git-ignored test-maps/private/eu4_heightmap.bmp. The reference map (a
+  third-party hand-drawn map) wasn't added yet at this point; it later went
+  into test-maps/private/reference_map.png (git-ignored). The M2b palette
+  check and the M3/M5 checks use it.
 
 **Start of Session 2 checklist**
 - Read CLAUDE.md, SPEC.md, and this log. Start a "Session 2 prompt log".
@@ -596,6 +598,221 @@ today with M2a.
   asked for confirmation. Otherwise Claude runs no git commands.
 - test-maps/README.md credits GEBCO. I removed the dataset/version
   placeholder line myself.
+
+---
+
+## 2026-10-18 — Milestone 2a: Terrain imports
+
+**Planned** (approved plan; additions from my review)
+- First change: milestone badges show "M2a"/"M2b" instead of "M2", and a
+  new workflow rule for visual checks (a short checklist I verify by eye in
+  my own browser instead of Claude probing the preview).
+- Pure src/sim modules with tests first, then the worker, file handling,
+  renderers, import dialog, Map settings, Reload (Shift+R), and elevation
+  readouts.
+- Additions: Import, Reload, and Map Settings are enabled once
+  `CURRENT_MILESTONE` is `'2a'`, and M2b items stay disabled; Map settings
+  on a blank map just applies the new extent; the by-eye checklist includes
+  a non-wrapping archipelago and a wrapped continent_map_1; the reference
+  map is third-party and private.
+
+**Changed**
+- Milestones: one ordered list in src/ui/comingsoon.js
+  (`1, 2a, 2b, 3 … 11`); registries use `'2a'`/`'2b'` for the M2 items;
+  badges and tooltips go through `milestoneLabel()`. `CURRENT_MILESTONE` is
+  now `'2a'`.
+- CLAUDE.md: visual checks are a by-eye checklist for me. The "preview
+  stalls" rule now applies only when I ask Claude to use the preview.
+- SPEC/LOG: "the reference map" (third-party, in git-ignored
+  test-maps/private/reference_map.png); the generated archipelago/continent
+  maps are listed in SPEC §17.
+- New pure modules (src/sim/):
+  - terrain.js: the single `isLand` / `landMask` function, plus blank terrain.
+  - heightmap.js, silhouette.js: reading the two image types.
+  - distance.js: distance to the coast in km, accounting for latitude and
+    east-west wrap.
+  - noise.js: seeded noise on a sphere, plus a fast interpolated field.
+  - blur.js, relief.js, bathymetry.js, downsample.js.
+  - importpipeline.js: runs the steps in order.
+  - Start values live in constants.js.
+- Rendering: colorramps.js (Physical and Elevation color tables) and
+  src/render/modes/ (Original Art, Physical, Elevation). The cached map
+  image rebuilds when the terrain version changes.
+- I/O: imagefile.js picks files (File System Access API with a fallback),
+  decodes without color conversion so gray values stay exact, and handles
+  the downscale size. workerclient.js handles worker requests; the worker
+  runs the build job.
+- UI:
+  - Import dialog with a live preview (coastline outlined) and
+    heightmap/silhouette settings, sliders with number inputs, and notices
+    for downscaling, color images, and mismatched mask sizes.
+  - Map settings dialog, and shared extent fields.
+  - File > Import / Reload (Shift+R) and Edit > Map Settings are live.
+  - The status bar and tooltip show elevation.
+- Decisions applied: the mask wins; the coastline is restored after
+  smoothing; Auto sea level only with a flat ocean (otherwise I set it); a
+  different-size Reload reopens the dialog prefilled; images over
+  8192×4096 get a downscale notice; a mask of a different size is scaled
+  to fit (nearest neighbor) with a notice.
+
+**Problems**
+- Per-pixel sphere noise was too slow at full size, so noise is now sampled
+  every 4 px and interpolated. It's low-frequency, so the result matches
+  within 0.03; a test covers it.
+- The image-type guess called the GEBCO black/white silhouette a heightmap,
+  because downscaling the preview softens edges into in-between grays (256
+  levels). The guess now checks whether at least 97% of pixels sit on the
+  two most common tones (GEBCO BW: 98.6%; heightmaps: ~8%).
+- Three new tests had setup mistakes, not code bugs: a noise test map too
+  small for its finest octave, a −0 vs 0 strict comparison, and a 4×2
+  config below the minimum map size.
+- Deviations from the plan, for the record:
+  - The New Map dialog still has its own extent fields; only Import and
+    Map settings share extentfields.js (left alone to avoid rewriting a
+    working dialog).
+  - Import progress is an elapsed-time counter, not per-step progress.
+  - The renderers live in src/render/modes/ with an index.
+
+**Verification checks**
+- PASS `node --test "tests/*.test.js"`: 61/61 (31 at the end of M1).
+- PASS Full-size timing in Node: a 5632×2048 silhouette import takes
+  ~2.5 s, run in the worker.
+- PASS In the browser (non-visual): the page loads with no console errors
+  and the worker answers through the new client. continent_map_1 decodes,
+  is guessed as a silhouette, and builds in 161 ms (46% land, −4,254 to
+  2,722 m). The type guess is right for all test maps.
+- My by-eye checklist results (in my browser):
+  1. PASS GEBCO silhouette: coastlines match in Original Art, Physical, and
+     Elevation (SPEC M2a check 1). The auto-relief mountains are invented,
+     as expected.
+  2. PASS GEBCO heightmap + BW mask (sea level 128): real terrain with
+     shelves and trenches visible; tooltip readings are consistent.
+  3. PASS Non-wrapping import (a continent map, wrap off): shown once,
+     latitude labels visible.
+  4. PASS Wrapped import, but none of the generated maps touch the
+     left/right edges, so there was no seam to test. The thin light lines at
+     the top/bottom edges are in the source images.
+  5. PASS Map Settings: EU4 at top 80 / bottom −37 puts the equator at Lake
+     Victoria and Gibraltar near 36°N. The far south stays squashed because
+     the EU4 map isn't truly equirectangular (now a SPEC §16 future idea).
+  6–9. First reported as "[result]" placeholders, so Claude left M2a
+     unticked and asked. My follow-up results:
+  6. PASS Reload: I edited a Desktop copy, and Reload showed the new island.
+  7. PASS with a finding (SPEC M2a check 2): the Tibetan plateau reads
+     4,184 m (max 5,000), but a northern France coast read 195 m. With Auto
+     sea level, EU4's gap between its ocean gray and its lowest land gray
+     meant darkest + 1 lifted all land. Fixed: Auto now picks the first
+     gray actually used above the flat ocean plateau (skipping empty
+     levels), so the lowest land reads ~0 m. New test: a Paradox-style gap
+     (ocean 40, land from 94) gives sea level 94 and the lowest land ~0 m.
+     The pipeline test now uses an image with such a gap too.
+  8. PASS M2b items: Sculpt brushes, Undo/Redo, Tool Palette, and Shaded
+     Relief show M2b; Cave-Prone Rock shows M9; the Slope and Distance icons
+     are disabled.
+  9. PASS ~1280 px and narrower: the toolbar wraps to 2–3 rows down to
+     ~650 px, nothing is clipped, and the context bar truncates with "…".
+     For later: the legend covers a large part of the map at narrow widths,
+     so a collapsible legend is now on the M11 list in SPEC.md.
+- Bug I found during the checklist: for gebco_bathy_BW_heightmap.png the
+  dialog note said "256 gray levels: looks like a heightmap" while
+  Silhouette was (correctly) selected. The note still counted distinct gray
+  levels, while the guess already used the two-tone share. Fixed: a new
+  `describeGuess()` in silhouette.js builds the note from the same fields
+  that chose the type (e.g., "Mostly two tones (98% of pixels): looks like
+  a silhouette."), so the note and the selection can't disagree. Tests: a
+  two-tone image with blended edges is guessed and described as a
+  silhouette, and for every test image the note names the guessed type.
+- `profileDepth(0)` returned −0. In Session 2's first pass I had only
+  loosened the test (`=== 0` treats −0 as equal) instead of fixing the
+  code. Fixed now (the shoreline returns +0), and the test is strict again
+  (`Object.is`).
+- PASS Node tests 63/63 after these fixes, then 64/64 after the
+  auto-sea-level fix.
+- M2a complete: every checklist item passes, including both SPEC M2a
+  checks (item 1 and item 7, the latter after the auto-sea-level fix; I
+  haven't re-checked EU4 by eye since that fix).
+
+**By-eye checklist (in my browser at ~1280 px, http://127.0.0.1:8000)**
+1. File > Import Map Image… → `gebco_bathy_BW_heightmap.png`. It
+   pre-selects Silhouette. Import, then switch Physical / Elevation /
+   Original Art (W / E / Q in Terrain): the coastlines match the image.
+2. Import `gebco_bathy_heightmap.jpg` as Heightmap. The sea level says "set
+   it by hand"; set it, add the BW PNG as the mask, and import. The coasts
+   follow the mask, depths come from the image, and hovering shows
+   elevation in the status bar and tooltip.
+3. Import `archipeligo_map_1.png` with the span < 360° (wrap greys out): a
+   non-wrapping map with ocean on every side.
+4. Import `continent_map_1.png` wrapped (360°): panning across the date
+   line repeats the map. A visible seam comes from the image, not a bug.
+5. Edit > Map Settings: change the latitude range and apply. The terrain
+   rebuilds and the view stays put.
+6. Edit the source image and save it, then press Shift+R: the map updates
+   without a dialog. A saved image of a different size reopens the dialog
+   prefilled.
+7. `private/eu4_heightmap.bmp` as Heightmap with sea level set by hand: the
+   darkest land reads ~0 m, and gray 203 reads the max height.
+8. Badges: Sculpt, Undo/Redo, Slope & Ruggedness, Distance from Coast, and
+   Shaded Relief show M2b and are disabled.
+9. Nothing is clipped or covering labels at ~1280 px; the import dialog
+   fits.
+
+**Next**
+- Quick by-eye re-check: EU4 with Auto sea level, a northern France coast
+  should now read close to 0 m.
+- Plan M2b (edits layer vs. Reload and Map settings decided there). Not
+  started.
+
+---
+
+## 2026-10-18 — Session 2 prompt log (M2a)
+
+### Prompt 1
+* **User Prompt:**  
+  > *"Read CLAUDE.md, SPEC.md, and LOG.md. We're doing M2a; the split and my answers are recorded. In Plan mode, propose the M2a files, data layers, import flow, and tests, consistent with those decisions. Start M2a with the milestone badge fix (show "M2a"/"M2b" instead of "M2"). Also add a workflow rule: for visual checks, give me a short checklist to verify by eye in my own browser instead of probing the preview."*
+* **What the AI Provided:**  
+  Read the docs and the new test maps (the generated maps are 1024×512, two-tone, opaque), then wrote the M2a plan: the badge fix first, then pure modules with tests, worker and I/O, data layers kept in sync by a version counter, the import dialog flow, Map settings and Reload, and verification.
+
+### Prompt 2
+* **User Prompt (plan feedback):**  
+  > *"Approved, with additions: Verification: Import, Reload, and Map Settings are enabled after CURRENT_MILESTONE becomes '2a'; M2b items (Sculpt, Undo, Slope, Shaded Relief) stay disabled. Map settings on a blank New Map (no cached source): just apply the new extent. Add to my by-eye checklist: import an archipelago as a non-wrapping map, and import continent_map_1 wrapped (the date-line seam comes from the image, not a bug). The reference map is test-maps/private/reference_map.png (third-party, git-ignored). Update SPEC.md and LOG.md to say "the reference map" instead of "my reference map", and note it's third-party and private. Open questions 1–3: your defaults are fine. Then implement M2a in the order you listed."*
+* **What the AI Provided:**  
+  Implemented M2a in the planned order (see the M2a entry above).
+* **Root Cause Discovered:**  
+  Slow per-pixel noise, and the silhouette guess fooled by smoothed edges (both fixed; see Problems above).
+* **How It Was Verified:**  
+  61/61 Node tests, the full-size timing run, and non-visual browser checks. The visual checks are my checklist.
+
+### Prompt 3 (sent while Claude was working)
+* **User Prompt:**  
+  > *"Can you please start the local host for me so I can view the current page as it is?"*
+* **What the AI Provided:**  
+  Started `py serve.py` at http://127.0.0.1:8000 (checked it serves `text/javascript` with `no-store`). At that point the page was still M1 plus the new badges.
+
+### Prompt 4
+* **User Prompt:**  
+  > *[M2a by-eye checklist results: 1–5 PASS with notes (GEBCO silhouette coastlines match; GEBCO heightmap + mask at sea level 128 shows real terrain; non-wrapping import shown once; wrapped import fine but no generated map touches the left/right edges, and the light top/bottom lines are in the source images; Map Settings with EU4 at 80/−37 lines up, but the far south stays squashed because EU4 isn't truly equirectangular). Items 6–9 left as "[result]".] "Bug: for gebco_bathy_BW_heightmap.png the import dialog's note says "256 gray levels: looks like a heightmap" while Silhouette is (correctly) selected. […] Make the note use the same two-tone check as the guess […] so the note and the selection can never disagree. Add a test with a two-tone image that has blended edges. Question: was profileDepth(0) returning -0 fixed in the code? If not, fix it." [SPEC.md future idea: non-equirectangular maps (Mercator, custom latitude control points) for distorted maps such as Paradox's.] "Then fix the bug, tick M2a, finish the LOG.md M2a entry and the Session 2 prompt log. Don't start M2b."*
+* **What the AI Provided:**  
+  - Added `describeGuess()` and used it for the dialog note, with two new tests.
+  - Answered honestly that `profileDepth(0)` had not been fixed (only the test was loosened); fixed it and made the test strict.
+  - Added the non-equirectangular idea to SPEC §16, and recorded the checklist results above.
+  - Did not tick M2a: items 6–9, including the required EU4 heights check, came through as placeholders, so it asked instead of assuming they passed. Did not start M2b.
+* **Root Cause Discovered:**  
+  - Two separate rules described the same image: when the guess was fixed to use the two-tone share, the note kept counting gray levels.
+  - Earlier this session the −0 issue had been covered by loosening a test rather than fixing the code (Claude's shortcut, not a misread of my request).
+* **How It Was Verified:**  
+  Node tests 63/63, including the blended-edge silhouette test and the "note names the guessed type" test; `Object.is(profileDepth(0), 0)`.
+
+### Prompt 5
+* **User Prompt:**  
+  > *[Checklist items 6–9: 6 PASS (Reload showed a new island in an edited Desktop copy); 7 PASS with a finding (Tibet reads 4,184 m of 5,000, but a northern France coast reads 195 m: with Auto sea level, EU4's gap between ocean gray and lowest land gray means darkest + 1 lifts all land; suggest Auto pick the first gray actually used above the flat ocean plateau, with a test); 8 PASS (M2b items show M2b, Cave-Prone Rock M9, Slope/Distance disabled); 9 PASS down to ~650 px, with a later note that the legend covers much of the map at narrow widths and should be collapsible (M11).]*
+* **What the AI Provided:**  
+  - Changed Auto sea level to the first used gray above the ocean plateau, with a Paradox-style gap test, and updated the pipeline test to use such a gap.
+  - Added a collapsible legend to M11 in SPEC.md.
+  - Recorded items 6–9, ticked M2a, and suggested a commit message.
+* **Root Cause Discovered:**  
+  The original auto rule (darkest + 1) assumed land starts right above the ocean gray. EU4 has empty gray levels in between, so every land pixel was lifted by the size of the gap.
+* **How It Was Verified:**  
+  Node tests 64/64 (new: ocean 40, land from 94 → sea level 94, lowest land ~0 m). Not yet re-checked by eye on EU4 since the fix (listed under Next).
 
 ---
 

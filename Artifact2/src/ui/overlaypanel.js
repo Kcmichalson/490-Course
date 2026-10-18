@@ -4,7 +4,7 @@
 
 import { icon } from './icons.js';
 import { bindPopover } from './menu.js';
-import { isAvailable, comingSoonText } from './comingsoon.js';
+import { isAvailable, comingSoonText, milestoneLabel } from './comingsoon.js';
 import { OVERLAY_GROUPS, OVERLAYS } from '../render/overlays.js';
 
 // opts: { onToggle(id, on) }
@@ -39,7 +39,7 @@ export function createOverlayPanel(root, { onToggle }) {
         label.title = comingSoonText(o.milestone);
         const badge = document.createElement('span');
         badge.className = 'badge';
-        badge.textContent = `M${o.milestone}`;
+        badge.textContent = milestoneLabel(o.milestone);
         label.append(badge);
       }
       inputs.set(o.id, input);

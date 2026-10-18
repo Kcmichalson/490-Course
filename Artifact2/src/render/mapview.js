@@ -7,15 +7,16 @@ import { visibleCopies } from './viewport.js';
 import { simCellBounds, sourceToSimCell } from '../sim/coords.js';
 import { drawGraticule } from './graticule.js';
 import { readTheme } from './theme.js';
+import { RENDERERS } from './modes/index.js';
 
 const OVERLAY_DRAWERS = {
   graticule: drawGraticule,
 };
 
 // Shared placeholder until a mode's milestone provides a renderer.
-function drawOceanPlaceholder(g, w, h, theme) {
+function drawOceanPlaceholder(g, { map, theme }) {
   g.fillStyle = theme.placeholderOcean;
-  g.fillRect(0, 0, w, h);
+  g.fillRect(0, 0, map.sourceWidth, map.sourceHeight);
 }
 
 export class MapView {
@@ -49,17 +50,21 @@ export class MapView {
     this.onResize?.(w, h);
   }
 
-  // Rebuilds the base layer only when the map or the mode's renderer changes.
-  ensureBase(map, mode) {
-    const renderer = mode.drawBase ? mode.id : 'placeholder';
-    const key = `${map.sourceWidth}x${map.sourceHeight}|${renderer}`;
+  // Rebuilds the base layer only when the map, the terrain (version), or the
+  // mode's renderer changes. store = { terrain, source, version }.
+  ensureBase(map, mode, store) {
+    const draw = RENDERERS[mode.id] ?? drawOceanPlaceholder;
+    const renderer = RENDERERS[mode.id] ? mode.id : 'placeholder';
+    const key = `${map.sourceWidth}x${map.sourceHeight}|${renderer}|${store.version}`;
     if (key === this.baseKey) return;
-    const c = document.createElement('canvas');
-    c.width = map.sourceWidth;
-    c.height = map.sourceHeight;
-    const g = c.getContext('2d', { alpha: false });
-    (mode.drawBase ?? drawOceanPlaceholder)(g, map.sourceWidth, map.sourceHeight, this.theme);
-    this.base = c;
+    if (store.terrain.width !== map.sourceWidth || store.terrain.height !== map.sourceHeight) return; // mid-update
+    if (!this.base || this.base.width !== map.sourceWidth || this.base.height !== map.sourceHeight) {
+      this.base = document.createElement('canvas');
+      this.base.width = map.sourceWidth;
+      this.base.height = map.sourceHeight;
+    }
+    const g = this.base.getContext('2d', { alpha: false });
+    draw(g, { map, terrain: store.terrain, source: store.source, theme: this.theme });
     this.baseKey = key;
   }
 
@@ -71,9 +76,10 @@ export class MapView {
 
   // reserved: screen rects (canvas CSS px) covered by on-map controls, which
   // overlay labels avoid.
-  draw({ map, view, mode, overlays, selected, reserved = [] }) {
+  draw({ map, view, mode, store, overlays, selected, reserved = [] }) {
     const { ctx, dpr, theme, cssWidth: viewW, cssHeight: viewH } = this;
-    this.ensureBase(map, mode);
+    this.ensureBase(map, mode, store);
+    if (!this.base) return;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = theme.mapBg;

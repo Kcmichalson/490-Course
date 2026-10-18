@@ -1,5 +1,5 @@
-// Hover tooltip (tile inspector). M1 shows lat/lon, the source pixel, and the
-// sim cell; later milestones add elevation, temperature, rain, wind, etc.
+// Hover tooltip (tile inspector): lat/lon, elevation, the source pixel, and
+// the sim cell; later milestones add temperature, rain, wind, etc.
 
 const OFFSET = 16;
 
@@ -14,7 +14,7 @@ export function createInspector(el, container) {
     // info: { latLon, px, py, i, j }
     show(sx, sy, info) {
       main.textContent = info.latLon;
-      sub.textContent = `Pixel ${info.px}, ${info.py} · Sim cell ${info.i}, ${info.j}`;
+      sub.textContent = `${info.elevation ? `${info.elevation} · ` : ''}Pixel ${info.px}, ${info.py} · Sim cell ${info.i}, ${info.j}`;
       el.hidden = false;
       const w = el.offsetWidth;
       const h = el.offsetHeight;

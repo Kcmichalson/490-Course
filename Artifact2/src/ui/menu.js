@@ -5,7 +5,7 @@
 // `checked` may be a boolean or a function evaluated when the menu opens.
 // Items from later milestones show a "M#" badge and do nothing when chosen.
 
-import { isAvailable, comingSoonText } from './comingsoon.js';
+import { isAvailable, comingSoonText, milestoneLabel } from './comingsoon.js';
 
 const layer = () => document.getElementById('menu-layer');
 let stack = []; // open menus by level: { el, anchor, opts, items }
@@ -88,7 +88,7 @@ function buildMenu(items, level, opts) {
 
     const mark = checked ? (item.radio ? '•' : '✓') : '';
     const right = !available && !item.submenu
-      ? `<span class="badge">M${item.milestone}</span>`
+      ? `<span class="badge">${milestoneLabel(item.milestone)}</span>`
       : `<span class="shortcut">${item.shortcut ?? ''}</span>`;
     btn.innerHTML = `<span class="mark">${mark}</span><span class="label"></span>${right}<span class="arrow">${item.submenu ? '›' : ''}</span>`;
     btn.querySelector('.label').textContent = item.label;

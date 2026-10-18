@@ -10,7 +10,7 @@ export const OVERLAY_GROUPS = [
 
 export const OVERLAYS = [
   { id: 'graticule', label: 'Graticule', group: 'reference', milestone: 1, defaultOn: true },
-  { id: 'shaded-relief', label: 'Shaded Relief', group: 'reference', milestone: 2 },
+  { id: 'shaded-relief', label: 'Shaded Relief', group: 'reference', milestone: '2b' },
   { id: 'water-body-labels', label: 'Water Body Labels', group: 'reference', milestone: 9 },
   { id: 'wind-arrows', label: 'Wind Arrows', group: 'atmosphere', milestone: 3 },
   { id: 'pressure-itcz', label: 'Pressure & ITCZ', group: 'atmosphere', milestone: 3 },

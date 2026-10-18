@@ -3,7 +3,7 @@
 
 import { icon } from './icons.js';
 import { showMenu, closeMenus, isMenuOpen } from './menu.js';
-import { applyComingSoon, isAvailable } from './comingsoon.js';
+import { applyComingSoon, isAvailable, milestoneLabel } from './comingsoon.js';
 import { CATEGORIES, modesInCategory, getMode } from '../render/modes.js';
 import { CATEGORY_KEYS, modeHotkeyLabel } from './shortcuts.js';
 import { getTool } from './tools.js';
@@ -67,7 +67,7 @@ export function createToolbar(root, handlers) {
     const ci = CATEGORIES.findIndex((c) => c.id === categoryId);
     grid.setAttribute('aria-label', `${CATEGORIES[ci].label} map modes`);
     modesInCategory(categoryId).forEach((m, mi) => {
-      const status = isAvailable(m.milestone) ? 'available' : `arrives in M${m.milestone}`;
+      const status = isAvailable(m.milestone) ? 'available' : `arrives in ${milestoneLabel(m.milestone)}`;
       const b = el('button', {
         type: 'button',
         className: `mode-button${isAvailable(m.milestone) ? '' : ' is-placeholder'}`,

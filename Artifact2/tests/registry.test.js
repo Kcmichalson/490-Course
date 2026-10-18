@@ -4,8 +4,10 @@ import { CATEGORIES, MODES, modesInCategory } from '../src/render/modes.js';
 import { OVERLAYS, OVERLAY_GROUPS } from '../src/render/overlays.js';
 import { TOOLS } from '../src/ui/tools.js';
 import { CATEGORY_KEYS, MODE_KEYS, KEYS, shouldIgnoreHotkey, isTypingTarget } from '../src/ui/shortcuts.js';
+import { MILESTONES, isAvailable } from '../src/ui/comingsoon.js';
 
-const milestoneOk = (m) => Number.isInteger(m) && m >= 1 && m <= 11;
+// Valid ids come from the ordered list; a bare 2 is not allowed (M2 is split into 2a/2b).
+const milestoneOk = (m) => MILESTONES.includes(String(m)) && String(m) !== '2';
 
 test('29 map modes in 5 categories with unique ids', () => {
   assert.equal(CATEGORIES.length, 5);
@@ -40,13 +42,13 @@ test('overlays: unique ids, known groups, valid milestones, only M1 ones on by d
   for (const o of OVERLAYS) {
     assert.ok(groups.has(o.group), `${o.id} group`);
     assert.ok(milestoneOk(o.milestone), `${o.id} milestone`);
-    if (o.defaultOn) assert.equal(o.milestone, 1, `${o.id} can't default on before it exists`);
+    if (o.defaultOn) assert.ok(isAvailable(o.milestone), `${o.id} can't default on before it exists`);
   }
 });
 
 test('tools: Navigate is available in M1, the rest later', () => {
   assert.equal(TOOLS[0].id, 'navigate');
-  assert.equal(TOOLS[0].milestone, 1);
+  assert.ok(isAvailable(TOOLS[0].milestone));
   for (const t of TOOLS) {
     assert.ok(milestoneOk(t.milestone));
     for (const c of t.children ?? []) assert.ok(milestoneOk(c.milestone));

@@ -15,11 +15,11 @@ export const CATEGORIES = [
 
 export const MODES = [
   // Terrain
-  { id: 'original-art', label: 'Original Art', category: 'terrain', milestone: 2, blurb: 'The imported image, so overlays sit on your own map.' },
-  { id: 'physical', label: 'Physical', category: 'terrain', milestone: 2, blurb: 'Bathymetry blues; land greens → browns → white.' },
-  { id: 'elevation', label: 'Elevation', category: 'terrain', milestone: 2, blurb: 'Grayscale elevation.' },
-  { id: 'slope', label: 'Slope & Ruggedness', category: 'terrain', milestone: 2, blurb: 'How steep and broken the land is.' },
-  { id: 'coast-distance', label: 'Distance from Coast', category: 'terrain', milestone: 2, blurb: 'Distance to the nearest coastline in km.' },
+  { id: 'original-art', label: 'Original Art', category: 'terrain', milestone: '2a', blurb: 'The imported image, so overlays sit on your own map.' },
+  { id: 'physical', label: 'Physical', category: 'terrain', milestone: '2a', blurb: 'Bathymetry blues; land greens → browns → white.' },
+  { id: 'elevation', label: 'Elevation', category: 'terrain', milestone: '2a', blurb: 'Grayscale elevation.' },
+  { id: 'slope', label: 'Slope & Ruggedness', category: 'terrain', milestone: '2b', blurb: 'How steep and broken the land is.' },
+  { id: 'coast-distance', label: 'Distance from Coast', category: 'terrain', milestone: '2b', blurb: 'Distance to the nearest coastline in km.' },
   { id: 'art-check', label: 'Art Check', category: 'terrain', milestone: 6, blurb: 'Where the hand-drawn map disagrees with the simulation.' },
   // Climate
   { id: 'koppen', label: 'Köppen', category: 'climate', milestone: 6, blurb: 'Köppen–Geiger climate classes with legend.' },

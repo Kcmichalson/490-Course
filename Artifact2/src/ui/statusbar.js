@@ -1,12 +1,17 @@
-// Status bar: cursor lat/lon, elevation (M2), climate code (M6), map info,
+// Status bar: cursor lat/lon, elevation (M2a), climate code (M6), map info,
 // and the simulation worker's status.
 
 import { simGridSize } from '../sim/mapconfig.js';
 
+export function formatMeters(m) {
+  const v = Math.round(m);
+  return `${v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('en-US')} m`;
+}
+
 export function createStatusBar(root) {
   root.innerHTML = `
     <span class="sb-cursor">—</span>
-    <span class="sb-elev" title="Elevation arrives in M2">Elevation: —</span>
+    <span class="sb-elev" title="Elevation arrives in M2a">Elevation: —</span>
     <span class="sb-climate" title="Climate code arrives in M6">Climate: —</span>
     <span class="sb-spacer"></span>
     <span class="sb-map"></span>
@@ -14,11 +19,17 @@ export function createStatusBar(root) {
   const cursor = root.querySelector('.sb-cursor');
   const mapInfo = root.querySelector('.sb-map');
   const worker = root.querySelector('.sb-worker');
+  const elev = root.querySelector('.sb-elev');
+  elev.removeAttribute('title');
 
   return {
     // text: formatted lat/lon, or null when the cursor is off the map/canvas
     setCursor(text, offMap = false) {
       cursor.textContent = text ?? (offMap ? 'Off map' : '—');
+    },
+    // meters, or null when the cursor is off the map
+    setElevation(meters) {
+      elev.textContent = `Elevation: ${meters == null ? '—' : formatMeters(meters)}`;
     },
     setMap(map) {
       const sim = simGridSize(map);

@@ -2,7 +2,7 @@
 // says when the mode arrives and that the open-ocean placeholder is shown.
 
 import { icon } from '../ui/icons.js';
-import { isAvailable } from '../ui/comingsoon.js';
+import { isAvailable, milestoneLabel } from '../ui/comingsoon.js';
 
 export function renderLegend(el, mode) {
   el.replaceChildren();
@@ -16,7 +16,7 @@ export function renderLegend(el, mode) {
   el.append(title, blurb);
   if (!isAvailable(mode.milestone)) {
     const note = document.createElement('p');
-    note.textContent = `Arrives in M${mode.milestone}. Showing the open-ocean placeholder.`;
+    note.textContent = `Arrives in ${milestoneLabel(mode.milestone)}. Showing the open-ocean placeholder.`;
     el.append(note);
   }
 }

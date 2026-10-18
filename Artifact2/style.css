@@ -335,6 +335,34 @@ legend { color: var(--muted); padding: 0 4px; }
 .errors:empty { display: none; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .hint button { margin-left: 6px; padding: 1px 6px; font-size: 12px; }
+
+/* ---------- Import dialog ---------- */
+.dialog-wide { width: min(1080px, calc(100vw - 32px)); }
+.import-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 8px;
+}
+@media (max-width: 860px) { .import-body { grid-template-columns: minmax(0, 1fr); } }
+.import-preview canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--map-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  image-rendering: auto;
+}
+.import-settings fieldset:first-child { margin-top: 0; }
+.import-settings fieldset[hidden] { display: none; }
+.slider-row input[type="range"] { flex: 1 1 120px; min-width: 100px; accent-color: var(--accent); }
+.slider-row input[type="number"] { width: 84px; }
+.slider-row.is-disabled label { color: var(--faint); }
+.seed-input { width: 72px; }
+.notices { margin: 8px 0 0; padding-left: 18px; color: var(--warning); }
+.notices:empty { display: none; }
+.busy { margin-right: auto; color: var(--muted); align-self: center; }
 .shortcut-table { border-collapse: collapse; width: 100%; margin-top: 8px; }
 .shortcut-table td { padding: 4px 8px; border-top: 1px solid var(--border); vertical-align: top; }
 .shortcut-table td:first-child { white-space: nowrap; font-family: ui-monospace, Consolas, monospace; color: var(--accent); }

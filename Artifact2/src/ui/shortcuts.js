@@ -11,6 +11,7 @@ export const KEYS = {
   zoomOut: ['-', '_'],
   goTo: 'g',
   shortcuts: '?',
+  reload: 'R', // with Shift; plain R is a mode key
 };
 
 // Rows for the shortcuts dialog.
@@ -25,6 +26,7 @@ export const SHORTCUT_ROWS = [
   ['Space + drag, middle-drag', 'Pan in any tool'],
   ['Click (Navigate tool)', 'Inspect a tile'],
   ['G', 'Go to lat/lon'],
+  ['Shift+R', 'Reload the last imported map image'],
   ['Esc', 'Back to the Navigate tool; leave a text field; close menus and dialogs'],
   ['?', 'Show this list'],
 ];

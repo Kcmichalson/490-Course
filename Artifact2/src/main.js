@@ -1,6 +1,8 @@
 // App entry: state, wiring, and the render loop.
 
 import { DEFAULT_MAP, createMapConfig } from './sim/mapconfig.js';
+import { blankTerrain, makeTerrain } from './sim/terrain.js';
+import { downsampleTerrain } from './sim/downsample.js';
 import {
   pixelToLatLon, latLonToPixel, sourcePixel, sourceToSimCell, formatLatLon, parseLatLon, wrapX,
 } from './sim/coords.js';
@@ -26,6 +28,11 @@ import { createInspector } from './ui/inspector.js';
 import { createNewMapDialog } from './ui/newmapdialog.js';
 import { attachNavigation } from './ui/navigation.js';
 import { load, save } from './io/storage.js';
+import { createWorkerClient } from './io/workerclient.js';
+import { pickImageFile, imageSize, fitWithinMax, decodeImage, readPixels } from './io/imagefile.js';
+import { createImportDialog } from './ui/importdialog.js';
+import { createMapSettingsDialog } from './ui/mapsettingsdialog.js';
+import { formatMeters } from './ui/statusbar.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -63,6 +70,24 @@ const state = {
   legendOn: prefs.legendOn ?? true,
   selected: null, // continuous source position of the inspected tile
 };
+
+// Terrain store. Full-resolution elevation is the source of truth; the sim
+// grid is always derived from it. `version` changes on every terrain change,
+// so cached base layers and sim results know they are stale.
+// source: the imported image(s) and settings, kept for Reload and Map settings.
+const store = {
+  terrain: blankTerrain(state.map.sourceWidth, state.map.sourceHeight),
+  sim: null,
+  source: null,
+  version: 1,
+};
+
+function setTerrain(terrain, sim, source) {
+  store.terrain = terrain;
+  store.sim = sim;
+  store.source = source;
+  store.version++;
+}
 
 function savePrefs() {
   const { modeId, categoryId, overlays, tooltipOn, legendOn } = state;
@@ -135,6 +160,7 @@ function frame() {
     map: state.map,
     view: state.view,
     mode: getMode(state.modeId),
+    store,
     overlays: state.overlays,
     selected: state.selected,
     reserved: reservedRects(),
@@ -161,6 +187,7 @@ function onHover(point, dragging) {
 function updateHover() {
   if (!hover) {
     statusbar.setCursor(null);
+    statusbar.setElevation(null);
     inspector.hide();
     return;
   }
@@ -168,18 +195,23 @@ function updateHover() {
   const ll = pixelToLatLon(state.map, src.x, src.y);
   if (!ll) {
     statusbar.setCursor(null, true);
+    statusbar.setElevation(null);
     inspector.hide();
     return;
   }
   const text = formatLatLon(ll);
+  const px = sourcePixel(state.map, src.x, src.y);
+  const meters = store.terrain.elevation[px.py * store.terrain.width + px.px];
   statusbar.setCursor(text);
+  statusbar.setElevation(meters);
   if (!state.tooltipOn || hover.dragging) {
     inspector.hide();
     return;
   }
   inspector.show(hover.x, hover.y, {
     latLon: text,
-    ...sourcePixel(state.map, src.x, src.y),
+    elevation: formatMeters(meters),
+    ...px,
     ...sourceToSimCell(state.map, src.x, src.y),
   });
 }
@@ -257,11 +289,102 @@ function setLegend(on) {
   requestDraw(); // graticule labels re-check what the legend covers
 }
 
+// New Map: a blank, open-ocean map.
 function setMap(cfg) {
+  const terrain = blankTerrain(cfg.sourceWidth, cfg.sourceHeight);
+  applyMap(cfg, terrain, downsampleTerrain(terrain, cfg), null);
+}
+
+function applyMap(cfg, terrain, sim, source, { keepView = false } = {}) {
+  const sameSize = cfg.sourceWidth === state.map.sourceWidth && cfg.sourceHeight === state.map.sourceHeight;
   state.map = cfg;
+  setTerrain(terrain, sim, source);
   statusbar.setMap(cfg);
   clearSelection();
-  fit();
+  if (keepView && sameSize) setView(state.view);
+  else fit();
+}
+
+// ---------- Imports, Reload, Map settings ----------
+
+let worker = null;
+
+// Decodes the image(s) at map size and builds terrain in the worker.
+async function buildFromSource(source, cfg) {
+  const bitmap = await decodeImage(source.file, cfg.sourceWidth, cfg.sourceHeight);
+  const rgba = readPixels(bitmap);
+  let maskRgba = null;
+  if (source.mask) {
+    const maskBitmap = await decodeImage(source.mask.file, cfg.sourceWidth, cfg.sourceHeight, 'pixelated');
+    maskRgba = readPixels(maskBitmap);
+    maskBitmap.close();
+  }
+  const transfer = [rgba.buffer];
+  if (maskRgba) transfer.push(maskRgba.buffer);
+  const result = await worker.request('build', { kind: source.kind, rgba, maskRgba, settings: source.settings, cfg: { ...cfg } }, transfer);
+  if (source.bitmap && source.bitmap !== bitmap) source.bitmap.close();
+  const terrain = makeTerrain(cfg.sourceWidth, cfg.sourceHeight, result.elevation);
+  return { terrain, sim: result.sim, source: { ...source, bitmap }, info: result.info, ms: result.ms };
+}
+
+async function importMap(payload) {
+  if (!worker) throw new Error('The simulation worker is not running.');
+  const mapSize = fitWithinMax(payload.natural.width, payload.natural.height);
+  const cfg = createMapConfig({ ...payload.cfgValues, sourceWidth: mapSize.width, sourceHeight: mapSize.height });
+  const source = {
+    kind: payload.kind,
+    file: payload.file,
+    handle: payload.handle,
+    natural: payload.natural,
+    settings: payload.settings,
+    storedSettings: payload.storedSettings,
+    mask: payload.mask,
+  };
+  const built = await buildFromSource(source, cfg);
+  applyMap(cfg, built.terrain, built.sim, built.source);
+  contextbar.flash(`Imported ${payload.file.name} (${cfg.sourceWidth} × ${cfg.sourceHeight}) in ${(built.ms / 1000).toFixed(1)} s.`);
+}
+
+async function reloadMap() {
+  const src = store.source;
+  if (!src) {
+    contextbar.flash('Nothing to reload yet: import a map image first (File > Import Map Image…).');
+    return;
+  }
+  try {
+    let file = src.file;
+    let handle = src.handle;
+    if (handle) file = await handle.getFile();
+    else {
+      const picked = await pickImageFile();
+      if (!picked) return;
+      ({ file, handle } = picked);
+    }
+    const natural = await imageSize(file);
+    if (natural.width !== src.natural.width || natural.height !== src.natural.height) {
+      // A different size: reopen the import dialog, prefilled.
+      await importDialog.open({ file, handle, prefill: { kind: src.kind, storedSettings: src.storedSettings, cfgValues: state.map } });
+      return;
+    }
+    const mask = src.mask?.handle ? { ...src.mask, file: await src.mask.handle.getFile() } : src.mask;
+    contextbar.flash(`Reloading ${file.name}…`);
+    const built = await buildFromSource({ ...src, file, handle, mask }, state.map);
+    applyMap(state.map, built.terrain, built.sim, built.source, { keepView: true });
+    contextbar.flash(`Reloaded ${file.name}.`);
+  } catch (err) {
+    contextbar.flash(`Reload failed: ${err.message}`, 8000);
+  }
+}
+
+async function applyMapSettings(values) {
+  const cfg = createMapConfig({ ...values, sourceWidth: state.map.sourceWidth, sourceHeight: state.map.sourceHeight });
+  if (!store.source) {
+    // Blank map: just apply the new extent.
+    applyMap(cfg, store.terrain, downsampleTerrain(store.terrain, cfg), null, { keepView: true });
+    return;
+  }
+  const built = await buildFromSource(store.source, cfg);
+  applyMap(cfg, built.terrain, built.sim, built.source, { keepView: true });
 }
 
 function goTo(text) {
@@ -334,6 +457,12 @@ const overlayMenuItems = () => OVERLAYS.map((o) => ({
 }));
 
 const newMapDialog = createNewMapDialog($('newmap-dialog'), { onCreate: setMap });
+const importDialog = createImportDialog($('import-dialog'), {
+  worker: { request: (...args) => worker.request(...args) },
+  getCurrentMap: () => state.map,
+  onImport: importMap,
+});
+const mapSettingsDialog = createMapSettingsDialog($('mapsettings-dialog'), { onApply: applyMapSettings });
 
 createMenuBar($('menubar'), [
   {
@@ -341,8 +470,8 @@ createMenuBar($('menubar'), [
     items: () => [
       { label: 'New Map…', action: () => newMapDialog.open(state.map) },
       { separator: true },
-      { label: 'Import Map Image…', milestone: 2 },
-      { label: 'Reload Map Image', milestone: 2 },
+      { label: 'Import Map Image…', milestone: '2a', action: () => importDialog.openFromPicker().catch((err) => contextbar.flash(err.message, 8000)) },
+      { label: 'Reload Map Image', shortcut: 'Shift+R', milestone: '2a', action: reloadMap },
       { separator: true },
       { label: 'Save Project…', milestone: 11 },
       { label: 'Load Project…', milestone: 11 },
@@ -353,10 +482,10 @@ createMenuBar($('menubar'), [
   {
     label: 'Edit',
     items: () => [
-      { label: 'Undo', shortcut: 'Ctrl+Z', milestone: 2 },
-      { label: 'Redo', shortcut: 'Ctrl+Y', milestone: 2 },
+      { label: 'Undo', shortcut: 'Ctrl+Z', milestone: '2b' },
+      { label: 'Redo', shortcut: 'Ctrl+Y', milestone: '2b' },
       { separator: true },
-      { label: 'Map Settings…', milestone: 2 },
+      { label: 'Map Settings…', milestone: '2a', action: () => mapSettingsDialog.open(state.map, Boolean(store.source)) },
     ],
   },
   {
@@ -364,7 +493,7 @@ createMenuBar($('menubar'), [
     items: () => [
       { label: 'Overlays', submenu: overlayMenuItems },
       { label: 'Hover Tooltip', checked: state.tooltipOn, action: () => setTooltip(!state.tooltipOn) },
-      { label: 'Tool Palette', milestone: 2 },
+      { label: 'Tool Palette', milestone: '2b' },
       { separator: true },
       { label: 'Zoom In', shortcut: '+', action: () => zoomBy(1.25) },
       { label: 'Zoom Out', shortcut: '−', action: () => zoomBy(0.8) },
@@ -432,6 +561,11 @@ window.addEventListener('keydown', (e) => {
   if (isMenuOpen()) return;
   if (shouldIgnoreHotkey({ target: e.target, dialogOpen, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey })) return;
 
+  if (e.shiftKey && e.key === KEYS.reload) {
+    e.preventDefault();
+    if (isAvailable('2a')) reloadMap();
+    return;
+  }
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const ci = CATEGORY_KEYS.indexOf(k);
   const mi = MODE_KEYS.indexOf(k);
@@ -459,15 +593,13 @@ window.addEventListener('keydown', (e) => {
 
 function startWorker() {
   try {
-    const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-    worker.addEventListener('message', (e) => {
-      if (e.data?.type === 'pong') statusbar.setWorker('ready');
-    });
-    worker.addEventListener('error', (e) => {
+    const w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    w.addEventListener('error', (e) => {
       statusbar.setWorker('error');
       console.error('Simulation worker failed to start:', e.message || e);
     });
-    worker.postMessage({ type: 'ping', id: 1 });
+    worker = createWorkerClient(w);
+    worker.request('ping').then(() => statusbar.setWorker('ready'));
   } catch (err) {
     statusbar.setWorker('error');
     console.error('Simulation worker failed to start:', err);

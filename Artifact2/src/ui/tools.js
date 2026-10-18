@@ -4,14 +4,14 @@
 export const TOOLS = [
   { id: 'navigate', label: 'Navigate', icon: 'tool-navigate', milestone: 1, hint: 'Drag to pan, click a tile to inspect it, scroll to zoom.' },
   {
-    id: 'sculpt', label: 'Sculpt', icon: 'tool-sculpt', milestone: 2,
+    id: 'sculpt', label: 'Sculpt', icon: 'tool-sculpt', milestone: '2b',
     children: [
-      { id: 'draw-land', label: 'Draw Land', milestone: 2 },
-      { id: 'raise', label: 'Raise', milestone: 2 },
-      { id: 'lower', label: 'Lower', milestone: 2 },
-      { id: 'carve-trench', label: 'Carve Trench', milestone: 2 },
-      { id: 'smooth', label: 'Smooth', milestone: 2 },
-      { id: 'erase', label: 'Erase', milestone: 2 },
+      { id: 'draw-land', label: 'Draw Land', milestone: '2b' },
+      { id: 'raise', label: 'Raise', milestone: '2b' },
+      { id: 'lower', label: 'Lower', milestone: '2b' },
+      { id: 'carve-trench', label: 'Carve Trench', milestone: '2b' },
+      { id: 'smooth', label: 'Smooth', milestone: '2b' },
+      { id: 'erase', label: 'Erase', milestone: '2b' },
       { id: 'cave-prone-rock', label: 'Cave-Prone Rock', milestone: 9 },
     ],
   },

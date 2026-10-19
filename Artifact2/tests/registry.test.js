@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { CATEGORIES, MODES, modesInCategory } from '../src/render/modes.js';
 import { OVERLAYS, OVERLAY_GROUPS } from '../src/render/overlays.js';
 import { TOOLS } from '../src/ui/tools.js';
-import { CATEGORY_KEYS, MODE_KEYS, KEYS, shouldIgnoreHotkey, isTypingTarget } from '../src/ui/shortcuts.js';
+import { CATEGORY_KEYS, MODE_KEYS, KEYS, shouldIgnoreHotkey, isTypingTarget, undoAction, isReloadKey } from '../src/ui/shortcuts.js';
 import { MILESTONES, isAvailable } from '../src/ui/comingsoon.js';
 
 // Valid ids come from the ordered list; a bare 2 is not allowed (M2 is split into 2a/2b).
@@ -69,4 +69,42 @@ test('hotkey guard: silent while typing or while a dialog is open', () => {
   }
   assert.ok(shouldIgnoreHotkey({ target: el('BODY'), dialogOpen: true }), 'dialog open blocks hotkeys');
   assert.ok(shouldIgnoreHotkey({ target: el('BODY'), ctrlKey: true }), 'Ctrl combos are not hotkeys');
+});
+
+test('reload is Ctrl+Shift+R (by physical key); plain Shift+R is not reload', () => {
+  assert.ok(isReloadKey({ ctrlKey: true, shiftKey: true, code: 'KeyR' }));
+  assert.ok(!isReloadKey({ shiftKey: true, code: 'KeyR' }), 'Shift+R alone no longer reloads');
+  assert.ok(!isReloadKey({ ctrlKey: true, code: 'KeyR' }), 'Ctrl+R stays the browser reload');
+  assert.ok(!isReloadKey({ ctrlKey: true, shiftKey: true, altKey: true, code: 'KeyR' }));
+  const body = { tagName: 'BODY' };
+  assert.ok(!shouldIgnoreHotkey({ target: body, ctrlKey: true, shiftKey: true, code: 'KeyR' }));
+  assert.ok(shouldIgnoreHotkey({ target: body, ctrlKey: true, shiftKey: true, code: 'KeyT' }), 'other Ctrl+Shift combos are ignored');
+  assert.ok(shouldIgnoreHotkey({ target: { tagName: 'INPUT', type: 'text' }, ctrlKey: true, shiftKey: true, code: 'KeyR' }));
+});
+
+test('undo keys: Ctrl+Z undoes, Ctrl+Y and Ctrl+Shift+Z redo; never while typing or in a dialog', () => {
+  const body = { tagName: 'BODY' };
+  assert.equal(undoAction({ key: 'z', ctrlKey: true, target: body }), 'undo');
+  assert.equal(undoAction({ key: 'Z', ctrlKey: true, shiftKey: true, target: body }), 'redo');
+  assert.equal(undoAction({ key: 'y', ctrlKey: true, target: body }), 'redo');
+  assert.equal(undoAction({ key: 'z', metaKey: true, target: body }), 'undo');
+  assert.equal(undoAction({ key: 'z', target: body }), null, 'plain Z is not undo');
+  assert.equal(undoAction({ key: 'z', ctrlKey: true, target: { tagName: 'INPUT', type: 'number' } }), null, 'typing undo belongs to the field');
+  assert.equal(undoAction({ key: 'z', ctrlKey: true, target: body, dialogOpen: true }), null);
+});
+
+test('sea caves are not in the registries; Sculpt and Undo are live; Tool Palette is M11', async () => {
+  const ids = (list) => list.flatMap((t) => [t.id, ...(t.children ?? []).map((c) => c.id)]);
+  for (const id of ['cave', 'cave-prone-rock']) assert.ok(!ids(TOOLS).includes(id), `${id} removed`);
+  assert.ok(!OVERLAYS.some((o) => o.id === 'sea-caves'));
+  const sculpt = TOOLS.find((t) => t.id === 'sculpt');
+  assert.deepEqual(sculpt.children.map((c) => c.id), ['draw-land', 'raise', 'lower', 'carve-trench', 'smooth', 'erase']);
+  assert.ok(isAvailable(sculpt.milestone) && sculpt.children.every((c) => isAvailable(c.milestone)));
+  // Phase 2 of M2b is not unlocked yet.
+  for (const id of ['slope', 'coast-distance']) assert.ok(!isAvailable(MODES.find((m) => m.id === id).milestone), id);
+  assert.ok(!isAvailable(OVERLAYS.find((o) => o.id === 'shaded-relief').milestone));
+  const { readFile } = await import('node:fs/promises');
+  const main = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(main, /label: 'Tool Palette', milestone: 11/);
+  assert.match(main, /shortcut: 'Ctrl\+Z', milestone: '2b-1'/, 'Edit > Undo is live');
 });

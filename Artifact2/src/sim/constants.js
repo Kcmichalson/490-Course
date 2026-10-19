@@ -25,8 +25,8 @@ export const DEFAULT_MAX_HEIGHT_M = 5000;
 export const DEFAULT_MAX_DEPTH_M = -6000;
 
 // A darkest gray covering at least this share of the image counts as a flat
-// ocean (no depth data), so sea level is auto-set to darkest + 1 and depths
-// are generated.
+// ocean (no depth data), so Auto sea level is the first gray actually used
+// above it, and depths are generated.
 export const FLAT_OCEAN_FRACTION = 0.2;
 
 // Light blur that removes 8-bit terracing (staircase slopes) from heightmaps.
@@ -50,3 +50,33 @@ export const RELIEF_NOISE_M = 500;      // broad highlands and basins
 export const RELIEF_NOISE_FREQ = 2.5;
 export const RELIEF_RIDGE_M = 1800;     // mountain ridges
 export const RELIEF_RIDGE_FREQ = 4;
+
+// ---- Sculpt brushes (SPEC 2.1) ----
+// Brushes are editing tools, not physics; these are their start values.
+
+// Raise / Lower: meters added or removed per dab at the brush center at
+// 100% strength (builds mountains or basins gradually, like uplift and
+// erosion compressed into strokes). Clamped to a plausible height range.
+export const BRUSH_RAISE_M = 200;
+export const BRUSH_MAX_M = 9000;     // a little above Everest
+export const BRUSH_LOWER_FLOOR_M = -6000; // Lower stops at the deep abyssal plain
+
+// Carve Trench: deep, narrow ocean trenches (subduction zones), down to
+// about the depth of the Mariana Trench.
+export const BRUSH_CARVE_M = 1000;
+export const TRENCH_FLOOR_M = -10000;
+
+// Draw Land: new land starts as a low plain (same as flat silhouette land).
+export const DRAW_LAND_M = FLAT_LAND_M;
+
+// Erase: new ocean starts as a shallow shelf sea (the Shallow Sea palette
+// depth), so erased coasts don't drop straight into the abyss.
+export const ERASE_OCEAN_M = -100;
+
+// Largest brush radius (source px). Keeps every brush under 16 ms per dab
+// (brush math plus redraw) on a 5632×2048 map; radius 500 measured ~30–50 ms.
+export const BRUSH_MAX_RADIUS_PX = 250;
+
+// Smooth: largest box radius (px) used for the local mean, so one dab of a
+// big brush stays fast; repeated dabs smooth further.
+export const SMOOTH_MAX_KERNEL_PX = 6;

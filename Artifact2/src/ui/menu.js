@@ -1,7 +1,8 @@
 // Popup menus (menu bar dropdowns, tool dropdown) and simple popovers.
 //
 // Menu item: { label, shortcut?, milestone?, action?, checked?, radio?,
-//              submenu?, separator? }
+//              submenu?, separator?, disabled? }
+// `disabled` greys out an available item (e.g. Undo with nothing to undo).
 // `checked` may be a boolean or a function evaluated when the menu opens.
 // Items from later milestones show a "M#" badge and do nothing when chosen.
 
@@ -80,6 +81,10 @@ function buildMenu(items, level, opts) {
     btn.setAttribute('role', checked === undefined ? 'menuitem' : item.radio ? 'menuitemradio' : 'menuitemcheckbox');
     if (checked !== undefined) btn.setAttribute('aria-checked', String(Boolean(checked)));
     if (item.submenu) btn.setAttribute('aria-haspopup', 'menu');
+    if (available && item.disabled) {
+      btn.classList.add('is-disabled');
+      btn.setAttribute('aria-disabled', 'true');
+    }
     if (!available) {
       btn.classList.add('is-coming');
       btn.setAttribute('aria-disabled', 'true');
@@ -115,7 +120,7 @@ function openSub(level, btn, item, opts, focusFirst) {
 
 function activate(level, btn, item, opts) {
   if (item.submenu) { openSub(level, btn, item, opts, true); return; }
-  if (!isAvailable(item.milestone)) return;
+  if (!isAvailable(item.milestone) || item.disabled) return;
   closeMenus({ returnFocus: false });
   item.action?.();
 }

@@ -12,6 +12,8 @@ const VARIABLES = {
   labelHalo: '--label-halo',
   selection: '--selection',
   selectionHalo: '--selection-halo',
+  brushOutline: '--brush-outline',
+  brushHalo: '--brush-halo',
 };
 
 export function readTheme(el = document.documentElement) {

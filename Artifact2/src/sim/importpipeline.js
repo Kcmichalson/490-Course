@@ -16,7 +16,7 @@ import { coastDistancesKm, distanceToFeatureKm } from './distance.js';
 import { boxBlur } from './blur.js';
 import { fillBathymetry } from './bathymetry.js';
 import { fillRelief } from './relief.js';
-import { makeTerrain, landMask } from './terrain.js';
+import { makeTerrain, landMask, categoryFromElevation } from './terrain.js';
 import { downsampleTerrain } from './downsample.js';
 
 // Resolves Auto fields against what the image contains.
@@ -90,7 +90,8 @@ function silhouetteElevation({ rgba, settings, cfg, radiusKm }) {
 export function buildTerrain({ kind, rgba, maskRgba = null, settings, cfg, radiusKm = PLANET_RADIUS_KM }) {
   const args = { rgba, maskRgba, settings, cfg, radiusKm };
   const { elev, info } = kind === 'heightmap' ? heightmapElevation(args) : silhouetteElevation(args);
-  const terrain = makeTerrain(cfg.sourceWidth, cfg.sourceHeight, elev);
+  const terrain = makeTerrain(cfg.sourceWidth, cfg.sourceHeight, elev,
+    categoryFromElevation(cfg.sourceWidth, cfg.sourceHeight, elev));
   const sim = downsampleTerrain(terrain, cfg);
   const land = landMask(terrain);
   let landPixels = 0;

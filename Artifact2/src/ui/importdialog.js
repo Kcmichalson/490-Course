@@ -7,7 +7,7 @@ import { luminance, grayHistogram, detectLevels } from '../sim/heightmap.js';
 import { guessImageKind, detectSilhouetteMode, describeGuess } from '../sim/silhouette.js';
 import { allowedSimWidths } from '../sim/mapconfig.js';
 import { DEFAULT_MAX_HEIGHT_M, DEFAULT_MAX_DEPTH_M, SMOOTH_RADIUS_PX } from '../sim/constants.js';
-import { PHYSICAL_STOPS, buildLut, elevationToRGBA } from '../render/colorramps.js';
+import { PHYSICAL_STOPS, buildLut, terrainToRGBA } from '../render/colorramps.js';
 import { makeTerrain, landMask } from '../sim/terrain.js';
 import { createExtentFields } from './extentfields.js';
 import { createSlider } from './slider.js';
@@ -30,8 +30,9 @@ const el = (html) => {
   return t.content.firstElementChild;
 };
 
-// opts: { worker, getCurrentMap(), onImport(payload) → Promise }
-export function createImportDialog(dialog, { worker, getCurrentMap, onImport }) {
+// opts: { worker, getCurrentMap(), getEditCount() (edited tiles, 0 = none),
+//         onImport(payload) → Promise }
+export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount = () => 0, onImport }) {
   dialog.innerHTML = `
     <form method="dialog" class="import-form" novalidate>
       <h2>Import map image</h2>
@@ -59,6 +60,8 @@ export function createImportDialog(dialog, { worker, getCurrentMap, onImport }) 
       </div>
       <ul class="errors" data-r="errors" aria-live="polite"></ul>
       <div class="dialog-actions">
+        <label class="check keep-edits" data-r="keepRow" title="Your brush edits are kept as a layer on top of the new import (same image size only).">
+          <input type="checkbox" data-r="keep" checked> Keep brush edits</label>
         <span class="busy" data-r="busy" aria-live="polite"></span>
         <button type="button" data-r="cancel">Cancel</button>
         <button type="submit" class="primary" data-r="import">Import</button>
@@ -209,6 +212,13 @@ export function createImportDialog(dialog, { worker, getCurrentMap, onImport }) 
     if (job.mask?.resized) add(`The mask is ${job.mask.natural.width} × ${job.mask.natural.height}; it is scaled to ${job.mapSize.width} × ${job.mapSize.height} to match the heightmap.`);
   }
 
+  // Edits are in source pixels, so they can only be kept at the same size.
+  function canKeepEdits() {
+    const cur = getCurrentMap();
+    return Boolean(job) && getEditCount() > 0
+      && job.mapSize.width === cur.sourceWidth && job.mapSize.height === cur.sourceHeight;
+  }
+
   function heightmapNeedsSeaLevel() {
     return kind === 'heightmap' && settings.heightmap.seaLevel === 'auto' && job.levels.seaLevel == null;
   }
@@ -246,7 +256,7 @@ export function createImportDialog(dialog, { worker, getCurrentMap, onImport }) 
       if (maskRgba) transfer.push(maskRgba.buffer);
       const result = await worker.request('build', { kind, rgba, maskRgba, settings: workerSettings(), cfg }, transfer);
       if (token !== previewToken) return;
-      drawPreview(result.elevation, width, height);
+      drawPreview(result.elevation, result.category, width, height);
       const pct = Math.round(result.info.landFraction * 100);
       r('previewStatus').textContent = `Preview at ${width} × ${height}: ${pct}% land. The full import uses ${job.mapSize.width} × ${job.mapSize.height}.`;
     } catch (err) {
@@ -255,11 +265,12 @@ export function createImportDialog(dialog, { worker, getCurrentMap, onImport }) 
   }
 
   // Physical colors with the coastline outlined in white.
-  function drawPreview(elevation, w, h) {
+  function drawPreview(elevation, category, w, h) {
     canvas.width = w;
     canvas.height = h;
-    const rgba = elevationToRGBA(elevation, lut);
-    const land = landMask(makeTerrain(w, h, elevation));
+    const terrain = makeTerrain(w, h, elevation, category);
+    const rgba = terrainToRGBA(terrain, lut);
+    const land = landMask(terrain);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
@@ -313,6 +324,7 @@ export function createImportDialog(dialog, { worker, getCurrentMap, onImport }) 
         storedSettings: structuredClone(settings),
         cfgValues,
         mask: kind === 'heightmap' && job.mask ? { file: job.mask.file, handle: job.mask.handle } : null,
+        keepEdits: canKeepEdits() && r('keep').checked,
       });
       save('importExtent', { latTop: cfgValues.latTop, latBottom: cfgValues.latBottom, lonWest: cfgValues.lonWest, lonSpan: cfgValues.lonSpan, wraps: cfgValues.wraps, simWidth: cfgValues.simWidth });
       save('importSettings', settings);
@@ -357,6 +369,8 @@ export function createImportDialog(dialog, { worker, getCurrentMap, onImport }) 
     canvas.width = previewSize.width;
     canvas.height = previewSize.height;
     r('errors').replaceChildren();
+    r('keepRow').hidden = !canKeepEdits();
+    r('keep').checked = true;
     syncControls();
     validate();
     if (!dialog.open) dialog.showModal();

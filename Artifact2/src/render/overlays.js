@@ -24,7 +24,6 @@ export const OVERLAYS = [
   { id: 'coastline-type', label: 'Coastline Type', group: 'coast', milestone: 9 },
   { id: 'wave-exposure', label: 'Wave Exposure', group: 'coast', milestone: 9 },
   { id: 'harbor-suitability', label: 'Harbor Suitability', group: 'coast', milestone: 9 },
-  { id: 'sea-caves', label: 'Sea Caves', group: 'coast', milestone: 9 },
 ];
 
 export function defaultOverlayState() {

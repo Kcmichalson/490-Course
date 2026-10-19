@@ -42,6 +42,8 @@
   --label-halo: rgba(0, 0, 0, 0.55);
   --selection: #ffd34d;
   --selection-halo: rgba(0, 0, 0, 0.6);
+  --brush-outline: rgba(255, 255, 255, 0.9);
+  --brush-halo: rgba(0, 0, 0, 0.55);
 
   --radius: 4px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -146,7 +148,7 @@ select:disabled { opacity: 0.45; }
   white-space: nowrap;
 }
 .menu-item:hover, .menu-item:focus { background: var(--accent-weak); outline: none; }
-.menu-item.is-coming { color: var(--faint); }
+.menu-item.is-coming, .menu-item.is-disabled { color: var(--faint); }
 .menu-item.is-coming:hover, .menu-item.is-coming:focus { background: var(--panel-2); }
 .menu-item .shortcut { color: var(--muted); font-size: 12px; }
 .menu-item .arrow { color: var(--muted); }
@@ -280,6 +282,13 @@ select:disabled { opacity: 0.45; }
 .ctx-message { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ctx-message.is-flash { color: var(--warning); }
 .ctx-tool { flex: 0 1 auto; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctx-tool.has-controls { flex: 0 1 auto; color: var(--text); overflow: hidden; }
+.sculpt-panel { display: flex; align-items: center; gap: 4px 12px; min-width: 0; }
+.sculpt-panel .slider-row { margin-top: 0; flex-wrap: nowrap; gap: 6px; }
+.sculpt-panel .slider-row label:not(.check) { min-width: 0; }
+.sculpt-panel .slider-row input[type="range"] { flex: 0 1 110px; width: 110px; min-width: 60px; }
+.sculpt-panel .slider-row input[type="number"] { width: 64px; }
+.sculpt-panel .sculpt-km { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .planet-button { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 .planet-button[aria-expanded="true"] { background: var(--accent-weak); border-color: var(--accent); }
 
@@ -338,6 +347,9 @@ legend { color: var(--muted); padding: 0 4px; }
 
 /* ---------- Import dialog ---------- */
 .dialog-wide { width: min(1080px, calc(100vw - 32px)); }
+.dialog-narrow { width: min(440px, calc(100vw - 32px)); }
+.dialog-actions .keep-edits { margin-right: auto; }
+.dialog-actions .keep-edits[hidden] { display: none; }
 .import-body {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);

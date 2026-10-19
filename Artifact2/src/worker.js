@@ -25,8 +25,8 @@ self.addEventListener('message', (e) => {
         settings: msg.settings,
         cfg: msg.cfg,
       });
-      const result = { elevation: terrain.elevation, sim, info, ms: Math.round(performance.now() - started) };
-      const transfer = [terrain.elevation.buffer, sim.landFraction.buffer, sim.meanLandElev.buffer,
+      const result = { elevation: terrain.elevation, category: terrain.category, sim, info, ms: Math.round(performance.now() - started) };
+      const transfer = [terrain.elevation.buffer, terrain.category.buffer, sim.landFraction.buffer, sim.meanLandElev.buffer,
         sim.maxElev.buffer, sim.meanOceanDepth.buffer, sim.category.buffer];
       self.postMessage({ type: 'done', id: msg.id, result }, transfer);
     } catch (err) {

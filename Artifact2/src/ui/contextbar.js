@@ -57,9 +57,18 @@ export function createContextBar(root, { planetPanel, planetClose, onClearSelect
   renderMessage();
 
   return {
-    setTool(toolId) {
+    // controls: an element with the tool's controls (Sculpt), or null for
+    // the tool's hint text.
+    setTool(toolId, controls = null) {
       const tool = getTool(toolId);
-      toolArea.textContent = tool.hint ? `${tool.label}: ${tool.hint}` : tool.label;
+      toolArea.classList.toggle('has-controls', Boolean(controls));
+      if (controls) {
+        toolArea.replaceChildren(controls);
+        toolArea.title = tool.hint ?? '';
+      } else {
+        toolArea.textContent = tool.hint ? `${tool.label}: ${tool.hint}` : tool.label;
+        toolArea.title = '';
+      }
     },
     // info: { latLon, i, j } or null
     setSelection(info) {

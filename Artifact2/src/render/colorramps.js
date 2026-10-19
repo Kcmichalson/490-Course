@@ -2,6 +2,8 @@
 // palettes (they describe terrain, not the UI), so per CLAUDE.md they live
 // with the renderers rather than in style.css. Pure: no DOM.
 
+import { CATEGORY, isLandCategory } from '../sim/terrain.js';
+
 // Physical: bathymetry blues, then land greens → browns → white peaks.
 export const PHYSICAL_STOPS = [
   [-11000, [5, 18, 40]],
@@ -28,6 +30,14 @@ export const ELEVATION_STOPS = [
   [6000, [255, 255, 255]],
   [9000, [255, 255, 255]],
 ];
+
+// Physical mode colors for categories that aren't drawn by elevation.
+// Lakes draw as fresh water whatever their surface height; ice as ice.
+export const CATEGORY_COLORS = {
+  [CATEGORY.LAKE]: [82, 150, 200],
+  [CATEGORY.LAND_ICE]: [236, 242, 246],
+  [CATEGORY.SEA_ICE]: [204, 224, 238],
+};
 
 const LUT_MIN = -11000;
 const LUT_MAX = 9000;
@@ -58,6 +68,42 @@ export function elevationToRGBA(elevation, lut, out = new Uint8ClampedArray(elev
     out[p + 1] = lut[idx * 3 + 1];
     out[p + 2] = lut[idx * 3 + 2];
     out[p + 3] = 255;
+  }
+  return out;
+}
+
+// Terrain → RGBA bytes for the rectangle { x0, y0, x1, y1 } (exclusive ends;
+// whole map when rect is null). Land below sea level draws as the lowest land
+// color, so depressions still read as land. With categoryColors, lakes and
+// ice use CATEGORY_COLORS (Physical); without, everything follows elevation
+// (Elevation mode).
+export function terrainToRGBA(terrain, lut, rect = null, { categoryColors = true } = {}) {
+  const { width: w, elevation: elev, category: cat } = terrain;
+  const x0 = rect ? rect.x0 : 0;
+  const y0 = rect ? rect.y0 : 0;
+  const x1 = rect ? rect.x1 : w;
+  const y1 = rect ? rect.y1 : terrain.height;
+  const out = new Uint8ClampedArray((x1 - x0) * (y1 - y0) * 4);
+  const last = lut.length / 3 - 1;
+  const landFloor = -LUT_MIN; // LUT index of 0 m
+  let p = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++, p += 4) {
+      const i = y * w + x;
+      const c = cat ? cat[i] : -1;
+      const special = categoryColors && c >= 0 ? CATEGORY_COLORS[c] : null;
+      if (special) {
+        out[p] = special[0]; out[p + 1] = special[1]; out[p + 2] = special[2]; out[p + 3] = 255;
+        continue;
+      }
+      const e = elev[i];
+      let idx = Number.isNaN(e) ? 0 : Math.min(last, Math.max(0, Math.round(e) - LUT_MIN));
+      if (c >= 0 && isLandCategory(c) && idx < landFloor) idx = landFloor;
+      out[p] = lut[idx * 3];
+      out[p + 1] = lut[idx * 3 + 1];
+      out[p + 2] = lut[idx * 3 + 2];
+      out[p + 3] = 255;
+    }
   }
   return out;
 }

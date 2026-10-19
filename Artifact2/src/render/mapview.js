@@ -1,7 +1,8 @@
 // Owns the map canvas. Each map mode renders once into an offscreen canvas
 // at source resolution (the base layer); every frame just blits it with the
 // view transform (one blit per visible wrapped copy), then draws overlays in
-// screen space. Pan and zoom never re-render the base layer.
+// screen space. Pan and zoom never re-render the base layer. Brush strokes
+// re-render only their dirty rectangles (renderers marked `partial`).
 
 import { visibleCopies } from './viewport.js';
 import { simCellBounds, sourceToSimCell } from '../sim/coords.js';
@@ -19,6 +20,21 @@ function drawOceanPlaceholder(g, { map, theme }) {
   g.fillRect(0, 0, map.sourceWidth, map.sourceHeight);
 }
 
+// Consecutive dabs overlap heavily, so one frame's dirty rects are drawn as
+// their bounding box when that box is no bigger than the rects combined;
+// otherwise (e.g. the two halves of a dab across the date line) separately.
+export function mergeRects(rects) {
+  if (rects.length < 2) return rects;
+  const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  let sum = 0;
+  for (const r of rects) {
+    box.x0 = Math.min(box.x0, r.x0); box.y0 = Math.min(box.y0, r.y0);
+    box.x1 = Math.max(box.x1, r.x1); box.y1 = Math.max(box.y1, r.y1);
+    sum += (r.x1 - r.x0) * (r.y1 - r.y0);
+  }
+  return (box.x1 - box.x0) * (box.y1 - box.y0) <= sum ? [box] : rects;
+}
+
 export class MapView {
   constructor(canvas, { onResize } = {}) {
     this.canvas = canvas;
@@ -26,6 +42,7 @@ export class MapView {
     this.onResize = onResize;
     this.base = null;
     this.baseKey = '';
+    this.dirty = []; // source rects to re-render before the next blit
     this.cssWidth = 0;
     this.cssHeight = 0;
     this.dpr = 1;
@@ -50,14 +67,28 @@ export class MapView {
     this.onResize?.(w, h);
   }
 
+  // Marks a source rectangle { x0, y0, x1, y1 } as changed by a brush.
+  invalidate(rect) {
+    this.dirty.push(rect);
+  }
+
   // Rebuilds the base layer only when the map, the terrain (version), or the
-  // mode's renderer changes. store = { terrain, source, version }.
+  // mode's renderer changes; otherwise re-renders just the dirty rectangles.
+  // store = { terrain, source, version }.
   ensureBase(map, mode, store) {
     const draw = RENDERERS[mode.id] ?? drawOceanPlaceholder;
     const renderer = RENDERERS[mode.id] ? mode.id : 'placeholder';
     const key = `${map.sourceWidth}x${map.sourceHeight}|${renderer}|${store.version}`;
-    if (key === this.baseKey) return;
     if (store.terrain.width !== map.sourceWidth || store.terrain.height !== map.sourceHeight) return; // mid-update
+    if (key === this.baseKey) {
+      if (this.dirty.length && draw.partial) {
+        const g = this.base.getContext('2d', { alpha: false });
+        for (const rect of mergeRects(this.dirty)) draw(g, { map, terrain: store.terrain, source: store.source, theme: this.theme, rect });
+      }
+      this.dirty = [];
+      return;
+    }
+    this.dirty = [];
     if (!this.base || this.base.width !== map.sourceWidth || this.base.height !== map.sourceHeight) {
       this.base = document.createElement('canvas');
       this.base.width = map.sourceWidth;
@@ -76,7 +107,8 @@ export class MapView {
 
   // reserved: screen rects (canvas CSS px) covered by on-map controls, which
   // overlay labels avoid.
-  draw({ map, view, mode, store, overlays, selected, reserved = [] }) {
+  // brush: { x, y, radius } in source px (Sculpt tool cursor), or null.
+  draw({ map, view, mode, store, overlays, selected, reserved = [], brush = null }) {
     const { ctx, dpr, theme, cssWidth: viewW, cssHeight: viewH } = this;
     this.ensureBase(map, mode, store);
     if (!this.base) return;
@@ -112,6 +144,26 @@ export class MapView {
       if (overlays[id]) drawOverlay(ctx, env);
     }
     if (selected) this.drawSelection(env, selected);
+    if (brush) this.drawBrush(env, brush);
+  }
+
+  // The brush footprint, on every visible wrapped copy.
+  drawBrush({ map, view, viewW, theme }, brush) {
+    const { ctx } = this;
+    const mapW = map.sourceWidth * view.scale;
+    const r = Math.max(2, brush.radius * view.scale);
+    const y = view.offsetY + brush.y * view.scale;
+    for (const k of visibleCopies(view, map.sourceWidth, viewW, map.wraps)) {
+      const x = view.offsetX + k * mapW + brush.x * view.scale;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = theme.brushHalo;
+      ctx.stroke();
+      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = theme.brushOutline;
+      ctx.stroke();
+    }
   }
 
   // Outline of the selected sim cell, at least 10 px so it stays visible.

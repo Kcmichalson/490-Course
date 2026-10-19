@@ -45,15 +45,28 @@ verification checks pass.
 Importing a map drawn in an outside editor (paint.net, GIMP) is the primary
 workflow; painting in-app is secondary.
 
-- **Reload map image** (toolbar button + Shift+R): re-reads the last imported
+- **Reload map image** (toolbar button + Ctrl+Shift+R; it was Shift+R until
+  M2b, which was too easy to hit by accident): re-reads the last imported
   file and re-runs the import with the same settings. Same image size →
-  silent reload; different size → the import dialog reopens prefilled.
+  silent reload, unless there are brush edits (then it asks first, see
+  2.1); different size → the import dialog reopens prefilled. The app
+  always claims Ctrl+Shift+R, so the browser's own hard refresh (which
+  would lose unsaved work) never runs on this page; Ctrl+R and F5 still
+  reload the page.
   Fields left on Auto are re-detected; values I typed are kept. Uses the File System
   Access API in Chrome/Edge (keeps a file handle, no picker needed), falling
   back to the file picker in other browsers.
-- **Undo/redo** (Ctrl+Z / Ctrl+Y) covers brush strokes, imports, and map
-  settings changes. The map state is replaced wholesale, never mutated, so
-  undo is a stack of snapshots.
+- **Undo/redo** (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z) covers brush strokes,
+  imports, reloads, map settings changes, and New Map. Undo is
+  region-based: a stroke entry stores before/after copies of only the edit
+  tiles it touched, so undoing it rebuilds just that region. Imports,
+  reloads, map settings, and New Map store whole-state entries (map config,
+  source, imported terrain, and a copy of the edits layer), which hold
+  references to existing arrays instead of copies. The undo history has a
+  memory budget (256 MB, start) that counts each distinct buffer once;
+  the oldest entries are dropped first, and the newest is always kept.
+  Undo keys are ignored while typing in a field (the field's own text undo
+  runs instead).
 - **New Map confirmation:** New Map asks before discarding painted or
   imported terrain.
 - **Edit > Map settings** dialog: change the latitude range, west-edge
@@ -62,9 +75,53 @@ workflow; painting in-app is secondary.
 
 ### 2.1 Blank map and sculpting brushes
 - Brushes: Draw Land, Erase to Ocean, Raise, Lower, Carve Trench, Smooth.
-- Brush size and strength sliders.
-- Brushes edit the full-resolution elevation layer. The simulation
-  recomputes when a stroke ends (debounced), not during the stroke.
+- Brush size and strength sliders. Size is the brush radius in source
+  pixels, 1–250 px. The cap keeps every brush under 16 ms per dab (brush
+  math plus redraw) on a 5632×2048 map; at radius 500, Raise/Lower took
+  ~33 ms and Smooth ~49 ms per dab.
+- Brushes edit the full-resolution terrain. The simulation recomputes when
+  a stroke ends (debounced), and only the sim cells the stroke touched are
+  rebuilt (dirty rectangles), not during the stroke.
+- **Edits layer.** Brush edits are kept in a separate layer on top of the
+  imported terrain, so they survive Reload and Map settings:
+  - Raise, Lower, Smooth, and Carve Trench store *amounts* (relative
+    changes), so they ride on whatever the reloaded image says underneath.
+  - Draw Land and Erase store *fixed values* (elevation plus a category),
+    so they win where they overlap the image. A later relative brush on such
+    a pixel changes its fixed value.
+  - After Map settings, the import pipeline rebuilds the terrain and the
+    edits layer is re-applied on top. A same-size Reload with brush edits
+    first asks "Keep current brush edits?": **Cancel** stops the reload,
+    **No** reloads without the edits (undo brings them back), **Yes**
+    reloads and re-applies them on top.
+  - Importing a different file clears the edits (undo restores them). A
+    same-size re-import offers "Keep brush edits" (on by default). A Reload
+    whose image changed size drops the edits with a notice (undo restores
+    them).
+- **Categories at compose time.** Only Draw Land and Erase set a category.
+  For everything else the category comes from the result: an ocean or
+  sea-ice pixel that ends above 0 m becomes land (an island emerges);
+  otherwise ocean and sea ice stay at or below −1 m. Land is never clamped,
+  so lowering land below 0 m makes a depression that stays land; Erase is
+  how you flood it. (Land that exists only because a relative brush raised
+  ocean above 0 m is still ocean underneath, so lowering it below 0 m again
+  returns it to ocean.) Relative amounts don't apply to lake pixels.
+- **Brush rules** (start values in src/sim/constants.js):
+  - Raise / Lower: up to ±200 m per dab, clamped to 9,000 m / −6,000 m.
+    Lakes are skipped; sea ice behaves like ocean seafloor.
+  - Carve Trench: ocean and sea ice only, sharper falloff, up to 1,000 m
+    per dab, down to −10,000 m. Land and lakes are skipped.
+  - Smooth: blends toward the local mean and never changes a category.
+    Lake pixels are skipped and left out of the averages, so lake surfaces
+    stay flat and shore land isn't dragged toward the lake. Ocean and sea
+    ice stay at or below −1 m; land that was above sea level stays at or
+    above +1 m, so smoothing never moves a coast.
+  - Draw Land: any water (ocean, sea ice, lake) becomes land at
+    max(current elevation, 200 m), so a lake becomes land at max(its
+    surface, 200 m). Land is untouched.
+  - Erase (to ocean): land, land ice, and lakes become ocean at
+    min(current elevation, −100 m). Sea ice is untouched (already ocean).
+  - Draw Land and Erase ignore strength.
 
 ### 2.2 Supported formats
 PNG, BMP, WEBP, JPG via the browser image decoder. SVG is rasterized at the
@@ -84,8 +141,11 @@ vendored decoder to keep their precision. **16-bit PNG support is deferred**
 
 ### 2.4 Grayscale heightmap import
 - Settings, auto-filled on import and adjustable with a live coastline preview:
-  - **Sea level value:** gray value where land begins (auto: darkest
-    value + 1 if a large flat region sits at the darkest value).
+  - **Sea level value:** gray value where land begins. Auto only works when
+    a large flat region sits at the darkest value (a flat ocean plateau):
+    it picks the first gray value actually used above that plateau,
+    skipping empty levels (Paradox maps have a gap between the ocean gray
+    and the lowest land gray). Otherwise I set it by hand.
   - **Highest value:** auto-detected brightest value.
   - **Height of highest value in meters** (default 5,000 m).
   - **Curve (gamma)** slider, default 1.0 (linear).
@@ -98,7 +158,10 @@ vendored decoder to keep their precision. **16-bit PNG support is deferred**
   so smoothing never moves the coast.
 - Example: Paradox heightmaps range roughly 89 (#595959) to 203 (#CBCBCB).
 
-### 2.5 Color palette import (stylized hand-drawn maps)
+### 2.5 Color palette import (satellite-style color maps)
+Expected inputs are satellite-style color images (flat colors for ocean,
+shelf, land tiers, lakes, and ice), alongside the black-and-white
+silhouettes and heightmaps of 2.3–2.4.
 - On import, scan the image and show the most common colors as swatches.
   An eyedropper picks additional colors straight from the map.
 - The user assigns each swatch a **category**:
@@ -106,8 +169,8 @@ vendored decoder to keep their precision. **16-bit PNG support is deferred**
     Land, Land Ice, Sea Ice, **Ignore**.
   - Each Land swatch can carry an **elevation in meters**, so shades of green
     become elevation tiers.
-  - Ignore is for labels, arrows, gridlines, and borders. Those pixels are
-    filled in from their nearest non-ignored neighbors.
+  - Ignore is for clouds, anti-aliased edges, and compression noise. Those
+    pixels are filled in from their nearest non-ignored neighbors.
 - Matching: each pixel takes the *nearest* palette color (perceptual
   distance, e.g., in Lab space) within a tolerance slider. Unmatched pixels
   are treated as Ignore and highlighted in the preview.
@@ -129,20 +192,22 @@ become +1 m, and mask-ocean pixels above it get generated depth (2.7).
 
 ### 2.8 Downsampling to the simulation grid
 - Each sim cell stores: land fraction, mean land elevation, max elevation,
-  mean ocean depth, and its category (land if land fraction > 0.5).
-- "Is this land?" is answered by one function everywhere. In M2a it means
-  elevation > 0; M2b's category layer takes it over, which allows land below
-  sea level later.
+  mean ocean depth, and its category: land if land fraction > 0.5, and then
+  the most common category among its land pixels (land or land ice) or its
+  water pixels (ocean, lake, or sea ice).
+- **Category layer** (M2b): every full-resolution pixel has a category:
+  ocean, land, lake, land ice, or sea ice. Shallow sea / shelf is not a
+  separate category; it is ocean less than 200 m deep (elevation above
+  −200 m).
+- "Is this land?" is answered by one function everywhere (`isLand`): land
+  or land ice. Water is everything else, and ocean is water that isn't a
+  lake. Only terrain with no category layer falls back to elevation > 0.
+  This allows land below sea level.
 - Islands smaller than a cell disappear from the simulation but stay
   visible in renders; their pixels take values from the nearest land cell.
 - Upscaling for display: bilinear for continuous layers, nearest/majority
   for categorical layers (Köppen), then clipped to the full-resolution
   coastline.
-
-### 2.9 Sea caves
-Sea caves are far smaller than a grid cell, so they don't feed back into
-climate or tides. They're generated as point markers after the tide model
-runs, and the user can place their own. See section 9.1.
 
 ## 3. Planet parameters (global sliders)
 
@@ -351,52 +416,6 @@ Additions:
     and coastal flatness, animated by the phase.
   - v1 uses the same tidal phase everywhere (no amphidromic systems).
 
-### 9.1 Sea caves
-
-Sea caves are point markers on the full-resolution coastline, not grid
-cells. In reality, waves do most of the carving; tides control how wide a
-band of cliff gets eroded and when a cave's entrance is above water. The
-generator reflects that.
-
-**Automatic generation**
-- Candidate sites are sampled along the full-resolution coastline.
-- Each site gets a cave-likelihood score (all factors start values):
-  - **Cliff steepness:** how fast land rises from the shoreline, using the
-    full-resolution elevation where available. Flat, low coasts (beaches,
-    deltas, mudflats) score near zero.
-  - **Wave exposure:** onshore component of the final wind × open-water
-    fetch upwind of the site (capped at ~1,000 km). Exposed headlands facing
-    the prevailing wind score highest; sheltered bays and enclosed seas score low.
-  - **Rock susceptibility:** a seeded low-frequency noise field, so caves
-    cluster along some stretches of coast and not others. Optional
-    "Cave-Prone Rock" brush (soft rock / karst limestone) raises it locally.
-  - **Tidal factor:** micro-tidal 0.8, meso-tidal 1.0, macro-tidal 1.3.
-    Larger ranges spread erosion over a taller band of cliff.
-  - No caves on lakes, ice-covered coasts, or coasts with zero tide.
-- Sites above a threshold become caves, thinned by a **density** slider and
-  a **minimum spacing** (20 km, start).
-- **Seed** setting for reproducible results. Selection uses a stable hash of
-  each coastline location, so small terrain edits don't reshuffle every cave.
-- Auto caves regenerate whenever terrain, wind, or tides change.
-
-**Cave types**
-- **Sea cave:** entrance at or below the high-tide line; reachable by boat in calm seas.
-- **Tidal cave:** on meso- and macro-tidal coasts, the entrance sits inside
-  the tidal band. It opens at low tide and floods at high tide. Each gets an
-  entrance height within the band, so the inspector can show roughly how many
-  hours per tidal cycle it's accessible.
-- The tide scrubber shows tidal caves switching between open and flooded.
-
-**Manual caves (worldbuilding override)**
-- Cave tool: click to place, drag to move, delete, and edit type, name, and notes.
-- Placement snaps to the nearest coastline by default; holding a modifier
-  key places it freely (e.g., a cave on a lake shore or an inland sea).
-- Manual caves are **locked**: regeneration never moves or removes them.
-- Any auto cave can be **pinned**, which converts it to a manual cave.
-- Manual caves can ignore physics. The inspector shows the site's
-  plausibility score as information only ("unlikely by physics"), and never
-  blocks placement.
-
 ## 10. Water bodies
 
 Named, classified bodies of water, shared by tides, ocean currents, the Water
@@ -456,7 +475,6 @@ Order:
 Tides run separately and depend only on terrain and planet settings.
 Water bodies (section 10) depend only on terrain; once they exist (M9), tides
 and currents read them.
-Sea cave generation runs after both tides and step 5 (it needs the final wind).
 Sailing routes and travel time run on demand from the final wind and currents
 for the selected month.
 Before M8 exists, step 5 passes the base wind through unchanged.
@@ -477,7 +495,7 @@ From top to bottom:
 1. **Menu bar:** File (New Map, Import, Reload map image, Save/Load Project,
    Export), Edit (Undo, Redo, Map settings), View (overlay toggles, hover
    tooltip, tool palette, zoom in/out, fit, go to lat/lon), Tools (Navigate,
-   Sculpt, Cave tool, Route tool), Help (legend, keyboard shortcuts).
+   Sculpt, Route tool), Help (legend, keyboard shortcuts).
 2. **Toolbar:** tool dropdown (far left, shows the current tool),
    "View: <mode name>" label, the 5 map-mode category tabs and the active
    category's mode icons, season selector with play button, zoom
@@ -498,11 +516,12 @@ modes, and toggles that don't exist yet are shown disabled with
 ### 13.2 Tools
 - One **tool dropdown** at the left of the toolbar instead of always-visible
   tool buttons: **Navigate** (default; drag pans, click inspects), **Sculpt**
-  submenu (Draw Land, Raise, Lower, Carve Trench, Smooth, Erase; M2;
-  plus Cave-Prone Rock, M9, see section 9.1),
-  **Cave tool** (M9), **Route tool** (M10).
+  submenu (Draw Land, Raise, Lower, Carve Trench, Smooth, Erase; M2b),
+  **Route tool** (M10). (The Cave tool and Cave-Prone Rock brush belong to
+  the sea caves reach goal, section 18.)
 - Esc returns to Navigate. Space+drag and middle-drag pan in every tool.
-- **View > Tool palette:** optional floating GIMP-style palette, hidden by default.
+- **View > Tool palette** (M11): optional floating GIMP-style palette,
+  hidden by default.
 
 ### 13.3 Map modes (EU4-style mode bar)
 Category tabs, each with a grid of icon buttons. Each button's tooltip shows
@@ -533,18 +552,15 @@ together.
   Coastal Fog (M7)
 - **Ocean:** Ocean Currents (M7; red = warm, blue = cold, green = upwelling),
   Seasonal Sea-Ice Edges (M7), Sailing Routes (M10)
-- **Coast:** Coastline Type (M9), Wave Exposure (M9), Harbor Suitability (M9),
-  Sea Caves (M9; auto and manual markers drawn differently; tidal caves show
-  open/flooded state from the tide scrubber)
+- **Coast:** Coastline Type (M9), Wave Exposure (M9), Harbor Suitability (M9).
+  (Sea Caves belongs to the reach goal, section 18.)
 
 ### 13.5 Lookups and controls
 - **Tile inspector** (hover tooltip, optional via View menu): latitude/
   longitude, elevation, summer and winter temperature, annual precipitation,
   wind direction and speed, current type, tidal range, Köppen code, day
   length (M3), and a real-world climate analog from a small built-in table
-  of real cities (M6). Hovering a cave marker shows its type, name, notes,
-  whether it's auto or manual, plausibility score, and (for tidal caves)
-  hours accessible per tidal cycle.
+  of real cities (M6).
 - **Click a tile** (without dragging) in Navigate: the context bar shows a
   monthly temperature and precipitation chart (M6).
 - **Season selector** (M3) with a **play button** that animates the year (M11).
@@ -559,10 +575,7 @@ Last-used settings, bookmarks, and palettes persist in localStorage.
   optional), or at sim resolution.
 - Save Project: downloads a .json with all settings, the palette, bookmarks,
   water body edits, and the edited terrain embedded as a PNG with elevation
-  packed into RGB channels (keeps full precision). Manual and pinned caves
-  are saved; auto caves regenerate from the seed.
-- Export the cave list as JSON or CSV (position in source pixels and
-  lat/lon, type, name, notes).
+  packed into RGB channels (keeps full precision).
 - Load Project restores everything.
 
 ## 15. Running locally and online
@@ -590,6 +603,15 @@ and custom latitude control points ("this row is 36°N") for distorted maps
 such as Paradox's, whose far south stays squashed even after setting the
 latitude range.
 
+Small ideas raised in M2b planning (not built yet): a tooltip line for the
+surface type (land / lake / sea ice / land ice / ocean); auto-guessing
+palette swatch categories from hue and lightness; preview zoom or a
+magnifier for the palette eyedropper; `[` / `]` to resize the brush and
+hotkeys to switch brushes; Edit > Clear Brush Edits; hovering a palette
+swatch highlights its pixels in the preview; and for heightmap + mask
+imports, mask-land below sea level keeping its real negative elevation
+instead of +1 m (section 2.6), now that categories allow it.
+
 **Moonshot** (optional, after M9): rivers, drainage basins, and lakes from runoff.
 
 **Not planned:**
@@ -603,9 +625,13 @@ latitude range.
 The app must run after every milestone. Test maps in test-maps/ (see its
 README for credits): a GEBCO Earth heightmap with ocean depth, an Earth
 silhouette thresholded from it, and generated black/white archipelago and
-continent maps (1024×512). In the git-ignored test-maps/private/ (never
-committed): a Paradox heightmap (game content) and the reference map
-(`reference_map.png`, a third-party hand-drawn map).
+continent maps (1024×512), plus a script-generated color map for palette
+import (`palette_map_1.png`, M2b). In the git-ignored test-maps/private/
+(never committed): a Paradox heightmap (game content) and the reference map
+(`drawn_sample_map.webp`, a third-party hand-drawn map). The reference map
+is a personal by-eye reference for how winds and rain should look: the app
+never opens it, and no test, fixture, preset, or checklist step imports it.
+Checks that mention it are side-by-side comparisons in my own image viewer.
 
 Each new map mode and toggle lands with the milestone that produces its data.
 
@@ -625,25 +651,28 @@ status bar with lat/lon, Go to lat/lon, Bookmarks.
 Grayscale heightmap import (auto sea level and max values, max height in
 meters, curve, smoothing, optional land/sea mask), silhouette import with the
 auto-relief toggle, generated bathymetry, downsampling to the sim grid,
-Edit > Map settings, Reload map image (Shift+R), elevation in the status bar
+Edit > Map settings, Reload map image (Ctrl+Shift+R since M2b), elevation in the status bar
 and tooltip. Modes: Original Art, Physical, Elevation.
 - Earth silhouette coastlines look right in Physical mode.
 - A Paradox heightmap's darkest land value maps to ~0 m and 203 to the max height.
 
 **M2b — Painting and editing**
-Palette editor, sculpt brushes, undo/redo, New Map confirmation, the
-category layer (lake, ice, shelf), an optional separate art image for
-Original Art. Modes: Slope & Ruggedness, Distance from Coast. Toggle: Shaded
-Relief. How brush edits survive Reload and Map settings is decided when M2b
-is planned (leaning: a separate edits layer re-applied afterward).
-- Palette import of the reference map ignores the text and wind arrows.
+Palette editor, sculpt brushes, region-based undo/redo, New Map
+confirmation, the category layer (ocean, land, lake, land ice, sea ice;
+shelf comes from depth), an optional separate art image for Original Art.
+Modes: Slope & Ruggedness, Distance from Coast. Toggle: Shaded Relief.
+Brush edits live in a separate edits layer re-applied after the import
+pipeline, so they survive Reload and Map settings (section 2.1).
+- Palette import of a color test map (`palette_map_1.png`) gives continuous
+  coastlines with little unmatched area.
 
 **M3 — Planet sliders and wind**
 All planet sliders, season selector, circulation bands, ITCZ shift,
 pressure belts, wind arrow overlay with band labels, Pressure & ITCZ toggle,
 tropics and polar circles on the graticule, day length in the inspector.
 Mode: Wind Speed & Pressure.
-- At default settings, the arrows match the reference map.
+- At default settings, the wind arrows match the reference map, compared
+  side by side with it open in my own image viewer (not imported).
 - 72 h rotation → 1 cell; 6 h → 7 bands. Retrograde flips east/west.
 - At northern summer solstice the ITCZ sits north of the equator.
 - Node tests cover wind direction signs in each band and hemisphere.
@@ -660,7 +689,8 @@ Modes: Precipitation, Precipitation Seasonality, Aridity, Cloud Cover.
 - Sahara and Arabia < 10 mm/month; Amazon, Congo, and Indonesia
   ≥ 150 mm/month; Western Europe 50–100 mm/month.
 - Dry lee sides behind the Andes and Rockies.
-- The reference map: the western continent is dry west of its mountain spine
+- Compared side by side with the reference map open in my own image viewer
+  (not imported): the western continent is dry west of its mountain spine
   in the northern tropics, with a wet east coast.
 
 **M6 — Köppen and biomes**
@@ -685,22 +715,15 @@ Storm Tracks.
   Asia. Northern winter: offshore winds.
 - Wind is visibly weaker over land.
 
-**M9 — Tides, sea caves, and water bodies**
-Tides, sea caves and the Cave tool, water bodies (section 10). Modes: Tidal
-Range, Water Bodies. Toggles: Water Body Labels, Coastline Type, Wave
-Exposure, Harbor Suitability, Sea Caves. Sculpt brush: Cave-Prone Rock.
+**M9 — Tides and water bodies**
+Tides, water bodies (section 10). Modes: Tidal Range, Water Bodies.
+Toggles: Water Body Labels, Coastline Type, Wave Exposure, Harbor
+Suitability. (Sea caves moved to the reach goal, section 18.)
 - Earth: the Mediterranean, Black Sea, Baltic, Red Sea, Persian Gulf, and
   Hudson Bay come out as separate bodies; the Caspian is a lake; each label
   sits in open water.
 - Bay of Fundy, Severn Estuary, and northwest France macro-tidal.
 - Mediterranean, Baltic, and Black Sea micro-tidal; lakes zero.
-- Earth: caves cluster on steep, exposed coasts such as western Ireland,
-  Cornwall, and the Algarve; few or none on low coasts like the
-  Netherlands or Bangladesh, and none on lakes.
-- Tidal caves appear only on meso- and macro-tidal coasts and open/flood
-  with the scrubber.
-- Same seed gives the same caves; a small brush edit only changes caves near it.
-- Manual caves survive regeneration; pinning converts an auto cave to manual.
 
 **M10 — Sailing routes and travel time**
 Section 11: ship presets, Route tool, Sailing Routes toggle, Sailing Time mode.
@@ -717,8 +740,88 @@ Section 11: ship presets, Route tool, Sailing Routes toggle, Sailing Time mode.
 Animated wind particles, tide scrubber, season playback, PNG export,
 project save/load. Themes: dark (default), light, parchment (each overrides
 the UI color variables in style.css). A collapsible legend (at narrow widths
-it covers a large part of the map).
+it covers a large part of the map). View > Tool palette (section 13.2).
 - An exported PNG matches the source map's dimensions exactly.
 - A saved project reloads identically.
 
 **Moonshot** (optional, after M9): rivers, drainage basins, lakes.
+
+**Reach goal** (after M11): sea caves, section 18.
+
+## 18. Reach goal (after M11): Sea caves
+
+Moved out of M9 during M2b planning; a reach goal after M11. Sea caves are
+far smaller than a grid cell, so they don't feed back into climate or tides.
+Everything cave-related lives in this section: generation, the Cave tool,
+the Cave-Prone Rock brush, the Sea Caves toggle, the inspector readout,
+saving, and export. None of it appears in the menus or registries until
+this goal is started.
+
+**Pipeline:** cave generation runs after both tides and pipeline step 5 (it
+needs the final wind).
+
+Sea caves are point markers on the full-resolution coastline, not grid
+cells. In reality, waves do most of the carving; tides control how wide a
+band of cliff gets eroded and when a cave's entrance is above water. The
+generator reflects that.
+
+**Automatic generation**
+- Candidate sites are sampled along the full-resolution coastline.
+- Each site gets a cave-likelihood score (all factors start values):
+  - **Cliff steepness:** how fast land rises from the shoreline, using the
+    full-resolution elevation where available. Flat, low coasts (beaches,
+    deltas, mudflats) score near zero.
+  - **Wave exposure:** onshore component of the final wind × open-water
+    fetch upwind of the site (capped at ~1,000 km). Exposed headlands facing
+    the prevailing wind score highest; sheltered bays and enclosed seas score low.
+  - **Rock susceptibility:** a seeded low-frequency noise field, so caves
+    cluster along some stretches of coast and not others. Optional
+    "Cave-Prone Rock" brush (soft rock / karst limestone) raises it locally.
+  - **Tidal factor:** micro-tidal 0.8, meso-tidal 1.0, macro-tidal 1.3.
+    Larger ranges spread erosion over a taller band of cliff.
+  - No caves on lakes, ice-covered coasts, or coasts with zero tide.
+- Sites above a threshold become caves, thinned by a **density** slider and
+  a **minimum spacing** (20 km, start).
+- **Seed** setting for reproducible results. Selection uses a stable hash of
+  each coastline location, so small terrain edits don't reshuffle every cave.
+- Auto caves regenerate whenever terrain, wind, or tides change.
+
+**Cave types**
+- **Sea cave:** entrance at or below the high-tide line; reachable by boat in calm seas.
+- **Tidal cave:** on meso- and macro-tidal coasts, the entrance sits inside
+  the tidal band. It opens at low tide and floods at high tide. Each gets an
+  entrance height within the band, so the inspector can show roughly how many
+  hours per tidal cycle it's accessible.
+- The tide scrubber shows tidal caves switching between open and flooded.
+
+**Manual caves (worldbuilding override)**
+- Cave tool: click to place, drag to move, delete, and edit type, name, and notes.
+- Placement snaps to the nearest coastline by default; holding a modifier
+  key places it freely (e.g., a cave on a lake shore or an inland sea).
+- Manual caves are **locked**: regeneration never moves or removes them.
+- Any auto cave can be **pinned**, which converts it to a manual cave.
+- Manual caves can ignore physics. The inspector shows the site's
+  plausibility score as information only ("unlikely by physics"), and never
+  blocks placement.
+
+**UI, saving, and export**
+- Tools: a **Cave tool** in the tool dropdown, and a **Cave-Prone Rock**
+  brush in the Sculpt submenu (raises rock susceptibility locally).
+- Toggle: **Sea Caves** in the Coast group (auto and manual markers drawn
+  differently; tidal caves show open/flooded state from the tide scrubber).
+- Inspector: hovering a cave marker shows its type, name, notes, whether
+  it's auto or manual, plausibility score, and (for tidal caves) hours
+  accessible per tidal cycle.
+- Save Project stores manual and pinned caves; auto caves regenerate from
+  the seed.
+- Export the cave list as JSON or CSV (position in source pixels and
+  lat/lon, type, name, notes).
+
+**Checks**
+- Earth: caves cluster on steep, exposed coasts such as western Ireland,
+  Cornwall, and the Algarve; few or none on low coasts like the
+  Netherlands or Bangladesh, and none on lakes.
+- Tidal caves appear only on meso- and macro-tidal coasts and open/flood
+  with the scrubber.
+- Same seed gives the same caves; a small brush edit only changes caves near it.
+- Manual caves survive regeneration; pinning converts an auto cave to manual.

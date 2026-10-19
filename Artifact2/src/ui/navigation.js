@@ -1,6 +1,6 @@
 // Pointer and wheel input on the map canvas: zoom at the cursor, drag to pan
-// (Navigate tool), Space+drag and middle-drag to pan in every tool, and a
-// click (movement under 4 px) to inspect.
+// (Navigate tool), Space+drag and middle-drag to pan in every tool, a click
+// (movement under 4 px) to inspect, and left-drag strokes in the Sculpt tool.
 
 import { wheelZoomFactor } from '../render/viewport.js';
 import { isTypingTarget } from './shortcuts.js';
@@ -8,7 +8,8 @@ import { isTypingTarget } from './shortcuts.js';
 const CLICK_SLOP_PX = 4;
 
 // handlers: { getTool(), onPan(dx, dy), onZoom(factor, x, y),
-//             onHover(point | null, dragging), onClick(x, y) }
+//             onHover(point | null, dragging), onClick(x, y),
+//             onStrokeStart(x, y), onStrokeMove(x, y), onStrokeEnd() }
 export function attachNavigation(canvas, handlers) {
   let drag = null;
   let spaceHeld = false;
@@ -26,14 +27,17 @@ export function attachNavigation(canvas, handlers) {
 
   canvas.addEventListener('pointerdown', (e) => {
     if (drag) return;
-    const navigate = handlers.getTool() === 'navigate';
+    const tool = handlers.getTool();
+    const navigate = tool === 'navigate';
     const pan = e.button === 1 || (e.button === 0 && (spaceHeld || navigate));
     const inspect = e.button === 0 && navigate && !spaceHeld;
-    if (!pan && !inspect) return;
+    const paint = e.button === 0 && tool === 'sculpt' && !spaceHeld;
+    if (!pan && !inspect && !paint) return;
     e.preventDefault(); // no middle-click autoscroll, no text selection
     try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
     const p = pos(e);
-    drag = { id: e.pointerId, start: p, last: p, moved: false, pan, inspect };
+    drag = { id: e.pointerId, start: p, last: p, moved: false, pan, inspect, paint };
+    if (paint) handlers.onStrokeStart?.(p.x, p.y);
   });
 
   canvas.addEventListener('pointermove', (e) => {
@@ -44,15 +48,18 @@ export function attachNavigation(canvas, handlers) {
         updateCursor();
       }
       if (drag.moved && drag.pan) handlers.onPan(p.x - drag.last.x, p.y - drag.last.y);
+      if (drag.paint) handlers.onStrokeMove?.(p.x, p.y);
       drag.last = p;
     }
-    handlers.onHover(p, Boolean(drag?.moved));
+    handlers.onHover(p, Boolean(drag?.moved && !drag.paint));
   });
 
   const end = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
     const wasClick = !drag.moved && drag.inspect && e.type === 'pointerup';
+    const wasPaint = drag.paint;
     drag = null;
+    if (wasPaint) handlers.onStrokeEnd?.();
     updateCursor();
     const p = pos(e);
     if (wasClick) handlers.onClick(p.x, p.y);
@@ -83,5 +90,5 @@ export function attachNavigation(canvas, handlers) {
   window.addEventListener('blur', () => { spaceHeld = false; updateCursor(); });
 
   updateCursor();
-  return { updateCursor };
+  return { updateCursor, isStroking: () => Boolean(drag?.paint) };
 }

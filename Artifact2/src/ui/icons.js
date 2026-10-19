@@ -55,7 +55,6 @@ const PATHS = {
   // Tools
   'tool-navigate': '<path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/>',
   'tool-sculpt': '<path d="M14 4l6 6-9 9H5v-6z"/><path d="M12 6l6 6"/>',
-  'tool-cave': '<path d="M2 20c0-8 4-14 10-14s10 6 10 14"/><path d="M8 20c0-4 2-7 4-7s4 3 4 7"/>',
   'tool-route': '<circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18c6 0 4-12 10-12" stroke-dasharray="2 2"/>',
 
   // Small UI glyphs

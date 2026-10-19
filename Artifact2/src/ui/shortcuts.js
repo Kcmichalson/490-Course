@@ -11,7 +11,7 @@ export const KEYS = {
   zoomOut: ['-', '_'],
   goTo: 'g',
   shortcuts: '?',
-  reload: 'R', // with Shift; plain R is a mode key
+  reload: 'KeyR', // physical key (event.code), with Ctrl+Shift; plain R is a mode key
 };
 
 // Rows for the shortcuts dialog.
@@ -26,7 +26,10 @@ export const SHORTCUT_ROWS = [
   ['Space + drag, middle-drag', 'Pan in any tool'],
   ['Click (Navigate tool)', 'Inspect a tile'],
   ['G', 'Go to lat/lon'],
-  ['Shift+R', 'Reload the last imported map image'],
+  ['Drag (Sculpt tool)', 'Paint with the current brush'],
+  ['Ctrl+Shift+R', 'Reload the last imported map image'],
+  ['Ctrl+Z', 'Undo (in a text field: undo typing)'],
+  ['Ctrl+Y, Ctrl+Shift+Z', 'Redo'],
   ['Esc', 'Back to the Navigate tool; leave a text field; close menus and dialogs'],
   ['?', 'Show this list'],
 ];
@@ -45,10 +48,29 @@ export function isTypingTarget(target) {
 }
 
 // Hotkeys never fire while typing, while a dialog is open, or with
-// Ctrl/Alt/Meta held (those combinations belong to the browser or to
-// menu shortcuts such as Ctrl+Z).
-export function shouldIgnoreHotkey({ target, dialogOpen = false, ctrlKey = false, altKey = false, metaKey = false }) {
-  return dialogOpen || ctrlKey || altKey || metaKey || isTypingTarget(target);
+// Alt/Meta held (those combinations belong to the browser or to
+// menu shortcuts such as Ctrl+Z). Ctrl+Shift+R is permitted for reload.
+export function shouldIgnoreHotkey({ target, dialogOpen = false, ctrlKey = false, altKey = false, metaKey = false, shiftKey = false, code = '' }) {
+  if (dialogOpen || altKey || metaKey || isTypingTarget(target)) return true;
+  // Allow Ctrl+Shift+R for reload even though ctrlKey and shiftKey are true
+  if (ctrlKey && shiftKey && code === KEYS.reload) return false;
+  return ctrlKey;
+}
+
+// Ctrl+Shift+R: Reload map image. Matched by physical key (event.code), so
+// it works whatever the keyboard layout or Caps Lock state.
+export function isReloadKey({ ctrlKey = false, shiftKey = false, altKey = false, metaKey = false, code = '' }) {
+  return ctrlKey && shiftKey && !altKey && !metaKey && code === KEYS.reload;
+}
+
+// Map undo/redo from a key event: 'undo', 'redo', or null. Never while
+// typing in a field (the field's own text undo runs) or with a dialog open.
+export function undoAction({ key, ctrlKey = false, metaKey = false, shiftKey = false, altKey = false, target, dialogOpen = false }) {
+  if (!(ctrlKey || metaKey) || altKey || dialogOpen || isTypingTarget(target)) return null;
+  const k = String(key).toLowerCase();
+  if (k === 'z') return shiftKey ? 'redo' : 'undo';
+  if (k === 'y' && !shiftKey) return 'redo';
+  return null;
 }
 
 export function modeHotkeyLabel(categoryIndex, modeIndex) {

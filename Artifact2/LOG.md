@@ -9,7 +9,8 @@ bottom. Claude Code updates this at the end of every milestone.
 - [x] M2a — Terrain imports
 - [x] M2b — Painting and editing
 - [x] M3 — Planet sliders and wind
-- [ ] M4 — Temperature
+- [x] M4 — Temperature
+- [ ] M4b — Terrain wind (friction, mountain deflection; moved from M8)
 - [ ] M5 — Precipitation and rain shadows
 - [ ] M6 — Köppen and biomes
 - [ ] M7 — Ocean currents and upwelling
@@ -1983,9 +1984,97 @@ Heightmap, sea level 128, the BW PNG as the mask, max height 5,000 m.
 
 **Next**
 - After your checklist: tick M4, commit, push. Not started: M5.
+**My checklist results (checked by me, by eye, in my browser)**
+- PASS items 1 (Temperature, Annual Mean), 2 (solstices), 3 (Temperature
+  Range), and 10 (Day of year slider in Annual Mean).
+- NOT TESTED by my choice: items 4–9 and 11 (Growing Season, Frost, Winter
+  Severity, Climate Boundaries, tooltip, brush strokes, ~1280 px pass).
+- M4 ticked and committed by me (Prompt 5).
+
 - 2048 continentality (7 s in the browser): your decision (Prompt 4) is to
   keep the method as is. Capping the tracer grid at 1024 and upsampling
   remains an idea only, not built.
+
+---
+
+## 2026-10-19 — Milestone 4b: Terrain wind (moved out of M8)
+
+**Planned** (approved in advance in Prompt 5, for a class demo)
+- New milestone id `'4b'` right after M4: SPEC §4.5 (friction over land,
+  mountain deflection) moves out of M8; monsoons (§4.4) stay in M8. Step 5
+  produces the final wind; temperature pass 2 uses it; arrows, the speed
+  mode, and the tooltip show it.
+
+**Changed (decisions, my defaults)**
+- Friction × 0.6 on land and land ice, per cell (lakes count as water).
+- Deflection on land: the uphill direction comes from the gradient of cell
+  surface elevation; if the wind blows uphill,
+  `block = 0.8 · smoothstep(500, 1500 m, elevation) · smoothstep(0, 10 m/km, slope)`
+  of the uphill component is removed and 70% of it is added along the
+  contour (in the direction the wind already leans). Only the deflection
+  is smoothed (one 3×3 pass), so the open ocean away from mountains is
+  exactly the base wind.
+- Annual Mean = the vector mean of the 12 monthly final winds (mean speed);
+  the free zonal monthly profiles are no longer returned with terrain.
+- Step 4 (pass 1, base wind) is skipped until M8 needs it; step 6 is the
+  temperature, on the final wind.
+- Every climate view now sends the terrain; the continentality key
+  includes cell elevations, so any stroke (even elevation only) reruns the
+  tracer (~1.6–2.1 s at 1024 in the browser worker).
+- `CURRENT_MILESTONE = '4b'`; MILESTONES gains '4b'.
+
+**Built**
+- src/sim/terrainwind.js; constants (LAND_FRICTION, DEFLECT_*);
+  pipeline.js (finalWind uses the terrain; annual final wind; pass 2);
+  continentality accepts per-month wind generators (memory); main.js sends
+  the terrain for wind views and labels the status "wind + temperature";
+  the worker-error console line now prints the message, file, and line.
+
+**Problems**
+- First version smoothed the whole change, friction included, so a flat
+  plain read 0.48282 instead of 0.6 × 0.80470 = 0.48282 vs 0.48272: the
+  blur mixed neighbouring rows' friction. Fixed in the code (friction per
+  cell, only the deflection smoothed, as SPEC orders it), not the test.
+- Changed expectations (the milestone changed what's true): the M4 test
+  "pass 2 equals pass 1 before M8" became "pass 2 follows the final wind";
+  comingsoon now expects '4b'.
+- **Not verified in the app.** In the in-app browser pane (hidden at the
+  time), main.js stopped loading: the status bar stayed empty, and
+  dynamic imports of most modules failed with "Failed to fetch
+  dynamically imported module". The server log shows every requested file
+  answered 200, and modules never requested in that log (planet.js,
+  terrain.js) are likely failed entries cached from an earlier load while
+  the pane was hidden. Node parses main.js and the edited modules without
+  errors. Per CLAUDE.md I stopped instead of working around the stalled
+  pane. The app load still needs a check in a normal browser tab.
+
+**Verification checks**
+- PASS `node --test "tests/*.test.js"`: 197/197. New terrainwind tests (6):
+  friction ratio, ocean unchanged exactly, deflection along a 4,000 m
+  ridge, a 300 m ridge crossed (no deflection), wrap, determinism (and
+  runClimate uses the final wind).
+- PASS GEBCO in a browser worker (day 80, 1024; before the pane stalled):
+  open ocean unchanged (Mid-Atlantic speed 1.00 → 1.00); plains slowed
+  (Kazakh steppe and US plains 1.00 → 0.60); mountains turned a little
+  (Tibet west edge from 203° → 191°, Andes 20°S 145° → 149°, 30°S
+  345° → 354°). Deflection is modest at these start values (≤ ~12°
+  where sampled); friction is the obvious effect.
+- Job time with terrain: 2.2 s at 1024 (continentality 2.1 s).
+- PASS (reported by you, Prompt 6): the app loads fine in your own
+  browser. So the in-app pane's module failures were the stalled pane, not
+  the code.
+- Not done: timings at 2048, the by-eye checklist below.
+
+**By-eye checklist (your browser, GEBCO imported as in M4)**
+1. Overlays > Wind Arrows, Northern Spring Equinox: arrows over the
+   continents are visibly shorter (≈ 60%) than over the open ocean, and
+   ocean arrows far from land look as in M3.
+2. Zoom on the Tibetan Plateau / Himalayas: arrows on the steep edges
+   turn to run more along the range (a modest bend, ≈ 10–15° at these
+   start values); low plains don't bend.
+3. Zoom on the Andes: arrows on the slopes turn slightly along the range
+   and are slower; Weather > Wind Speed & Pressure shows the continents
+   darker than the oceans.
 
 ---
 
@@ -2026,6 +2115,24 @@ Heightmap, sea level 128, the BW PNG as the mask, max height 5,000 m.
   > *"Keep the 2048 continentality method as is; I'll run the M4 checklist."*
 * **What the AI Provided:**  
   Recorded the decision in the M4 entry's Next (no code change) and suggested a commit message. M4 stays unticked until the checklist results arrive.
+
+### Prompt 5
+* **User Prompt:**  
+  > *[M4 checklist: items 1, 2, 3, and 10 PASS by eye; the rest NOT TESTED by my choice; tick M4 (committed). Next, quickly, for a class demo in ~15 minutes: move SPEC §4.5 (friction, mountain deflection) out of M8 into a new milestone after M4 (propose the id); monsoons stay in M8. Approved now: a short plan in chat with defaults, then build. Record the change in SPEC and LOG. Step 5 produces the final wind; pass 2 uses it; arrows, speed mode, and tooltip show it. Tests: friction ratio, ridge deflection, low ridge crossed, ocean far from land unchanged, wrap, determinism; fix code, not expectations. If it isn't working in 15 minutes, stop and say where it stands. Finish with a 3-item GEBCO checklist and a commit message; don't push.]*
+* **What the AI Provided:**  
+  Recorded the M4 results and ticked M4. Proposed milestone '4b', with the plan in chat; recorded it in SPEC (§4.5, §12, §17) and the milestone list. Built terrainwind.js and the pipeline and main.js wiring; 197/197 tests pass; GEBCO worker numbers show friction clearly and modest deflection. Stopped at the time limit because the in-app browser pane (hidden) stopped loading the app's modules. See the M4b entry.
+* **Root Cause Discovered:**  
+  The first deflection version smoothed friction along with deflection, blending neighbouring rows (a 0.02% error caught by the friction test). Fixed by smoothing only the deflection.
+* **How It Was Verified:**  
+  Node tests 197/197. GEBCO numbers from a browser worker. The app itself was not verified in a browser tab (pane stalled).
+
+### Prompt 6 (answer to Claude's question)
+* **User Prompt:**  
+  > *"The app loads fine in my browser; record that and give me the M4b commit message."*
+* **What the AI Provided:**  
+  Recorded the load check in the M4b entry and suggested a commit message. M4b stays unticked until the by-eye checklist is done; nothing pushed.
+* **How It Was Verified:**  
+  By you, in your own browser.
 
 ---
 

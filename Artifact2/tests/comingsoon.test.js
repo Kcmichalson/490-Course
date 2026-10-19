@@ -13,12 +13,14 @@ test('milestones are ordered 1, 2a, 2b, 3 … 11', () => {
   assert.equal(milestoneIndex('2b-1'), -1, 'the M2b phase id is removed');
 });
 
-// Moved with the milestone (Session 6): M4 is now current, M5 not yet.
-test('M4 is available; M5 is not yet', () => {
-  assert.equal(CURRENT_MILESTONE, '4');
+// Moved with the milestone (Session 6): M4b (terrain wind, moved out of M8)
+// is now current, M5 not yet.
+test('M4b is available; M5 is not yet', () => {
+  assert.equal(CURRENT_MILESTONE, '4b');
+  assert.ok(milestoneIndex(4) < milestoneIndex('4b') && milestoneIndex('4b') < milestoneIndex(5));
   assert.ok(isAvailable('2b'));
-  assert.ok(isAvailable(3));
   assert.ok(isAvailable(4));
+  assert.ok(isAvailable('4b'));
   assert.ok(!isAvailable(5));
 });
 

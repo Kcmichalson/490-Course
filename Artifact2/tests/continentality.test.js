@@ -99,18 +99,23 @@ test('non-wrapping partial map: off the map counts as open ocean', () => {
   assert.ok(Number.isFinite(d[row + 45]), 'distance to the map edge');
 });
 
-test('determinism, and pass 2 equals pass 1 before M8', () => {
+// Until M4b (Session 6) the second half checked that pass 2 equaled pass 1,
+// true only while step 5 passed the base wind through. Now pass 2 must use
+// the final (friction + deflection) wind.
+test('determinism, and pass 2 follows the final wind', () => {
   const w = world((lon, lat) => lon >= 0 && lon < 70 && lat > 40 && lat < 60, { W: 120, H: 60 });
   const terrain = { category: w.category, elevation: w.elevation };
   const one = runClimate({ grid: w.grid, planet, season: { day: 15 }, terrain });
   const two = runClimate({ grid: w.grid, planet, season: { day: 15 }, terrain });
   assert.deepEqual(one.temperature, two.temperature);
   assert.deepEqual(one.continentality.s, two.continentality.s);
-  // Pass 2 recomputed on the final wind gives exactly pass 1.
+  // Pass 2 = continentality on the 12 monthly final winds.
   const steps = temperatureSteps({ grid: w.grid, planet, season: { day: 15 }, terrain });
-  const finalMonths = MONTH_MID_DAYS.map((d) => finalWind(windProfile(w.grid, planet, d)));
+  const finalMonths = MONTH_MID_DAYS.map((d) => finalWind(windProfile(w.grid, planet, d), w.grid, terrain));
   const pass2 = continentality(w.grid, w.category, finalMonths, R);
   assert.deepEqual(pass2.s, steps.continentality.s);
+  const onBase = continentality(w.grid, w.category, MONTH_MID_DAYS.map((d) => windProfile(w.grid, planet, d)), R);
+  assert.notDeepEqual(onBase.s, steps.continentality.s, 'friction changes the tracer');
 });
 
 test('lakes count as land (no maritime source)', () => {

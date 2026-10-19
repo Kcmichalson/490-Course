@@ -700,14 +700,19 @@ const temperatureViewShown = () => TEMPERATURE_MODES.has(state.modeId) || Boolea
 const temperatureNeeded = () => temperatureViewShown() || state.tooltipOn;
 
 // What the current settings need: { grid, planet, season, key, temp, thermalKey?, boundaryKey? }.
+// From M4b the wind itself follows the terrain (friction, mountain
+// deflection), so every climate view sends the terrain, and the
+// continentality key includes the cell elevations too (simVersion): they
+// steer the final wind the tracer follows.
 function climateRequest() {
   const grid = climateGrid(state.map);
   const { planet, season } = state;
-  if (!temperatureNeeded()) return { grid, planet, season, temp: false, key: climateKey(grid, planet, season) };
-  const tk = thermalKey(grid, planet, store.landVersion);
+  if (!temperatureNeeded() && !windViewShown()) return { grid, planet, season, temp: false, key: climateKey(grid, planet, season) };
+  const terrainVersion = `${store.landVersion}.${store.simVersion}`;
+  const tk = thermalKey(grid, planet, terrainVersion);
   return {
-    grid, planet, season, temp: true, thermalKey: tk, boundaryKey: `${tk}|sim${store.simVersion}`,
-    key: temperatureKey(grid, planet, season, store.landVersion, store.simVersion),
+    grid, planet, season, temp: true, thermalKey: tk, boundaryKey: tk,
+    key: temperatureKey(grid, planet, season, terrainVersion, store.simVersion),
   };
 }
 
@@ -724,7 +729,7 @@ function showClimate(result, req) {
 function simText(result, temp) {
   if (!temp) return `Sim: wind ${result.ms} ms`;
   const c = result.timing?.continentality;
-  return `Sim: temperature ${Math.round(result.ms)} ms (continentality ${c === 'cached' ? 'reused' : `${c} ms`})`;
+  return `Sim: wind + temperature ${Math.round(result.ms)} ms (continentality ${c === 'cached' ? 'reused' : `${c} ms`})`;
 }
 
 function ensureClimate() {
@@ -733,13 +738,13 @@ function ensureClimate() {
   if (store.climate?.key === req.key) return;
   const cached = climateCache.get(req.key);
   if (cached && (!req.temp || thermals.has(req.thermalKey))) {
-    statusbar.setSim(req.temp ? 'Sim: temperature (cached)' : 'Sim: wind (cached)');
+    statusbar.setSim(req.temp ? 'Sim: wind + temperature (cached)' : 'Sim: wind (cached)');
     showClimate(cached, req);
     return;
   }
   if (climateJob.busy) return; // the running job asks again when it ends
   climateJob.busy = true;
-  statusbar.setSim(req.temp ? 'Sim: computing temperature…' : 'Sim: computing wind…');
+  statusbar.setSim(req.temp ? 'Sim: computing wind + temperature…' : 'Sim: computing wind…');
   const msg = { grid: req.grid, planet: { ...req.planet }, season: { ...req.season } };
   const transfer = [];
   if (req.temp) {
@@ -1279,7 +1284,7 @@ function startWorker() {
     const w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     w.addEventListener('error', (e) => {
       statusbar.setWorker('error');
-      console.error('Simulation worker failed to start:', e.message || e);
+      console.error(`Simulation worker error: ${e.message || 'no message'} (${e.filename || '?'}:${e.lineno || '?'})`);
     });
     worker = createWorkerClient(w);
     worker.request('ping').then(() => { statusbar.setWorker('ready'); ensureCoast(); ensureClimate(); });

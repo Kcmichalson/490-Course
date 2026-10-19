@@ -225,7 +225,8 @@ export function seaDistanceKm(grid, ocean, radiusKm) {
   return d;
 }
 
-// Seasonal swing s per cell from the monthly winds (each { u, v }).
+// Seasonal swing s per cell from the monthly winds (each { u, v }, or a
+// function returning one, so 12 full layers needn't exist at once).
 // → { s, maritime (mean tracer M), coast (D), sweeps: [per month] }
 export function continentality(grid, category, monthlyWinds, radiusKm) {
   const n = grid.width * grid.height;
@@ -235,7 +236,8 @@ export function continentality(grid, category, monthlyWinds, radiusKm) {
   const sweeps = [];
   // Each month starts cold (land at 0): starting from the previous month's
   // answer was measured slower, because the divergence lines move.
-  for (const wind of monthlyWinds) {
+  for (const month of monthlyWinds) {
+    const wind = typeof month === 'function' ? month() : month;
     const t = maritimeTracer(grid, ocean, wind, radiusKm);
     for (let k = 0; k < n; k++) maritime[k] += t.m[k];
     sweeps.push(t.sweeps);

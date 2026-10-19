@@ -62,6 +62,21 @@ export const WIND_BASE_SPEED = 1.0;
 export const CALM_FLOOR = 0.15;
 export const CALM_EDGE_FRACTION = 0.25;
 
+// ---- Terrain wind (SPEC 4.5, M4b) ----
+
+// Surface friction: rough land slows the wind to ~60% of its speed over sea.
+export const LAND_FRICTION = 0.6;
+// Mountain deflection: air meeting high, steep terrain can't climb it all
+// and flows around it instead. Blocking ramps in from DEFLECT_LOW_M to
+// DEFLECT_HIGH_M of elevation and up to DEFLECT_SLOPE_M_PER_KM of slope;
+// at most DEFLECT_MAX of the uphill component is removed, and
+// DEFLECT_REDIRECT of what's removed flows along the contours instead.
+export const DEFLECT_LOW_M = 500;          // lower ridges are crossed
+export const DEFLECT_HIGH_M = 1500;
+export const DEFLECT_SLOPE_M_PER_KM = 10;
+export const DEFLECT_MAX = 0.8;
+export const DEFLECT_REDIRECT = 0.7;
+
 // ---- Temperature (SPEC 6, M4) ----
 
 // Solar constant (W/m²): sunlight at the top of the atmosphere at Earth's

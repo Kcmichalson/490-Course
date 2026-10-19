@@ -366,11 +366,21 @@ after calibration).
 - Result: summer winds blow onshore into hot continents (summer monsoon);
   winter winds blow offshore (winter monsoon).
 
-### 4.5 Friction and mountain deflection
+### 4.5 Friction and mountain deflection (M4b; moved from M8)
 - Wind speed over land × 0.6 (start).
 - Where wind blows up steep, high terrain (above ~1,500 m, start), reduce
   the uphill component and redirect part of it along the contours, then
   smooth. Air still crosses lower ridges, which is what produces rain shadows.
+- M4b rule (start values): per land cell, the gradient of cell surface
+  elevation (central differences, km spacing with cos latitude, wraps)
+  gives the uphill direction n. If w·n > 0, a share
+  `block = 0.8 · smoothstep(500, 1500 m, elevation) · smoothstep(0, 10 m/km, slope)`
+  of the uphill component is removed, and 70% of it is added along the
+  contour, in the direction the wind already leans. Friction applies per
+  cell; the deflection is smoothed with one 3×3 pass, so open ocean away
+  from mountains is untouched. Speed =
+  |final (u, v)|. Annual Mean = the vector mean of the 12 monthly final
+  winds, with the mean of their speeds.
 
 ## 5. Ocean currents and upwelling
 
@@ -576,7 +586,10 @@ Water bodies (section 10) depend only on terrain; once they exist (M9), tides
 and currents read them.
 Sailing routes and travel time run on demand from the final wind and currents
 for the selected month.
-Before M8 exists, step 5 passes the base wind through unchanged.
+Before M4b, step 5 passed the base wind through unchanged. From M4b it
+applies friction and mountain deflection (4.5); monsoons (4.4) join it in
+M8. Step 4 (temperature pass 1) only feeds the monsoon pressure, so it is
+skipped until M8; step 6 is the temperature.
 
 Performance:
 - Everything runs in a Web Worker with typed arrays. Show a progress
@@ -830,6 +843,13 @@ Winter Severity. Toggle: Climate Boundaries.
 - Interior Siberia/Canada winters far colder than coasts at the same latitude.
 - Mountains are colder than surrounding lowlands.
 
+**M4b — Terrain wind** (moved out of M8 in Session 6, for a class demo)
+Friction over land and mountain deflection (4.5) in step 5; temperature
+pass 2 uses the final wind; arrows, Wind Speed & Pressure, and the tooltip
+show the final wind.
+- Wind is visibly weaker over land (moved here from M8).
+- Arrows bend along the Himalayas and the Andes; low ridges are crossed.
+
 **M5 — Precipitation and rain shadows**
 Modes: Precipitation, Precipitation Seasonality, Aridity, Cloud Cover.
 - Sahara and Arabia < 10 mm/month; Amazon, Congo, and Indonesia
@@ -854,12 +874,11 @@ Currents, Seasonal Sea-Ice Edges, Coastal Fog, Hurricane Zones.
 - Northwest Europe warmer than eastern Canada at the same latitude;
   Atacama and Namib coasts drier.
 
-**M8 — Monsoons, friction, deflection**
+**M8 — Monsoons** (friction and deflection moved to M4b)
 Modes: Air Masses, Travel Difficulty, Natural Hazards. Toggle: Polar Front &
 Storm Tracks.
 - Northern summer: onshore winds and heavy rain over India and Southeast
   Asia. Northern winter: offshore winds.
-- Wind is visibly weaker over land.
 
 **M9 — Tides and water bodies**
 Tides, water bodies (section 10). Modes: Tidal Range, Water Bodies.

@@ -1,8 +1,25 @@
 // Legend panel for the current map mode. Until a mode's milestone lands it
 // says when the mode arrives and that the open-ocean placeholder is shown.
+// Renderers may describe their colors with a `legend`:
+//   { items: [{ color, label }], columns?: [{ title, items }], note? }
 
 import { icon } from '../ui/icons.js';
 import { isAvailable, milestoneLabel } from '../ui/comingsoon.js';
+import { RENDERERS } from './modes/index.js';
+
+function swatchList(items) {
+  const list = document.createElement('ul');
+  list.className = 'legend-items';
+  for (const { color, label } of items) {
+    const li = document.createElement('li');
+    const chip = document.createElement('span');
+    chip.className = 'legend-chip';
+    chip.style.background = color; // a data color from the renderer
+    li.append(chip, document.createTextNode(label));
+    list.append(li);
+  }
+  return list;
+}
 
 export function renderLegend(el, mode) {
   el.replaceChildren();
@@ -17,6 +34,29 @@ export function renderLegend(el, mode) {
   if (!isAvailable(mode.milestone)) {
     const note = document.createElement('p');
     note.textContent = `Arrives in ${milestoneLabel(mode.milestone)}. Showing the open-ocean placeholder.`;
+    el.append(note);
+    return;
+  }
+  const legend = RENDERERS[mode.id]?.legend;
+  if (!legend) return;
+  if (legend.items) el.append(swatchList(legend.items));
+  if (legend.columns) {
+    const cols = document.createElement('div');
+    cols.className = 'legend-columns';
+    for (const c of legend.columns) {
+      const col = document.createElement('div');
+      const h = document.createElement('div');
+      h.className = 'legend-col-title';
+      h.textContent = c.title;
+      col.append(h, swatchList(c.items));
+      cols.append(col);
+    }
+    el.append(cols);
+  }
+  if (legend.note) {
+    const note = document.createElement('p');
+    note.className = 'muted';
+    note.textContent = legend.note;
     el.append(note);
   }
 }

@@ -1,16 +1,21 @@
 // Import dialog (SPEC 2.3–2.6): choose the image type, the map extent, and
 // type-specific settings, with a live preview computed in the worker at
-// ≤ 1024 px wide. The full-resolution import is done by the caller.
+// ≤ 1024 px wide. The full-resolution import is done by the caller. Color
+// palette images get the palette editor; any import can add an art image.
 
 import { pickImageFile, imageSize, fitWithinMax, decodeImage, readPixels } from '../io/imagefile.js';
 import { luminance, grayHistogram, detectLevels } from '../sim/heightmap.js';
 import { guessImageKind, detectSilhouetteMode, describeGuess } from '../sim/silhouette.js';
 import { allowedSimWidths } from '../sim/mapconfig.js';
 import { DEFAULT_MAX_HEIGHT_M, DEFAULT_MAX_DEPTH_M, SMOOTH_RADIUS_PX } from '../sim/constants.js';
+import { paletteReady, hexToRgb } from '../sim/palette.js';
 import { PHYSICAL_STOPS, buildLut, terrainToRGBA } from '../render/colorramps.js';
+import { readTheme } from '../render/theme.js';
 import { makeTerrain, landMask } from '../sim/terrain.js';
 import { createExtentFields } from './extentfields.js';
 import { createSlider } from './slider.js';
+import { createPaletteEditor, DEFAULT_PALETTE } from './paletteeditor.js';
+import { isAvailable } from './comingsoon.js';
 import { load, save } from '../io/storage.js';
 
 const PREVIEW_MAX_W = 1024;
@@ -22,7 +27,18 @@ export const DEFAULT_SETTINGS = {
     mask: { mode: 'threshold', threshold: 128, invert: false }, seed: 1,
   },
   silhouette: { mode: 'auto', threshold: 128, invert: false, autoRelief: true, seed: 1 },
+  palette: DEFAULT_PALETTE,
 };
+
+// Art whose aspect ratio differs from the map's by more than this gets a notice.
+const ART_ASPECT_TOLERANCE = 0.01;
+
+export function artAspectNotice(art, mapW, mapH) {
+  if (!art?.natural) return '';
+  const ratio = (art.natural.width / art.natural.height) / (mapW / mapH);
+  if (Math.abs(ratio - 1) <= ART_ASPECT_TOLERANCE) return '';
+  return `The art image is ${art.natural.width} × ${art.natural.height}, a different shape from the ${mapW} × ${mapH} map; it is stretched to fit.`;
+}
 
 const el = (html) => {
   const t = document.createElement('template');
@@ -49,13 +65,23 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
             <div class="field-row">
               <label class="check"><input type="radio" name="kind" value="heightmap"> Grayscale heightmap</label>
               <label class="check"><input type="radio" name="kind" value="silhouette"> Silhouette (land/ocean)</label>
-              <label class="check is-coming" title="Coming in M2b"><input type="radio" name="kind" value="palette" disabled> Color palette <span class="badge">M2b</span></label>
+              ${isAvailable('2b')
+    ? '<label class="check"><input type="radio" name="kind" value="palette"> Color palette</label>'
+    : '<label class="check is-coming" title="Coming in M2b"><input type="radio" name="kind" value="palette" disabled> Color palette <span class="badge">M2b</span></label>'}
             </div>
             <p class="hint" data-r="guess"></p>
           </fieldset>
           <fieldset><legend>Map extent</legend><div data-r="extent"></div></fieldset>
           <fieldset data-r="hm"><legend>Heightmap</legend></fieldset>
           <fieldset data-r="sil"><legend>Silhouette</legend></fieldset>
+          <fieldset data-r="pal"><legend>Color palette</legend></fieldset>
+          <fieldset data-r="art" ${isAvailable('2b') ? '' : 'hidden'}><legend>Art image (optional)</legend>
+            <div class="field-row">
+              <button type="button" data-r="artPick">Add art image…</button>
+              <span class="hint" data-r="artName">None: Original Art shows the imported image.</span>
+              <button type="button" data-r="artClear" hidden>Remove</button>
+            </div>
+          </fieldset>
         </div>
       </div>
       <ul class="errors" data-r="errors" aria-live="polite"></ul>
@@ -135,8 +161,70 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
   c(silChecks, 'relief').addEventListener('change', (e) => update('silhouette', { autoRelief: e.target.checked }));
   c(silChecks, 'seed').addEventListener('change', (e) => update('silhouette', { seed: Math.round(Number(e.target.value) || 1) }));
 
+  // ---- Color palette editor ----
+  const unmatched = hexToRgb(readTheme().paletteUnmatched) ?? [255, 0, 255];
+  const paletteEditor = createPaletteEditor({
+    unmatchedColor: unmatched,
+    onChange: () => {
+      settings.palette = paletteEditor.get();
+      validate();
+      schedulePreview();
+    },
+    flash: (text) => { r('previewStatus').textContent = text; },
+  });
+  r('pal').append(paletteEditor.element);
+
+  // Palette images are read nearest-neighbor, so every preview pixel is a
+  // color that is really in the file (a smoothed downscale would invent
+  // in-between colors that match no swatch).
+  async function ensurePaletteRgba() {
+    if (job.paletteRgba) return job.paletteRgba;
+    const bmp = await decodeImage(job.file, job.previewSize.width, job.previewSize.height, 'pixelated');
+    job.paletteRgba = readPixels(bmp);
+    bmp.close();
+    return job.paletteRgba;
+  }
+
+  // Sets up the palette editor the first time Color palette is chosen for this file.
+  async function preparePalette() {
+    if (job.paletteReadyForEditor) return;
+    const rgba = await ensurePaletteRgba();
+    paletteEditor.set(settings.palette, rgba);
+    settings.palette = paletteEditor.get();
+    job.paletteReadyForEditor = true;
+  }
+
+  // Eyedropper: click the preview to pick a source color.
+  canvas.addEventListener('click', (e) => {
+    if (!job || kind !== 'palette' || !paletteEditor.eyedropper || !job.paletteRgba) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(((e.clientX - rect.left) / rect.width) * canvas.width)));
+    const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(((e.clientY - rect.top) / rect.height) * canvas.height)));
+    const p = (y * job.previewSize.width + x) * 4;
+    paletteEditor.pick(job.paletteRgba[p], job.paletteRgba[p + 1], job.paletteRgba[p + 2]);
+  });
+
+  // ---- Art image ----
+  r('artPick').addEventListener('click', async () => {
+    const picked = await pickImageFile();
+    if (!picked || !job) return;
+    try {
+      job.art = { file: picked.file, handle: picked.handle, natural: await imageSize(picked.file) };
+      syncControls();
+    } catch (err) {
+      r('errors').replaceChildren(Object.assign(document.createElement('li'), { textContent: err.message }));
+    }
+  });
+  r('artClear').addEventListener('click', () => { if (job) job.art = null; syncControls(); });
+
   for (const radio of dialog.querySelectorAll('input[name="kind"]')) {
-    radio.addEventListener('change', () => { kind = radio.value; syncControls(); validate(); schedulePreview(); });
+    radio.addEventListener('change', async () => {
+      kind = radio.value;
+      if (kind === 'palette') await preparePalette();
+      syncControls();
+      validate();
+      schedulePreview();
+    });
   }
   r('cancel').addEventListener('click', () => { if (!busy) dialog.close(); });
   dialog.addEventListener('cancel', (e) => { if (busy) e.preventDefault(); });
@@ -162,6 +250,9 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     for (const radio of dialog.querySelectorAll('input[name="kind"]')) radio.checked = radio.value === kind;
     hm.hidden = kind !== 'heightmap';
     sil.hidden = kind !== 'silhouette';
+    r('pal').hidden = kind !== 'palette';
+    r('artName').textContent = job.art ? job.art.file.name : 'None: Original Art shows the imported image.';
+    r('artClear').hidden = !job.art;
     const h = settings.heightmap;
     const lv = job.levels;
     const seaAuto = h.seaLevel === 'auto';
@@ -208,8 +299,14 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     if (job.mapSize.scale < 1) {
       add(`This image is ${job.natural.width} × ${job.natural.height}, larger than the 8192 × 4096 maximum. It will be downscaled to ${job.mapSize.width} × ${job.mapSize.height}. Cancel to keep the original untouched.`);
     }
-    if (kind === 'heightmap' && job.guess.isColor) add('Color image: the heightmap uses its brightness. Color palette import arrives in M2b.');
+    if (kind === 'heightmap' && job.guess.isColor) {
+      add(isAvailable('2b')
+        ? 'Color image: the heightmap uses its brightness. Choose Color palette to import it by color.'
+        : 'Color image: the heightmap uses its brightness. Color palette import arrives in M2b.');
+    }
     if (job.mask?.resized) add(`The mask is ${job.mask.natural.width} × ${job.mask.natural.height}; it is scaled to ${job.mapSize.width} × ${job.mapSize.height} to match the heightmap.`);
+    const artNote = artAspectNotice(job.art, job.mapSize.width, job.mapSize.height);
+    if (artNote) add(artNote);
   }
 
   // Edits are in source pixels, so they can only be kept at the same size.
@@ -227,6 +324,9 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     if (!job) return [];
     const problems = [...extent.errors()];
     if (heightmapNeedsSeaLevel()) problems.push('Set the sea level value: this image has no flat ocean to detect it from.');
+    if (kind === 'palette' && !paletteReady(settings.palette.swatches)) {
+      problems.push('Assign at least one land swatch (Land or Land Ice) and one water swatch (Deep Ocean, Shallow Sea, Lake, or Sea Ice).');
+    }
     r('errors').replaceChildren(...problems.map((p) => Object.assign(document.createElement('li'), { textContent: p })));
     r('import').disabled = busy || problems.length > 0;
     return problems;
@@ -239,18 +339,42 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
 
   function workerSettings() {
     if (kind === 'heightmap') return { ...settings.heightmap };
+    if (kind === 'palette') return structuredClone(settings.palette);
     return { ...settings.silhouette, mode: resolvedSilMode() };
   }
 
+  // Palette Source and Categories views are drawn here, without the worker.
+  function drawPaletteView() {
+    const { width, height } = job.previewSize;
+    canvas.width = width;
+    canvas.height = height;
+    const g = canvas.getContext('2d');
+    if (paletteEditor.view === 'source') {
+      g.putImageData(new ImageData(job.paletteRgba.slice(), width, height), 0, 0);
+      r('previewStatus').textContent = `Source colors at ${width} × ${height}.`;
+      return;
+    }
+    const { rgba, unmatchedShare } = paletteEditor.categoriesImage(job.paletteRgba);
+    g.putImageData(new ImageData(rgba, width, height), 0, 0);
+    r('previewStatus').textContent = `Categories: ${(unmatchedShare * 100).toFixed(1)}% unmatched (magenta), filled from the nearest match on import.`;
+  }
+
   async function runPreview() {
-    if (!job || validate().length) return;
+    if (!job) return;
+    if (kind === 'palette' && job.paletteRgba && paletteEditor.view !== 'result') {
+      previewToken++;
+      validate();
+      drawPaletteView();
+      return;
+    }
+    if (validate().length) return;
     const token = ++previewToken;
     const { width, height } = job.previewSize;
     const full = extent.get();
     const cfg = { ...full, sourceWidth: width, sourceHeight: height, simWidth: allowedSimWidths(width).at(-1) };
     r('previewStatus').textContent = 'Updating preview…';
     try {
-      const rgba = job.previewRgba.slice();
+      const rgba = (kind === 'palette' ? await ensurePaletteRgba() : job.previewRgba).slice();
       const maskRgba = kind === 'heightmap' && job.mask ? job.mask.previewRgba.slice() : null;
       const transfer = [rgba.buffer];
       if (maskRgba) transfer.push(maskRgba.buffer);
@@ -258,7 +382,8 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
       if (token !== previewToken) return;
       drawPreview(result.elevation, result.category, width, height);
       const pct = Math.round(result.info.landFraction * 100);
-      r('previewStatus').textContent = `Preview at ${width} × ${height}: ${pct}% land. The full import uses ${job.mapSize.width} × ${job.mapSize.height}.`;
+      const unmatchedText = result.info.unmatchedFraction != null ? ` ${(result.info.unmatchedFraction * 100).toFixed(1)}% unmatched.` : '';
+      r('previewStatus').textContent = `Preview at ${width} × ${height}: ${pct}% land.${unmatchedText} The full import uses ${job.mapSize.width} × ${job.mapSize.height}.`;
     } catch (err) {
       if (token === previewToken) r('previewStatus').textContent = err.message;
     }
@@ -324,6 +449,7 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
         storedSettings: structuredClone(settings),
         cfgValues,
         mask: kind === 'heightmap' && job.mask ? { file: job.mask.file, handle: job.mask.handle } : null,
+        art: job.art ? { file: job.art.file, handle: job.art.handle, natural: job.art.natural } : null,
         keepEdits: canKeepEdits() && r('keep').checked,
       });
       save('importExtent', { latTop: cfgValues.latTop, latBottom: cfgValues.latBottom, lonWest: cfgValues.lonWest, lonSpan: cfgValues.lonSpan, wraps: cfgValues.wraps, simWidth: cfgValues.simWidth });
@@ -351,15 +477,23 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     bmp.close();
     const guess = guessImageKind(previewRgba);
     const levels = detectLevels(grayHistogram(luminance(previewRgba)));
-    job = { file, handle, natural, mapSize, previewSize, previewRgba, guess, levels, mask: null };
+    job = {
+      file, handle, natural, mapSize, previewSize, previewRgba, guess, levels, mask: null,
+      art: prefill?.art ? { ...prefill.art } : null, paletteRgba: null, paletteReadyForEditor: false,
+    };
 
     const stored = load('importSettings', null);
-    settings = structuredClone(prefill?.storedSettings ?? DEFAULT_SETTINGS);
+    settings = structuredClone({ ...DEFAULT_SETTINGS, ...(prefill?.storedSettings ?? {}) });
     if (!prefill && stored) {
       settings.heightmap = { ...settings.heightmap, ...stored.heightmap };
       settings.silhouette = { ...settings.silhouette, ...stored.silhouette };
+      // A new image gets its own swatch scan; tolerance and smoothing carry over.
+      const { tolerance, smoothing } = stored.palette ?? {};
+      settings.palette = { ...settings.palette, ...(tolerance != null && { tolerance }), ...(smoothing != null && { smoothing }), swatches: [] };
     }
     kind = prefill?.kind ?? guess.kind;
+    if (kind === 'palette' && !isAvailable('2b')) kind = 'heightmap';
+    if (kind === 'palette') await preparePalette();
     const cur = getCurrentMap();
     const lastExtent = prefill?.cfgValues ?? load('importExtent', null) ?? cur;
     extent.set({ ...cur, ...lastExtent }, mapSize.width, mapSize.height);

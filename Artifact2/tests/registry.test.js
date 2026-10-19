@@ -100,11 +100,24 @@ test('sea caves are not in the registries; Sculpt and Undo are live; Tool Palett
   const sculpt = TOOLS.find((t) => t.id === 'sculpt');
   assert.deepEqual(sculpt.children.map((c) => c.id), ['draw-land', 'raise', 'lower', 'carve-trench', 'smooth', 'erase']);
   assert.ok(isAvailable(sculpt.milestone) && sculpt.children.every((c) => isAvailable(c.milestone)));
-  // Phase 2 of M2b is not unlocked yet.
-  for (const id of ['slope', 'coast-distance']) assert.ok(!isAvailable(MODES.find((m) => m.id === id).milestone), id);
-  assert.ok(!isAvailable(OVERLAYS.find((o) => o.id === 'shaded-relief').milestone));
   const { readFile } = await import('node:fs/promises');
   const main = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
   assert.match(main, /label: 'Tool Palette', milestone: 11/);
-  assert.match(main, /shortcut: 'Ctrl\+Z', milestone: '2b-1'/, 'Edit > Undo is live');
+  assert.match(main, /shortcut: 'Ctrl\+Z', milestone: '2b'/, 'Edit > Undo is live');
+});
+
+// Until Session 4 this checked that M2b phase 2 was still locked; M2b is
+// now finished, so the same items must be live.
+test('M2b is complete: Slope, Distance from Coast, Shaded Relief, and Art Image are live; Art Check stays M6', async () => {
+  const { RENDERERS } = await import('../src/render/modes/index.js');
+  for (const id of ['slope', 'coast-distance']) {
+    assert.ok(isAvailable(MODES.find((m) => m.id === id).milestone), id);
+    assert.ok(RENDERERS[id], `${id} has a renderer`);
+  }
+  assert.ok(isAvailable(OVERLAYS.find((o) => o.id === 'shaded-relief').milestone));
+  assert.equal(MODES.find((m) => m.id === 'art-check').milestone, 6);
+  assert.ok(!isAvailable(6));
+  const { readFile } = await import('node:fs/promises');
+  const main = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(main, /label: 'Art Image…', milestone: '2b'/);
 });

@@ -2,6 +2,7 @@
 // image was imported, so the import dialog can pre-select the type.
 
 import { luminance } from './heightmap.js';
+import { COLORFUL_SPREAD, COLORFUL_SHARE } from './constants.js';
 
 export function hasTransparency(rgba) {
   for (let p = 3; p < rgba.length; p += 4) if (rgba[p] < 255) return true;
@@ -30,9 +31,15 @@ export function silhouetteMask(rgba, { mode = 'threshold', threshold = 128, inve
 // Guess the import type. Gray means R, G, B within a small tolerance (JPEG
 // adds speckle). A gray image with nearly all pixels on its two most common
 // tones (downscaling softens edges into in-between grays), or any
-// transparency, reads as a silhouette; other gray images read as heightmaps;
-// colorful images are flagged (palette import arrives in M2b).
-export function guessImageKind(rgba, tolerance = 8) {
+// transparency, reads as a silhouette; color images (without transparency)
+// read as palette maps; other gray images read as heightmaps.
+export function guessImageKind(rgba, tolerance = COLORFUL_SPREAD) {
+  return guessFromStats(imageStats(rgba, tolerance));
+}
+
+// The pixel statistics the guess is made from (also recorded for the test
+// maps, so the guess rules can be checked against real browser decodes).
+export function imageStats(rgba, tolerance = COLORFUL_SPREAD) {
   const counts = new Uint32Array(256);
   let colorful = 0;
   const n = rgba.length >> 2;
@@ -48,12 +55,20 @@ export function guessImageKind(rgba, tolerance = 8) {
     if (c) levelCount++;
     if (c > first) { second = first; first = c; } else if (c > second) second = c;
   }
-  const twoToneShare = n ? (first + second) / n : 0;
-  const transparent = hasTransparency(rgba);
-  const isColor = colorful > n * 0.01;
+  return {
+    transparent: hasTransparency(rgba),
+    levelCount,
+    twoToneShare: n ? (first + second) / n : 0,
+    colorfulShare: n ? colorful / n : 0,
+  };
+}
+
+export function guessFromStats({ transparent, levelCount, twoToneShare, colorfulShare }) {
+  const isColor = colorfulShare > COLORFUL_SHARE;
   let kind = 'heightmap';
   if (transparent || (!isColor && twoToneShare >= 0.97)) kind = 'silhouette';
-  return { kind, isColor, transparent, levelCount, twoToneShare };
+  else if (isColor) kind = 'palette';
+  return { kind, isColor, transparent, levelCount, twoToneShare, colorfulShare };
 }
 
 // The import dialog's note for a guess. Built from the same fields that chose
@@ -64,6 +79,9 @@ export function describeGuess(guess) {
     const pct = Math.floor(guess.twoToneShare * 100);
     return `Mostly two tones (${pct}% of pixels): looks like a silhouette.`;
   }
-  if (guess.isColor) return 'Color image: read as a heightmap by brightness. Color palette import arrives in M2b.';
+  if (guess.kind === 'palette') {
+    const pct = Math.max(1, Math.round(guess.colorfulShare * 100));
+    return `Color image (${pct}% colorful pixels): looks like a color palette map.`;
+  }
   return `${guess.levelCount} gray levels: looks like a heightmap.`;
 }

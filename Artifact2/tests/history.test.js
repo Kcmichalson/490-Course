@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHistory } from '../src/ui/history.js';
-import { liveState, snapshotOf, stateEntry, strokeEntry, snapshotBuffers } from '../src/sim/mapstate.js';
+import { liveState, snapshotOf, stateEntry, strokeEntry, snapshotBuffers, bitmapsOf, hasImport, withArt } from '../src/sim/mapstate.js';
 import { createEdits, writableTerrain, composeRect } from '../src/sim/edits.js';
 import { applyDab } from '../src/sim/brushes.js';
 import { addDirty } from '../src/sim/edits.js';
@@ -140,4 +140,23 @@ test('stroke undo/redo swaps only the touched tiles', () => {
   assert.equal(live.edits.tiles.size, 0, 'tiles that did not exist are removed again');
   e.redo();
   assert.equal(live.terrain.category[i], CATEGORY.LAND);
+});
+
+test('art image: counted with the source bitmaps; an art-only blank map is not an import', () => {
+  const imageBmp = { width: 4, height: 2 };
+  const artBmp = { width: 4, height: 2 };
+  const imported = { kind: 'palette', file: { name: 'map.png' }, bitmap: imageBmp };
+  const withArtImport = withArt(imported, { file: { name: 'art.png' }, bitmap: artBmp });
+  assert.deepEqual(bitmapsOf(withArtImport), [imageBmp, artBmp]);
+  assert.ok(hasImport(withArtImport));
+  assert.equal(withArt(withArtImport, null).art, null, 'removing art keeps the import');
+  const blankArt = withArt(null, { file: { name: 'art.png' }, bitmap: artBmp });
+  assert.equal(blankArt.kind, 'blank');
+  assert.ok(!hasImport(blankArt), 'Reload and Map settings treat it as a blank map');
+  assert.deepEqual(bitmapsOf(blankArt), [artBmp]);
+  assert.equal(withArt(blankArt, null), null, 'a blank map without art has no source');
+  // Undo memory counts the art bitmap.
+  const base = blankTerrain(4, 2);
+  const snap = { map: { sourceWidth: 4, sourceHeight: 2 }, source: blankArt, base, baseSim: null, edits: createEdits(4, 2) };
+  assert.ok(snapshotBuffers(snap).some((b) => b.ref === artBmp && b.bytes === 32));
 });

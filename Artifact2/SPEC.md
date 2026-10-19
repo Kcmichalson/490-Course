@@ -172,10 +172,46 @@ silhouettes and heightmaps of 2.3–2.4.
   - Ignore is for clouds, anti-aliased edges, and compression noise. Those
     pixels are filled in from their nearest non-ignored neighbors.
 - Matching: each pixel takes the *nearest* palette color (perceptual
-  distance, e.g., in Lab space) within a tolerance slider. Unmatched pixels
-  are treated as Ignore and highlighted in the preview.
-- Palettes are saved as named presets (localStorage) and can be exported
-  and imported as JSON.
+  distance: CIE Lab, ΔE76) within a tolerance slider (default ΔE 12).
+  Unmatched pixels are treated as Ignore and highlighted in magenta in the
+  preview.
+- Palette images are decoded nearest-neighbor (no resampling blend), so
+  every pixel keeps a color that is really in the file. The eyedropper
+  samples the preview, which holds real source colors.
+- The scan offers up to 16 swatches. Colors closer than the **Scan merge**
+  distance are merged into one swatch: a slider (with a number input) from
+  0 to 12 ΔE, default 2, remembered between imports (`fcm:paletteScan`).
+  Noisy or anti-aliased images need ~6–8. Changing it rescans and keeps the
+  categories already assigned (and assigned eyedropper swatches). Every
+  swatch starts as Ignore (auto-guessing categories is a §16 idea). Import
+  is enabled once at least one land swatch (Land / Land Ice) and one water
+  swatch (Deep Ocean, Shallow Sea, Lake, Sea Ice) are set.
+- Ignored and unmatched pixels copy their category and elevation from the
+  nearest classified pixel (km metric, wraps), so a cloud over a coast
+  splits at the midline.
+- Elevation by category: Land / Land Ice = the swatch elevation (default
+  200 m); Lake = the swatch surface (default 0 m); Shallow Sea = −100 m;
+  Deep Ocean / Sea Ice = generated depth (2.7), never shallower than
+  −200 m. A tier-smoothing slider (default 2 px) blends land tiers: lakes
+  and not-yet-generated pixels are left out of the averages, water stays
+  ≤ −1 m, land that was ≥ 1 m stays ≥ 1 m, and land below 0 m is not
+  clamped. (Heightmap smoothing, 2.4, keeps its M2a behavior.)
+- Color images (without transparency) pre-select Color palette on import.
+- Palettes are saved as named presets (localStorage `fcm:palettes`) and can
+  be exported and imported as JSON:
+  `{ "format": "fcm-palette", "version": 1, name, tolerance, smoothing,
+  swatches: [{ hex, category, elevation }] }`. Files without the format tag
+  are rejected.
+- Reload re-applies the swatches and reports the unmatched share.
+
+### 2.5.1 Art image (optional)
+A separate image shown by Original Art in place of the imported terrain
+image (e.g., a painted map over a heightmap import). Set from the import
+dialog or File > Art Image… (Remove Art Image takes it off); works on blank
+maps too. Stretched to the map size, with a notice when its aspect ratio
+differs. Setting and removing it are undoable. Reload re-reads it through
+its file handle (browsers without the File System Access API keep the
+current art).
 
 ### 2.6 Separate land/sea mask (optional)
 Any heightmap import can take a second image as the land/sea mask. Paradox
@@ -538,6 +574,22 @@ Each mode's exact colors and formula are defined when its milestone is planned.
 | Weather | Precipitation (M5): tan → dark blue · Precipitation Seasonality (M5) · Aridity (M5) · Cloud Cover (M5) · Wind Speed & Pressure (M3): calm zones, pressure belts, later monsoon highs/lows · Air Masses (M8) |
 | Ocean | Sea Surface Temperature (M7) · Water Bodies (M9) · Tidal Range (M9): micro/meso/macro coast colors, intertidal band · Marine Productivity (M7) · Sailing Time (M10) |
 | Life | Vegetation Density (M6) · Agricultural Potential (M6) · Travel Difficulty (M8) · Natural Hazards (M8) · Wildfire Risk (M6) |
+
+Terrain mode definitions (M2b):
+- **Slope & Ruggedness:** slope in degrees from elevation differences over
+  km spacing (east-west spacing × cos latitude), in five classes: < 0.5°,
+  0.5–2°, 2–5°, 5–10°, > 10° (dark plains → bright ridges). Land only;
+  lakes and ocean draw one muted water color. The tooltip adds the terrain
+  ruggedness index (TRI: mean absolute height difference to the 8
+  neighbors, m). Updates after brush strokes.
+- **Distance from Coast:** distance in km to the nearest coast at full
+  resolution (computed in the worker), with an inland ramp on land and an
+  offshore ramp on water, and a km legend. Lakes count as land. Reruns
+  after imports, reloads, map settings, undo/redo, and strokes that change
+  land/water.
+- **Shaded Relief** (toggle): light from the northwest, ×20 vertical
+  exaggeration, blended with `overlay` at 60% over any mode (Original Art
+  included). Land and seafloor are shaded; lakes stay flat.
 
 ### 13.4 Toggles (stackable overlays)
 A checkbox panel in the map's top-right dropdown, grouped below. Toggles are

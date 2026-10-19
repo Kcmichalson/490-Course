@@ -80,3 +80,26 @@ export const BRUSH_MAX_RADIUS_PX = 250;
 // Smooth: largest box radius (px) used for the local mean, so one dab of a
 // big brush stays fast; repeated dabs smooth further.
 export const SMOOTH_MAX_KERNEL_PX = 6;
+
+// ---- Image type guess (SPEC 2.3–2.5) ----
+
+// A pixel is "colorful" when its R, G, B spread more than this (gray images
+// and JPEG chroma speckle stay below it). An image is a color image when
+// more than COLORFUL_SHARE of its pixels are colorful.
+export const COLORFUL_SPREAD = 8;
+export const COLORFUL_SHARE = 0.01;
+
+// ---- Color palette import (SPEC 2.5) ----
+// Palette maps are drawn art, not physics; these are their start values.
+
+export const PALETTE_TOLERANCE_DE = 12;  // ΔE76: how far a pixel may be from a swatch
+export const PALETTE_MERGE_DE = 2;       // scan: colors this close become one swatch (default)
+export const PALETTE_MERGE_MAX_DE = 12;  // scan merge slider maximum (noisy images need ~6–8)
+export const PALETTE_MAX_SWATCHES = 16;
+export const PALETTE_SMOOTH_PX = 2;      // tier smoothing: softens steps between land tiers
+export const PALETTE_LAND_M = FLAT_LAND_M; // default Land / Land Ice swatch elevation
+export const PALETTE_LAKE_M = 0;         // default lake surface
+export const SHALLOW_SEA_M = -100;       // Shallow Sea / Shelf swatches: mid-shelf depth
+// Deep Ocean / Sea Ice get generated depth, but never shallower than the
+// shelf edge, so "deep" water reads as off the continental shelf.
+export const DEEP_OCEAN_MAX_M = SHELF_DEPTH_M;

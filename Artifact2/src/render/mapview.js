@@ -9,6 +9,7 @@ import { simCellBounds, sourceToSimCell } from '../sim/coords.js';
 import { drawGraticule } from './graticule.js';
 import { readTheme } from './theme.js';
 import { RENDERERS } from './modes/index.js';
+import { drawHillshade, RELIEF_ALPHA } from './hillshade.js';
 
 const OVERLAY_DRAWERS = {
   graticule: drawGraticule,
@@ -42,6 +43,8 @@ export class MapView {
     this.onResize = onResize;
     this.base = null;
     this.baseKey = '';
+    this.relief = null; // Shaded Relief layer (grayscale hillshade)
+    this.reliefKey = '';
     this.dirty = []; // source rects to re-render before the next blit
     this.cssWidth = 0;
     this.cssHeight = 0;
@@ -72,37 +75,62 @@ export class MapView {
     this.dirty.push(rect);
   }
 
-  // Rebuilds the base layer only when the map, the terrain (version), or the
-  // mode's renderer changes; otherwise re-renders just the dirty rectangles.
-  // store = { terrain, source, version }.
-  ensureBase(map, mode, store) {
+  // Rebuilds the base layer only when the map, the terrain (version), the
+  // mode's renderer, or the renderer's extra data (dataKey, e.g. a worker
+  // result) changes; otherwise re-renders just the dirty rectangles.
+  // The Shaded Relief layer follows the same rules when it is on.
+  // store = { terrain, source, version, coast }.
+  ensureBase(map, mode, store, reliefOn) {
     const draw = RENDERERS[mode.id] ?? drawOceanPlaceholder;
     const renderer = RENDERERS[mode.id] ? mode.id : 'placeholder';
-    const key = `${map.sourceWidth}x${map.sourceHeight}|${renderer}|${store.version}`;
+    const key = `${map.sourceWidth}x${map.sourceHeight}|${renderer}|${store.version}|${draw.dataKey?.(store) ?? ''}`;
     if (store.terrain.width !== map.sourceWidth || store.terrain.height !== map.sourceHeight) return; // mid-update
+    const args = { map, terrain: store.terrain, source: store.source, coast: store.coast, theme: this.theme };
+    const dirty = mergeRects(this.dirty);
+    this.dirty = [];
+    this.base = this.layer(this.base, map);
     if (key === this.baseKey) {
-      if (this.dirty.length && draw.partial) {
+      if (dirty.length && draw.partial) {
         const g = this.base.getContext('2d', { alpha: false });
-        for (const rect of mergeRects(this.dirty)) draw(g, { map, terrain: store.terrain, source: store.source, theme: this.theme, rect });
+        for (const rect of dirty) draw(g, { ...args, rect });
       }
-      this.dirty = [];
+    } else {
+      draw(this.base.getContext('2d', { alpha: false }), args);
+      this.baseKey = key;
+    }
+
+    // Shaded Relief: rebuilt when the map or terrain changes, else patched.
+    if (!reliefOn) {
+      if (dirty.length) this.reliefKey = ''; // edited while hidden: rebuild when shown
       return;
     }
-    this.dirty = [];
-    if (!this.base || this.base.width !== map.sourceWidth || this.base.height !== map.sourceHeight) {
-      this.base = document.createElement('canvas');
-      this.base.width = map.sourceWidth;
-      this.base.height = map.sourceHeight;
+    const reliefKey = `${map.sourceWidth}x${map.sourceHeight}|${store.version}`;
+    this.relief = this.layer(this.relief, map);
+    const rg = this.relief.getContext('2d', { alpha: false });
+    if (reliefKey !== this.reliefKey) {
+      drawHillshade(rg, args);
+      this.reliefKey = reliefKey;
+    } else {
+      for (const rect of dirty) drawHillshade(rg, { ...args, rect });
     }
-    const g = this.base.getContext('2d', { alpha: false });
-    draw(g, { map, terrain: store.terrain, source: store.source, theme: this.theme });
-    this.baseKey = key;
+  }
+
+  // A source-size offscreen canvas for map, reusing `canvas` if it fits.
+  layer(canvas, map) {
+    if (canvas && canvas.width === map.sourceWidth && canvas.height === map.sourceHeight) return canvas;
+    const c = document.createElement('canvas');
+    c.width = map.sourceWidth;
+    c.height = map.sourceHeight;
+    if (canvas === this.base) this.baseKey = '';
+    if (canvas === this.relief) this.reliefKey = '';
+    return c;
   }
 
   // Re-reads the CSS color variables (for theme switching in M11).
   refreshTheme() {
     this.theme = readTheme();
     this.baseKey = '';
+    this.reliefKey = '';
   }
 
   // reserved: screen rects (canvas CSS px) covered by on-map controls, which
@@ -110,7 +138,8 @@ export class MapView {
   // brush: { x, y, radius } in source px (Sculpt tool cursor), or null.
   draw({ map, view, mode, store, overlays, selected, reserved = [], brush = null }) {
     const { ctx, dpr, theme, cssWidth: viewW, cssHeight: viewH } = this;
-    this.ensureBase(map, mode, store);
+    const reliefOn = Boolean(overlays['shaded-relief']);
+    this.ensureBase(map, mode, store, reliefOn);
     if (!this.base) return;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -130,6 +159,13 @@ export class MapView {
       const dx0 = Math.round(dpr * (view.offsetX + k * mapW));
       const dx1 = Math.round(dpr * (view.offsetX + (k + 1) * mapW));
       ctx.drawImage(this.base, 0, 0, map.sourceWidth, map.sourceHeight, dx0, dy0, dx1 - dx0, dy1 - dy0);
+      if (reliefOn && this.relief) {
+        ctx.globalCompositeOperation = 'overlay';
+        ctx.globalAlpha = RELIEF_ALPHA;
+        ctx.drawImage(this.relief, 0, 0, map.sourceWidth, map.sourceHeight, dx0, dy0, dx1 - dx0, dy1 - dy0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

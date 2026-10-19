@@ -4,9 +4,13 @@
 import { drawOriginalArt } from './originalart.js';
 import { drawPhysical } from './physical.js';
 import { drawElevation } from './elevation.js';
+import { drawSlope } from './slope.js';
+import { drawCoastDistance } from './coastdistance.js';
 
 export const RENDERERS = {
   'original-art': drawOriginalArt,
   physical: drawPhysical,
   elevation: drawElevation,
+  slope: drawSlope,
+  'coast-distance': drawCoastDistance,
 };

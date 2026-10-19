@@ -8,13 +8,17 @@ export function createInspector(el, container) {
   main.className = 'tt-main';
   const sub = document.createElement('div');
   sub.className = 'tt-sub';
-  el.append(main, sub);
+  const extra = document.createElement('div');
+  extra.className = 'tt-sub';
+  el.append(main, sub, extra);
 
   return {
-    // info: { latLon, px, py, i, j }
+    // info: { latLon, elevation?, extra? (a mode-specific line), px, py, i, j }
     show(sx, sy, info) {
       main.textContent = info.latLon;
       sub.textContent = `${info.elevation ? `${info.elevation} · ` : ''}Pixel ${info.px}, ${info.py} · Sim cell ${info.i}, ${info.j}`;
+      extra.textContent = info.extra ?? '';
+      extra.hidden = !info.extra;
       el.hidden = false;
       const w = el.offsetWidth;
       const h = el.offsetHeight;

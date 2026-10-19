@@ -7,7 +7,7 @@ bottom. Claude Code updates this at the end of every milestone.
 
 - [x] M1 — Shell and grid
 - [x] M2a — Terrain imports
-- [ ] M2b — Painting and editing
+- [x] M2b — Painting and editing
 - [ ] M3 — Planet sliders and wind
 - [ ] M4 — Temperature
 - [ ] M5 — Precipitation and rain shadows
@@ -830,7 +830,7 @@ today with M2a.
 
 ---
 
-## 2026-10-18 — Milestone 2b: Painting and editing (in progress)
+## 2026-10-18 — Milestone 2b: Painting and editing
 
 **Planned** (plan rev 2, approved with my fixes)
 - Built in two phases: steps 1–4 (category layer, edits layer and brushes,
@@ -901,6 +901,48 @@ today with M2a.
   - I started this myself in confirmdialog.js, shortcuts.js, and main.js;
     Claude fixed three things that kept it from working (see the Session 3
     prompt log, Prompt 6). SPEC §2 and §2.1 updated.
+
+**Changed (steps 5–7 decisions, Session 4, recorded before coding)**
+- Fit check against the code as built: Reload (Ctrl+Shift+R with the
+  Cancel / No / Yes question), size-changed Reload, undo memory for the art
+  bitmap, Physical's category colors, and the edits layer all fit as they
+  are. Adjustments: the palette branch returns its own category layer;
+  palette images need nearest-neighbor decoding; the image guess learns
+  "palette"; heightmap smoothing moves into a shared helper; art on a blank
+  map needs a source; Distance from Coast and Shaded Relief need their own
+  cache keys in MapView; distance.js needs a nearest-pixel index; the
+  `'2b-1'` phase is removed at the end.
+- D1 Exact colors: palette images (preview and full import) decode
+  nearest-neighbor. The eyedropper samples the preview, which holds real
+  source colors.
+- D2 Color images pre-select Color palette; the dialog note comes from the
+  same fields as the guess. The "colorful" thresholds move to constants.js,
+  and a test checks every existing test map keeps its guess (the GEBCO JPG
+  stays a heightmap despite JPEG chroma noise).
+- D3 Smoothing: a shared `smoothKeepingCoast()`. The heightmap path calls
+  it with options that reproduce M2a exactly (joint blur, pending pixels
+  counted as 0 m, the M2a clamps); existing heightmap tests pass unchanged.
+  The palette path leaves lakes and pending pixels out of the averages;
+  water ≤ −1 m, land that was ≥ 1 m stays ≥ 1 m, land below 0 m unclamped.
+- D4 Art image: a blank map with art gets `source = { kind: 'blank', art }`;
+  "is there an imported image?" checks use one helper, `hasImport()`.
+  Setting/removing art is undoable. Reload re-reads art through its file
+  handle only (no second picker without one).
+- D5 Distance from Coast: full resolution in the worker, lakes count as
+  land; reruns after import, reload, map settings, undo/redo, and strokes
+  that change land/water; shows the old result until the new one arrives.
+  If it takes over ~1.5 s at 5632×2048, stop and ask before falling back
+  to the sim grid.
+- D6 Swatch start values: up to 16 swatches (colors within ΔE 2 merged),
+  all starting as Ignore; Import needs at least one land swatch (Land /
+  Land Ice) and one water swatch (Deep, Shallow, Lake, Sea Ice). Land and
+  Land Ice 200 m, Lake surface 0 m, tolerance ΔE 12, tier smoothing 2 px.
+- D7 Slope & Ruggedness colors land only (water one muted color). Shaded
+  Relief shades land and seafloor, lakes flat, over every mode.
+- Preset JSON carries `"format": "fcm-palette"`; files without it are
+  rejected.
+- SPEC §2.5 (palette details), new §2.5.1 (art image), §13.3 (Slope,
+  Distance from Coast, Shaded Relief definitions) updated.
 
 **Built (steps 1–4)**
 - Category layer (src/sim/terrain.js): `OCEAN, LAND, LAKE, LAND_ICE,
@@ -1037,10 +1079,193 @@ today with M2a.
 8. ~1280 px: the context-bar brush controls aren't clipped; nothing covers
    labels or controls.
 
-**Next**
+**Next (after steps 1–4)**
 - Commit steps 1–4 (checklist done, items 3–4 skipped by choice). Then steps 5–7: palette import (with
   the generated test map), the art image, Slope & Ruggedness, Distance from
-  Coast, Shaded Relief, and `CURRENT_MILESTONE = '2b'`.
+  Coast, Shaded Relief, and `CURRENT_MILESTONE = '2b'`. (Done in Session 4; see below.)
+
+**Built (steps 5–7, Session 4)**
+- Palette import (src/sim/palette.js): sRGB → Lab, ΔE76, swatch scan
+  (up to 16, merged within ΔE 2), classification memoized per color (a
+  16.7 M-entry table for full-size images, a Map for previews).
+- `nearestFeatureIndex()` in distance.js (the exact distance transform,
+  tracking which pixel is nearest). Ignored and unmatched pixels copy the
+  nearest classified pixel.
+- Palette branch of the import pipeline: categories from swatches, Land /
+  Land Ice = swatch elevation, Lake = surface, Shallow = −100 m, Deep / Sea
+  Ice = generated depth capped at −200 m, tier smoothing, and unmatched /
+  ignored shares in the result.
+- `smoothKeepingCoast()` in blur.js. The heightmap path calls it with
+  `skippedAsZero`, which reproduces the M2a code exactly (a test compares
+  it against the M2a block); the palette path uses the new participation
+  rules.
+- Image guess: color images pre-select Color palette; `imageStats()` and
+  `guessFromStats()` split out; `COLORFUL_SPREAD` / `COLORFUL_SHARE` in
+  constants.js.
+- Palette editor (src/ui/paletteeditor.js) in the import dialog: swatch rows
+  (color, matched share, category, elevation, remove), Rescan, eyedropper,
+  tolerance and tier-smoothing sliders with number inputs, Source /
+  Categories / Result views (unmatched in `--palette-unmatched`), presets
+  (Apply, Delete, Export JSON, Import JSON, Save as). Presets in
+  `fcm:palettes` via src/io/palettepresets.js (`"format": "fcm-palette"`).
+- Palette images decode nearest-neighbor in the dialog and on import;
+  Reload and Map settings rebuild with the stored swatches; Reload and
+  Import messages report the unmatched share.
+- Art image: an optional row in the import dialog, File > Art Image… and
+  Remove Art Image (undoable whole-state entries), blank maps get
+  `{ kind: 'blank', art }`, `hasImport()` / `withArt()` in mapstate.js,
+  aspect-mismatch notice, Reload re-reads art through its handle, Original
+  Art prefers it.
+- Slope & Ruggedness (src/sim/slope.js, modes/slope.js): km-spaced
+  gradients, five classes on land, water muted, partial redraw after
+  strokes, TRI line in the tooltip.
+- Distance from Coast (modes/coastdistance.js, worker job `coastDistance`):
+  signed km, inland and offshore bands, lakes count as land. Runs only
+  while the mode is shown and the land/sea layout changed (whole-state
+  changes, strokes or undo that flip land/water); shows the old result
+  until the new one arrives.
+- Shaded Relief (src/render/hillshade.js): its own cached layer in MapView,
+  patched by stroke rectangles, blended with `overlay` at 60% on every
+  wrapped copy.
+- Legends list each mode's classes (legend.js reads a renderer's `legend`).
+- `CURRENT_MILESTONE = '2b'`; the `'2b-1'` phase id is gone and its tags are
+  back to `'2b'`.
+- test-maps/make-palette-map.js and palette_map_1.png; README lines for it
+  and for continent_map_5.png.
+
+**Problems (steps 5–7)**
+- Distance from Coast first took 1.65 s at 5632×2048 in Node, over D5's
+  1.5 s line. Two speedups: the distance transform computes each
+  parabola's term once per step (the same arithmetic, so results are
+  unchanged), and the coast job pads wrapped rows by half a width instead
+  of a whole copy each side (`halfPad`; a test checks it matches the full
+  padding). Imports keep the full padding, so imported terrain is
+  unchanged. Now ~1.0–1.1 s.
+- The swatch scan on noisy images: with merge ΔE 2 (the approved start
+  value), palette_map_1's ±4 noise splits each color into many swatches:
+  the 16 slots fill with ocean-blue and green variants, and the shelf, ice,
+  and lake colors don't appear. At ΔE 6–8 the main colors appear (deep,
+  shelf, three greens, sea ice, land ice), but the small lake (≈0.1% of
+  pixels) is still outranked by blended edge colors and needs the
+  eyedropper. **Resolved (my decision, Prompt 6):** no single hard-coded
+  value; a Scan merge slider instead (see below).
+- Scan merge slider (Prompt 6): "Scan merge" in the palette editor, 0–12 ΔE
+  in 0.5 steps, default 2 (`PALETTE_MERGE_DE`, max `PALETTE_MERGE_MAX_DE`
+  in constants.js), built with the shared `createSlider` (number input
+  included), saved to `fcm:paletteScan` on change. Moving it rescans the
+  preview; `rescanSwatches()` in palette.js keeps the categories and
+  elevations of swatches with the same color, and keeps assigned swatches
+  the new scan has no close color for (eyedropper picks such as the lake).
+  The eyedropper's "same swatch" check uses the same distance. The Rescan
+  button now keeps assignments too. It's separate from **Tolerance**
+  (ΔE 12), which decides how far a pixel may be from a swatch when
+  classifying. SPEC §2.5 updated.
+- Two expectations moved with the milestone (not wrong, just superseded):
+  comingsoon.test.js (the `'2b-1'` phase) and registry.test.js (phase 2
+  locked → now live).
+- The guess test can't decode the JPG in Node, so it checks the guess rules
+  against stats recorded in the browser from the dialog's own decode
+  (tests/testmaps.test.js). Files in test-maps/private/ aren't included.
+- A test-and-timing command was cut off when the session ended mid-call;
+  it was re-run (the test hadn't been appended yet, so nothing was
+  duplicated).
+
+**Verification checks (steps 5–7)**
+- PASS `node --test "tests/*.test.js"`: 126/126 after the Scan merge slider
+  (124 before it; 95 after steps 1–4). The two newest: a larger merge
+  folds noisy variants into one swatch per color and out-of-range values
+  are clamped; a rescan keeps assignments and eyedropper swatches. New in
+  steps 5–7:
+  palette (Lab, ΔE, scan, classify, readiness, nearest index vs brute
+  force, smoothing incl. the M2a reference, pipeline: cloud filled with the
+  coast at the midline, tiers, lake, −30 m land, shelf/deep, wrap,
+  determinism, refusal), presets (round trips, format tag, versions,
+  damaged entries), slope/hillshade/coast distance, art state, test-map
+  guesses, milestone and registry updates.
+- Timings at 5632×2048:
+  - Palette import: 3.2–4.0 s in Node (generated full-size map, 0.63%
+    unmatched); 3.3 s in the browser worker (palette_map_1 upscaled
+    nearest-neighbor, 2.07% unmatched).
+  - Distance from Coast: 1.03 s in Node, 1.08 s in the browser worker.
+  - Slope math for the whole map: ~0.3 s in Node (the canvas render isn't
+    timed).
+- PASS Browser, non-visual: no console errors; "Worker: ready"; the palette
+  radio is enabled with no badge; the art row shows; Slope and Distance
+  from Coast are "available", Art Check "arrives in M6"; switching to
+  Slope and Distance from Coast (1, R / 1, T) and toggling Shaded Relief
+  logs no errors (I turned it back off); File menu shows Art Image… and a
+  disabled Remove Art Image; the Distance legend lists the km bands. After
+  the Scan merge slider: the page reloads with no console errors, and the
+  palette editor has Scan merge (2, max 12), Tolerance (12), and Tier
+  smoothing (2), each with a number input.
+- Not checked by Claude: anything that needs the file picker (palette
+  import, presets saved from the dialog, art image, Reload). Those are
+  your checklist.
+
+**By-eye checklist after step 7 (my browser, ~1280 px, http://127.0.0.1:8000)**
+1. SPEC M2b check: Import `palette_map_1.png`; Color palette is
+   pre-selected. Assign ocean → Deep Ocean, shelf → Shallow, greens → Land
+   tiers, lake → Lake, ice → Land Ice / Sea Ice. At Scan merge 2 the list
+   is mostly blue and green variants; raising it to ~6–8 shows the shelf
+   and ice colors, keeps any categories already set, and survives a page
+   reload. Add the lake with the eyedropper. The Categories
+   view shows little magenta, and raising the tolerance shrinks it. After
+   import, Physical shows continuous coastlines and the cloud patch is
+   filled.
+2. The eyedropper adds or highlights a swatch.
+3. Presets survive a page reload; JSON export and import work.
+4. Edit the PNG (add a green island), Ctrl+Shift+R: swatches reapplied, the
+   message reports % unmatched. With brush edits, Cancel / No / Yes
+   appears and Yes keeps them.
+5. A −50 m Land swatch stays green and reads −50 m; lakes and ice show
+   their colors.
+6. Art image on a blank map and on an import: Original Art shows it; Ctrl+Z
+   after setting it restores the previous art; Ctrl+Shift+R re-reads an
+   edited art file.
+7. Slope & Ruggedness (1, R): ridges bright, plains dark, water one muted
+   color, legend in degrees, "Ruggedness (TRI)" in the tooltip. Distance
+   from Coast (1, T): bands inland and offshore with a km legend; lakes
+   count as land. Shaded Relief: lit from the northwest, also over
+   Original Art; off restores the plain mode. After a Draw Land stroke,
+   slope and relief update right away, distance a moment later.
+8. Badges: Slope, Distance from Coast, Shaded Relief live; Art Check M6; no
+   badge on the palette radio.
+9. ~1280 px: the import dialog with the palette editor fits (the swatch
+   list scrolls); nothing covers labels or controls.
+
+**My checklist results (steps 5–7, checked by me, by eye, in my browser)**
+1. PASS: palette_map_1.png imports with continuous coastlines, land tiers,
+   and the lake. **Finding:** the cloud patch was nearly the same white as
+   the southern land-ice band, so its center matched the Land Ice swatch
+   and imported as a white blob instead of being filled. **Fixed:** the
+   generator's cloud is now a neutral gray (168, 168, 168) that matches no
+   feature color; the map was regenerated. **How it was verified:**
+   classifying the new map with one swatch per feature color at the
+   default ΔE 12 (the same classification the Categories view uses) leaves
+   the whole cloud core unmatched (879 of 879 pixels; none match Land
+   Ice); only the wispy edge (17% of the cloud) matches the colors
+   underneath. The test-map guess stats were re-recorded (still a palette
+   map) and the tests pass 126/126. (Checked in Node, not re-checked by
+   eye in the Categories view.)
+   **Also noted:** near-duplicate swatches of one color given different
+   elevations make the land speckled, because noisy pixels flip between
+   them. I fixed it by giving both swatches the same elevation. (A higher
+   Scan merge folds such near-duplicates into one swatch.)
+2. PASS: the eyedropper added the lake swatch.
+3. PASS: presets.
+4. PASS: Ctrl+Shift+R reload of the palette map.
+5. PASS: a −50 m Land swatch stays green and reads −50 m.
+6. PASS: art image.
+7. PASS: Slope, Distance from Coast, and Shaded Relief look right.
+8. PASS: badges.
+9. PASS: layout at ~1280 px.
+- M2b complete: every checklist item passes, including the SPEC M2b
+  check (item 1). Earlier step-4 items 3–4 stay NOT TESTED by my choice.
+
+**Next**
+- Commit M2b. Then plan M3 (Planet sliders and wind). Not started. Note
+  for that plan: `createSlider` only reports values while dragging, so
+  "recompute when a slider is released" needs a commit callback.
 
 ---
 
@@ -1122,6 +1347,71 @@ today with M2a.
   Recorded the results in the M2b entry: PASS for everything I tested, and the size-changed Reload and same-size re-import checks (LOG checklist items 4 and 3) marked NOT TESTED, by my choice.
 * **How It Was Verified:**  
   By me, by eye, in my own browser.
+
+---
+
+## 2026-10-18 — Session 4 prompt log (M2b steps 5–7)
+
+### Prompt 1
+* **User Prompt:**  
+  > *[Read CLAUDE.md, SPEC.md, and LOG.md. "M2b is done; we're doing M3 (Planet sliders and wind)." Start a Session 4 prompt log. In Plan mode, propose the M3 files, data flow, and tests: worker pipeline and caching, Annual Mean wind and the ITCZ, angle limits by rotation, band-edge calm, wind arrows on 5632×2048, day length, the missing year length, the Planet panel at ~1280 px, and the Wind Speed & Pressure mode; tests, timings, and a by-eye checklist. No code until I approve.]*
+* **What the AI Provided:**  
+  Read the docs and surveyed the code for M3 (worker, render loop, graticule, slider, inspector, Planet panel). Found that M2b was only half built: `CURRENT_MILESTONE` was `'2b-1'`, and palette import, the art image, Slope & Ruggedness, Distance from Coast, and Shaded Relief didn't exist (a registry test checked they stayed locked). Moving to M3 would have unlocked them unbuilt, so it asked how to proceed instead of planning M3.
+* **My Error:**  
+  My prompt said M2b was done; only steps 1–4 were. Not a misread by the model, and not a change of plan.
+
+### Prompt 2 (answer to Claude's question)
+* **User Prompt:**  
+  > *[Continue M2b with steps 5–7 from the approved rev 2 plan. Before coding, confirm the plan still fits the code as built, including Session 3's Ctrl+Shift+R reload and Cancel / No / Yes dialog, and list decisions. Steps: 5 palette import (Lab/ΔE76, Ignore and unmatched filled from the nearest feature, elevation by category, smoothKeepingCoast(), the editor with eyedropper, sliders, three views, presets in fcm:palettes with JSON, Reload reapplying swatches), the generated palette_map_1.png, the art image; 6 Slope & Ruggedness, Distance from Coast (worker job), Shaded Relief, all updating after strokes; 7 CURRENT_MILESTONE = '2b', SPEC/LOG, full test run. Report the full-size palette import timing (Node or browser). Fix code, not expectations. Never open the reference map. Then the checklist, the M2b LOG entry, a commit message; don't start M3.]*
+* **What the AI Provided:**  
+  Found the rev 2 plan in its Session 3 plan file and wrote a fit check: what still fits (Reload and its question, size-changed Reload, art bitmap in undo memory, Physical's category colors, the edits layer) and nine adjustments. It proposed decisions D1–D7 (nearest-neighbor decoding, palette guess, one smoothing rule, art on blank maps, full-resolution distance, swatch defaults, slope on land only).
+* **Where the Model Misread Me:**  
+  D6 contradicted two rev 2 defaults I had already accepted: Lake surface 0 m (it proposed 100 m), and Import needing one land swatch and one water swatch (it proposed "at least one swatch with a category"). Root cause: rev 2 said its palette section was "unchanged from rev 1", and rev 1's text was no longer in the plan file. Claude proposed fresh defaults instead of saying those details were missing.
+
+### Prompt 3 (plan feedback)
+* **User Prompt:**  
+  > *[Approved with changes: the land + water swatch rule from rev 2; Lake surface 0 m; D3 keeps heightmap output identical to M2a (existing heightmap tests unchanged) and only the palette path uses the new rules; D2 gets a test that every existing test map keeps its guess (GEBCO JPG stays a heightmap) and the colorful threshold goes to constants.js; concrete expected results for checklist item 7; a "format": "fcm-palette" tag in preset JSON, rejecting files without it; log my Prompt 1 as my error; D1, D4, D5, D7 approved; a README line for continent_map_5; keep the createSlider note for M3.]*
+* **What the AI Provided:**  
+  Added the changes to the plan and asked for approval again. This prompt arrived as a rejection of the plan-approval prompt, which keeps the session in plan mode (no file edits), so the approval was asked for once more.
+
+### Prompt 4
+* **User Prompt:**  
+  > *"Approved. In step 0, write the approved versions into LOG.md and SPEC (Lake surface 0 m, land + water swatch rule, heightmap output identical to M2a, "format": "fcm-palette", and my Prompt 1 as my error), not the superseded text in the plan body. Then build steps 5–7 and stop as planned."*
+* **What the AI Provided:**  
+  Step 0: this prompt log, the approved decisions in the M2b entry, and SPEC §2.5, §2.5.1, and §13.3 with the approved values only. Then steps 5–7 (see the M2b entry).
+* **Root Cause Discovered:**  
+  - Distance from Coast took 1.65 s (over the 1.5 s line); fixed by computing each parabola term once and by half-width wrap padding for the coast job only.
+  - The swatch scan's merge ΔE 2 is too small for noisy images (left open for my decision).
+* **How It Was Verified:**  
+  Node tests 124/124; Distance from Coast re-timed at 1.03 s (Node) and 1.08 s (browser worker); a test shows half padding matches full padding; non-visual browser checks with no console errors.
+
+### Prompt 5 (after the session was cut off mid-call)
+* **User Prompt:**  
+  > *"Try again"*
+* **What the AI Provided:**  
+  Checked whether the interrupted command had already appended its test (it hadn't), re-ran it, finished the timings and browser checks, recorded the test-map guess stats, and completed the M2b entry.
+* **How It Was Verified:**  
+  `grep` showed the test wasn't in the file before re-appending; 124/124 tests after.
+
+### Prompt 6 (my answer to the swatch-scan question)
+* **User Prompt:**  
+  > *"Let's go with a configurable tolerance slider in the import dialog instead of picking a single hardcoded value. Please add a color-matching tolerance (Delta E) slider to the palette import options (defaulting to 2, adjustable up to 8+), wire it into the palette scanner in src/sim/palette.js using our reusable slider component, persist it in preferences, and then finish updating LOG.md and wrapping up M2b."*
+* **What the AI Provided:**  
+  A "Scan merge" slider (0–12 ΔE, default 2) made with `createSlider`, saved to `fcm:paletteScan`. The scanner clamps the value (`clampMergeDE`), and a rescan keeps existing assignments (`rescanSwatches`). SPEC §2.5 and this log updated; the M2b checklist and a commit message.
+* **Note on naming:** The dialog already had a "Tolerance" slider (ΔE 12), which decides which swatch a pixel matches. Your slider controls the scan's merging, so it's labeled "Scan merge" to keep the two apart. It is the value you described: default 2, scanner only.
+* **How It Was Verified:**  
+  Node tests 126/126 (two new); browser reload with no console errors and the three sliders present with number inputs. Moving the slider on a real import is in my checklist (item 1).
+
+### Prompt 7
+* **User Prompt:**  
+  > *[Checklist results, all PASS. Item 1 finding: the cloud patch shares the bottom ice band's white, so its center matched Land Ice and imported as a white blob; make the cloud a distinct light gray that matches no other feature, regenerate, and confirm it's unmatched (magenta) in the Categories view at default settings. Note in the M2b entry that near-duplicate swatches with different elevations cause speckle (I fixed it by giving both the same elevation). Record the results, tick M2b, suggest a commit message. Don't start M3.]*
+* **What the AI Provided:**  
+  Changed the generator's cloud to neutral gray (168, 168, 168), regenerated palette_map_1.png, re-recorded its guess stats, recorded the checklist results and the speckle note in the M2b entry, ticked M2b, and suggested a commit message.
+* **Root Cause Discovered:**  
+  The cloud color (232, 236, 239) blended at 85% over the map came within ΔE 12 of the land-ice white (250, 251, 252), so the classifier treated it as Land Ice instead of unmatched. The generator was my own; the test-map design was at fault, not the matching code.
+* **How It Was Verified:**  
+  A scratchpad script classified the regenerated map with the default ΔE 12 (the same function the Categories view uses): the cloud core is 879/879 unmatched with no Land Ice matches. Tests 126/126. Not re-checked by eye in the dialog's Categories view.
+* **Note:** The first regenerate failed with a Windows file-open error on palette_map_1.png (likely a temporary lock); a retry a moment later wrote it.
 
 ---
 

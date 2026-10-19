@@ -14,6 +14,7 @@ const VARIABLES = {
   selectionHalo: '--selection-halo',
   brushOutline: '--brush-outline',
   brushHalo: '--brush-halo',
+  paletteUnmatched: '--palette-unmatched',
 };
 
 export function readTheme(el = document.documentElement) {

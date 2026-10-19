@@ -1,11 +1,12 @@
 // App entry: state, wiring, and the render loop.
 
 import { DEFAULT_MAP, createMapConfig } from './sim/mapconfig.js';
-import { blankTerrain, makeTerrain } from './sim/terrain.js';
+import { blankTerrain, makeTerrain, isOceanCategory, isLand } from './sim/terrain.js';
+import { ruggednessAt } from './sim/slope.js';
 import { downsampleTerrain, downsampleRegion, cloneSim } from './sim/downsample.js';
 import { createEdits, cloneEdits, writableTerrain, composeRect, addDirty, isEmptyEdits } from './sim/edits.js';
 import { applyDab, strokeDabs, BRUSH_IDS } from './sim/brushes.js';
-import { liveState, snapshotOf, stateEntry, strokeEntry, bitmapsOf } from './sim/mapstate.js';
+import { liveState, snapshotOf, stateEntry, strokeEntry, bitmapsOf, hasImport, withArt } from './sim/mapstate.js';
 import { PLANET_RADIUS_KM } from './sim/constants.js';
 import {
   pixelToLatLon, latLonToPixel, sourcePixel, sourceToSimCell, formatLatLon, parseLatLon, wrapX,
@@ -34,7 +35,7 @@ import { attachNavigation } from './ui/navigation.js';
 import { load, save } from './io/storage.js';
 import { createWorkerClient } from './io/workerclient.js';
 import { pickImageFile, imageSize, fitWithinMax, decodeImage, readPixels } from './io/imagefile.js';
-import { createImportDialog } from './ui/importdialog.js';
+import { createImportDialog, artAspectNotice } from './ui/importdialog.js';
 import { createMapSettingsDialog } from './ui/mapsettingsdialog.js';
 import { formatMeters } from './ui/statusbar.js';
 import { createHistory } from './ui/history.js';
@@ -105,6 +106,7 @@ const store = {
   sim: startSim,
   source: null,
   version: 1,
+  coast: null, // Distance from Coast result: { data, width, height, version, mask }
 };
 
 function savePrefs() {
@@ -232,9 +234,18 @@ function updateHover() {
   inspector.show(hover.x, hover.y, {
     latLon: text,
     elevation: formatMeters(meters),
+    extra: modeReadout(px),
     ...px,
     ...sourceToSimCell(state.map, src.x, src.y),
   });
+}
+
+// An extra tooltip line for the current mode, or ''.
+function modeReadout({ px, py }) {
+  if (state.modeId !== 'slope') return '';
+  const i = py * store.terrain.width + px;
+  if (!isLand(store.terrain, i)) return 'Ruggedness (TRI): water';
+  return `Ruggedness (TRI): ${Math.round(ruggednessAt(store.terrain, state.map.wraps, px, py)).toLocaleString('en-US')} m`;
 }
 
 // Sculpt cursor: the brush footprint under the pointer, in source px.
@@ -287,6 +298,7 @@ function setMode(id) {
   state.categoryId = mode.category;
   savePrefs();
   refreshUI();
+  ensureCoast();
   requestDraw();
 }
 
@@ -359,6 +371,7 @@ function applySnapshot(snap, { keepView = false } = {}) {
     base: live.base, baseSim: live.baseSim, edits: live.edits, terrain: live.terrain, sim: live.sim, source: live.source,
   });
   store.version++;
+  markCoastStale();
   statusbar.setMap(state.map);
   clearSelection();
   if (keepView && sameSize) setView(state.view);
@@ -443,6 +456,7 @@ function refreshRects(rects) {
     mapView.invalidate(r);
   }
   rebuildSim(rects);
+  if (coastChangedIn(rects)) markCoastStale();
   requestDraw();
 }
 
@@ -463,6 +477,65 @@ function strokeEnd() {
   }
   clearTimeout(simTimer);
   simTimer = setTimeout(flushSim, 250);
+  if (coastChangedIn(s.dirty.values())) markCoastStale();
+}
+
+// ---- Distance from Coast (SPEC 13.3): a worker job, run only while the
+// mode is shown and the land/sea layout has changed since the last run.
+// Until a new result arrives the mode shows the previous one. ----
+
+const coastJob = { stale: true, pending: false };
+
+// 1 = land or lake (not ocean), the layout the distances are measured from.
+function coastMask(terrain, rect = null) {
+  const { width: w, category: cat } = terrain;
+  const r = rect ?? { x0: 0, y0: 0, x1: w, y1: terrain.height };
+  const out = new Uint8Array((r.x1 - r.x0) * (r.y1 - r.y0));
+  let k = 0;
+  for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) out[k++] = isOceanCategory(cat[y * w + x]) ? 0 : 1;
+  return out;
+}
+
+// Did land/sea change inside these source rects since the last distance run?
+function coastChangedIn(rects) {
+  const mask = store.coast?.mask;
+  if (!mask || store.coast.width !== state.map.sourceWidth || store.coast.height !== state.map.sourceHeight) return true;
+  const { width: w, category: cat } = store.terrain;
+  for (const r of rects) {
+    for (let y = r.y0; y < r.y1; y++) {
+      for (let x = r.x0; x < r.x1; x++) {
+        const i = y * w + x;
+        if ((isOceanCategory(cat[i]) ? 0 : 1) !== mask[i]) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function markCoastStale() {
+  coastJob.stale = true;
+  ensureCoast();
+}
+
+function ensureCoast() {
+  if (state.modeId !== 'coast-distance' || !worker || coastJob.pending || !coastJob.stale) return;
+  coastJob.pending = true;
+  coastJob.stale = false;
+  const map = state.map;
+  const mask = coastMask(store.terrain);
+  const category = store.terrain.category.slice();
+  if (!store.coast) contextbar.flash('Measuring distance from the coast…');
+  worker.request('coastDistance', { category, cfg: { ...map } }, [category.buffer])
+    .then((result) => {
+      if (result.width !== state.map.sourceWidth || result.height !== state.map.sourceHeight) return;
+      store.coast = { ...result, mask, version: (store.coast?.version ?? 0) + 1 };
+      requestDraw();
+    })
+    .catch((err) => contextbar.flash(`Distance from coast failed: ${err.message}`, 8000))
+    .finally(() => {
+      coastJob.pending = false;
+      ensureCoast(); // the layout changed again while this one ran
+    });
 }
 
 function undo() {
@@ -490,11 +563,24 @@ async function whileBusy(fn) {
   }
 }
 
+// Decodes an art image at map size (stretched to fit). `art` = { file,
+// handle?, natural?, bitmap? }: an existing bitmap of the right size is kept
+// unless `reread` (Reload re-reads the file through its handle).
+async function loadArt(art, cfg, { reread = false } = {}) {
+  if (!art) return null;
+  if (!reread && art.bitmap && art.bitmap.width === cfg.sourceWidth && art.bitmap.height === cfg.sourceHeight) return art;
+  const natural = art.natural ?? await imageSize(art.file);
+  const bitmap = await decodeImage(art.file, cfg.sourceWidth, cfg.sourceHeight);
+  return { file: art.file, handle: art.handle ?? null, natural, bitmap };
+}
+
 // Decodes the image(s) at map size and builds the base terrain in the worker.
 // Old bitmaps are not closed here: undo may bring them back (the history
-// closes them once nothing uses them).
-async function buildFromSource(source, cfg) {
-  const bitmap = await decodeImage(source.file, cfg.sourceWidth, cfg.sourceHeight);
+// closes them once nothing uses them). Palette images decode nearest-neighbor
+// so every pixel keeps a color that is really in the file.
+async function buildFromSource(source, cfg, { rereadArt = false } = {}) {
+  const quality = source.kind === 'palette' ? 'pixelated' : 'high';
+  const bitmap = await decodeImage(source.file, cfg.sourceWidth, cfg.sourceHeight, quality);
   const rgba = readPixels(bitmap);
   let maskRgba = null;
   if (source.mask) {
@@ -506,7 +592,13 @@ async function buildFromSource(source, cfg) {
   if (maskRgba) transfer.push(maskRgba.buffer);
   const result = await worker.request('build', { kind: source.kind, rgba, maskRgba, settings: source.settings, cfg: { ...cfg } }, transfer);
   const base = makeTerrain(cfg.sourceWidth, cfg.sourceHeight, result.elevation, result.category);
-  return { base, baseSim: result.sim, source: { ...source, bitmap }, info: result.info, ms: result.ms };
+  const art = await loadArt(source.art, cfg, { reread: rereadArt });
+  return { base, baseSim: result.sim, source: { ...source, bitmap, art }, info: result.info, ms: result.ms };
+}
+
+// " · 1.2% unmatched" for palette builds, else "".
+function unmatchedNote(info) {
+  return info?.unmatchedFraction != null ? ` ${(info.unmatchedFraction * 100).toFixed(1)}% of pixels unmatched (filled from the nearest match).` : '';
 }
 
 async function importMap(payload) {
@@ -522,6 +614,7 @@ async function importMap(payload) {
     settings: payload.settings,
     storedSettings: payload.storedSettings,
     mask: payload.mask,
+    art: payload.art ?? null,
   };
   // Brush edits are in source pixels, so they can only be kept at the same size.
   const sameSize = cfg.sourceWidth === state.map.sourceWidth && cfg.sourceHeight === state.map.sourceHeight;
@@ -539,13 +632,16 @@ async function importMap(payload) {
       ? ' Brush edits were not kept; Ctrl+Z brings them back.'
       : ' Brush edits were dropped because the image size changed; Ctrl+Z brings them back.';
   }
+  const artNote = artAspectNotice(built.source.art, cfg.sourceWidth, cfg.sourceHeight);
+  if (artNote) note += ` ${artNote}`;
+  note = unmatchedNote(built.info) + note;
   contextbar.flash(`Imported ${payload.file.name} (${cfg.sourceWidth} × ${cfg.sourceHeight}) in ${(built.ms / 1000).toFixed(1)} s.${note}`, note ? 8000 : 4000);
 }
 
 async function reloadMap() {
   const src = store.source;
   if (busy || stroke) return;
-  if (!src) {
+  if (!hasImport(src)) {
     contextbar.flash('Nothing to reload yet: import a map image first (File > Import Map Image…).');
     return;
   }
@@ -562,7 +658,10 @@ async function reloadMap() {
     if (natural.width !== src.natural.width || natural.height !== src.natural.height) {
       // A different size: reopen the import dialog, prefilled. Brush edits
       // can't follow (they are in source pixels); importing drops them.
-      await importDialog.open({ file, handle, prefill: { kind: src.kind, storedSettings: src.storedSettings, cfgValues: state.map } });
+      await importDialog.open({
+        file, handle,
+        prefill: { kind: src.kind, storedSettings: src.storedSettings, cfgValues: state.map, art: src.art ? { file: src.art.file, handle: src.art.handle, natural: src.art.natural } : null },
+      });
       return;
     }
 
@@ -584,8 +683,11 @@ async function reloadMap() {
     }
 
     const mask = src.mask?.handle ? { ...src.mask, file: await src.mask.handle.getFile() } : src.mask;
+    // The art image is re-read only through its file handle; without one
+    // (no File System Access API) the current art is kept.
+    const art = src.art?.handle ? { ...src.art, file: await src.art.handle.getFile(), natural: null } : src.art;
     contextbar.flash(`Reloading ${file.name}…`);
-    const built = await whileBusy(() => buildFromSource({ ...src, file, handle, mask }, state.map));
+    const built = await whileBusy(() => buildFromSource({ ...src, file, handle, mask, art }, state.map, { rereadArt: Boolean(src.art?.handle) }));
     
     // Same size: apply edits conditionally based on the prompt result
     commitState(`Reload ${file.name}`, {
@@ -596,7 +698,8 @@ async function reloadMap() {
       edits: keepEdits ? cloneEdits(store.edits) : createEdits(state.map.sourceWidth, state.map.sourceHeight),
     }, { keepView: true });
     
-    contextbar.flash(`Reloaded ${file.name}.${keepEdits ? ' Brush edits kept.' : hadEdits ? ' Brush edits discarded (Ctrl+Z brings them back).' : ''}`, hadEdits ? 6000 : 4000);
+    const unmatched = unmatchedNote(built.info);
+    contextbar.flash(`Reloaded ${file.name}.${unmatched}${keepEdits ? ' Brush edits kept.' : hadEdits ? ' Brush edits discarded (Ctrl+Z brings them back).' : ''}`, hadEdits || unmatched ? 6000 : 4000);
   } catch (err) {
     contextbar.flash(`Reload failed: ${err.message}`, 8000);
   }
@@ -605,10 +708,10 @@ async function reloadMap() {
 async function applyMapSettings(values) {
   if (busy) throw new Error('Another map update is still running.');
   const cfg = createMapConfig({ ...values, sourceWidth: state.map.sourceWidth, sourceHeight: state.map.sourceHeight });
-  if (!store.source) {
-    // Blank map: the same base with the new extent (and maybe sim width).
+  if (!hasImport(store.source)) {
+    // Blank map: the same base (and art) with the new extent (and maybe sim width).
     commitState('Map Settings', {
-      map: cfg, source: null, base: store.base, baseSim: downsampleTerrain(store.base, cfg), edits: cloneEdits(store.edits),
+      map: cfg, source: store.source, base: store.base, baseSim: downsampleTerrain(store.base, cfg), edits: cloneEdits(store.edits),
     }, { keepView: true });
     return;
   }
@@ -617,6 +720,24 @@ async function applyMapSettings(values) {
   commitState('Map Settings', {
     map: cfg, source: built.source, base: built.base, baseSim: built.baseSim, edits: cloneEdits(store.edits),
   }, { keepView: true });
+}
+
+// File > Art Image…: a separate image for Original Art (SPEC 2.5.1),
+// stretched to the map size. Works on blank maps too; undoable.
+async function setArtImage() {
+  if (busy || stroke) return;
+  const picked = await pickImageFile();
+  if (!picked) return;
+  const art = await loadArt({ file: picked.file, handle: picked.handle }, state.map);
+  commitState('Art Image', { ...currentState(), source: withArt(store.source, art) }, { keepView: true });
+  const note = artAspectNotice(art, state.map.sourceWidth, state.map.sourceHeight);
+  contextbar.flash(`Art image: ${picked.file.name}. Original Art (1, Q) shows it.${note ? ` ${note}` : ''}`, note ? 8000 : 4000);
+}
+
+function removeArtImage() {
+  if (busy || stroke || !store.source?.art) return;
+  commitState('Remove Art Image', { ...currentState(), source: withArt(store.source, null) }, { keepView: true });
+  contextbar.flash('Art image removed (Ctrl+Z brings it back).');
 }
 
 function goTo(text) {
@@ -717,6 +838,8 @@ createMenuBar($('menubar'), [
       { separator: true },
       { label: 'Import Map Image…', milestone: '2a', action: () => importDialog.openFromPicker().catch((err) => contextbar.flash(err.message, 8000)) },
       { label: 'Reload Map Image', shortcut: 'Ctrl+Shift+R', milestone: '2a', action: reloadMap },
+      { label: 'Art Image…', milestone: '2b', action: () => setArtImage().catch((err) => contextbar.flash(`Art image failed: ${err.message}`, 8000)) },
+      { label: 'Remove Art Image', milestone: '2b', disabled: !store.source?.art, action: removeArtImage },
       { separator: true },
       { label: 'Save Project…', milestone: 11 },
       { label: 'Load Project…', milestone: 11 },
@@ -727,10 +850,10 @@ createMenuBar($('menubar'), [
   {
     label: 'Edit',
     items: () => [
-      { label: history.canUndo() ? `Undo ${history.undoLabel()}` : 'Undo', shortcut: 'Ctrl+Z', milestone: '2b-1', disabled: !history.canUndo(), action: undo },
-      { label: history.canRedo() ? `Redo ${history.redoLabel()}` : 'Redo', shortcut: 'Ctrl+Y', milestone: '2b-1', disabled: !history.canRedo(), action: redo },
+      { label: history.canUndo() ? `Undo ${history.undoLabel()}` : 'Undo', shortcut: 'Ctrl+Z', milestone: '2b', disabled: !history.canUndo(), action: undo },
+      { label: history.canRedo() ? `Redo ${history.redoLabel()}` : 'Redo', shortcut: 'Ctrl+Y', milestone: '2b', disabled: !history.canRedo(), action: redo },
       { separator: true },
-      { label: 'Map Settings…', milestone: '2a', action: () => mapSettingsDialog.open(state.map, Boolean(store.source)) },
+      { label: 'Map Settings…', milestone: '2a', action: () => mapSettingsDialog.open(state.map, hasImport(store.source)) },
     ],
   },
   {
@@ -860,7 +983,7 @@ function startWorker() {
       console.error('Simulation worker failed to start:', e.message || e);
     });
     worker = createWorkerClient(w);
-    worker.request('ping').then(() => statusbar.setWorker('ready'));
+    worker.request('ping').then(() => { statusbar.setWorker('ready'); ensureCoast(); });
   } catch (err) {
     statusbar.setWorker('error');
     console.error('Simulation worker failed to start:', err);

@@ -33,6 +33,19 @@ export function bitmapsOf(source) {
   return [source?.bitmap, source?.art?.bitmap].filter(Boolean);
 }
 
+// Is there an imported terrain image (as opposed to a blank map, which may
+// still carry an art image: source = { kind: 'blank', art })?
+export function hasImport(source) {
+  return Boolean(source?.file);
+}
+
+// The source with a different art image (or none). A blank map's source is
+// null without art.
+export function withArt(source, art) {
+  if (hasImport(source)) return { ...source, art: art ?? null };
+  return art ? { kind: 'blank', art } : null;
+}
+
 function simBytes(sim) {
   return sim ? sim.landFraction.byteLength * 4 + sim.category.byteLength : 0;
 }

@@ -122,8 +122,10 @@ test('M2b is complete: Slope, Distance from Coast, Shaded Relief, and Art Image 
   assert.match(main, /label: 'Art Image…', milestone: '2b'/);
 });
 
-// M3 (Session 5): the wind mode and overlays are live; M4 items stay locked.
-test('M3 is live: Wind Speed & Pressure, Wind Arrows (with band labels), Pressure & ITCZ; Temperature stays M4', async () => {
+// M3 (Session 5): the wind mode and overlays are live. Until Session 6 this
+// also checked that Temperature stayed locked; that check moved to the M4
+// test below, which now expects the M4 items live.
+test('M3 is live: Wind Speed & Pressure, Wind Arrows (with band labels), Pressure & ITCZ', async () => {
   const { RENDERERS } = await import('../src/render/modes/index.js');
   const wind = MODES.find((m) => m.id === 'wind-pressure');
   assert.ok(isAvailable(wind.milestone) && RENDERERS['wind-pressure'], 'wind mode has a renderer');
@@ -134,8 +136,19 @@ test('M3 is live: Wind Speed & Pressure, Wind Arrows (with band labels), Pressur
   const labels = OVERLAYS.find((o) => o.id === 'wind-band-labels');
   assert.equal(labels.parent, 'wind-arrows');
   assert.equal(OVERLAYS.findIndex((o) => o.id === 'wind-band-labels'), OVERLAYS.findIndex((o) => o.id === 'wind-arrows') + 1, 'listed right under its parent');
-  assert.ok(!isAvailable(MODES.find((m) => m.id === 'temperature').milestone));
   const { readFile } = await import('node:fs/promises');
   const toolbar = await readFile(new URL('../src/ui/toolbar.js', import.meta.url), 'utf8');
   assert.match(toolbar, /applyComingSoon\(play, 11, 'Season playback'\)/, 'play button stays M11');
+});
+
+// M4 (Session 6): the five temperature modes and Climate Boundaries are live,
+// each mode with a renderer and legend; M5 items stay locked.
+test('M4 is live: the five temperature modes and Climate Boundaries; Precipitation stays M5', async () => {
+  const { RENDERERS } = await import('../src/render/modes/index.js');
+  for (const id of ['temperature', 'temp-range', 'growing-season', 'frost', 'winter-severity']) {
+    assert.ok(isAvailable(MODES.find((m) => m.id === id).milestone), id);
+    assert.ok(RENDERERS[id]?.legend, `${id} has a renderer and legend`);
+  }
+  assert.ok(isAvailable(OVERLAYS.find((o) => o.id === 'climate-boundaries').milestone));
+  assert.ok(!isAvailable(MODES.find((m) => m.id === 'precipitation').milestone));
 });

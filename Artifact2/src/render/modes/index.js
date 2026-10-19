@@ -7,6 +7,11 @@ import { drawElevation } from './elevation.js';
 import { drawSlope } from './slope.js';
 import { drawCoastDistance } from './coastdistance.js';
 import { drawWindPressure } from './windpressure.js';
+import { drawTemperature } from './temperature.js';
+import { drawTempRange } from './temprange.js';
+import { drawGrowingSeason } from './growingseason.js';
+import { drawFrost } from './frost.js';
+import { drawWinterSeverity } from './wintersev.js';
 
 export const RENDERERS = {
   'original-art': drawOriginalArt,
@@ -15,4 +20,12 @@ export const RENDERERS = {
   slope: drawSlope,
   'coast-distance': drawCoastDistance,
   'wind-pressure': drawWindPressure,
+  temperature: drawTemperature,
+  'temp-range': drawTempRange,
+  'growing-season': drawGrowingSeason,
+  frost: drawFrost,
+  'winter-severity': drawWinterSeverity,
 };
+
+// Modes that need temperature results (M4).
+export const TEMPERATURE_MODES = new Set(['temperature', 'temp-range', 'growing-season', 'frost', 'winter-severity']);

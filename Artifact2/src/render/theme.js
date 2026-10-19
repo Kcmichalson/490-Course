@@ -22,6 +22,10 @@ const VARIABLES = {
   pressureHigh: '--pressure-high',
   pressureLow: '--pressure-low',
   itczLine: '--itcz-line',
+  boundaryTree: '--boundary-tree',
+  boundarySnow: '--boundary-snow',
+  boundaryPermafrost: '--boundary-permafrost',
+  boundaryHalo: '--boundary-halo',
 };
 
 export function readTheme(el = document.documentElement) {

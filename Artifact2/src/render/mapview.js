@@ -12,10 +12,12 @@ import { RENDERERS } from './modes/index.js';
 import { drawHillshade, RELIEF_ALPHA } from './hillshade.js';
 import { drawWindArrows } from './windarrows.js';
 import { drawPressureItcz } from './pressure.js';
+import { drawClimateBoundaries } from './climateboundaries.js';
 
 // Screen-space overlays, drawn in this order (lines under symbols).
 const OVERLAY_DRAWERS = {
   graticule: drawGraticule,
+  'climate-boundaries': drawClimateBoundaries,
   'pressure-itcz': drawPressureItcz,
   'wind-arrows': drawWindArrows,
 };
@@ -90,7 +92,9 @@ export class MapView {
     const renderer = RENDERERS[mode.id] ? mode.id : 'placeholder';
     const key = `${map.sourceWidth}x${map.sourceHeight}|${renderer}|${store.version}|${draw.dataKey?.(store) ?? ''}`;
     if (store.terrain.width !== map.sourceWidth || store.terrain.height !== map.sourceHeight) return; // mid-update
-    const args = { map, terrain: store.terrain, source: store.source, coast: store.coast, climate: store.climate, theme: this.theme };
+    const args = {
+      map, terrain: store.terrain, source: store.source, coast: store.coast, climate: store.climate, theme: this.theme, version: store.version,
+    };
     const dirty = mergeRects(this.dirty);
     this.dirty = [];
     this.base = this.layer(this.base, map);
@@ -100,7 +104,11 @@ export class MapView {
         for (const rect of dirty) draw(g, { ...args, rect });
       }
     } else {
-      draw(this.base.getContext('2d', { alpha: false }), args);
+      const g = this.base.getContext('2d', { alpha: false });
+      draw(g, args);
+      // Renderers that cache data (the M4 climate raster) still need this
+      // frame's brush rects, even when the data key changed.
+      if (draw.partial) for (const rect of dirty) draw(g, { ...args, rect });
       this.baseKey = key;
     }
 

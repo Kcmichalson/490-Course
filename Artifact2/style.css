@@ -52,6 +52,10 @@
   --pressure-high: #7fc4ff;
   --pressure-low: #ff8f7a;
   --itcz-line: #ff6b5a;
+  --boundary-tree: #5fd068;
+  --boundary-snow: #f2f7ff;
+  --boundary-permafrost: #c58cff;
+  --boundary-halo: rgba(0, 0, 0, 0.6);
 
   --radius: 4px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -244,6 +248,7 @@ select:disabled { opacity: 0.45; }
 .legend {
   position: absolute; right: 8px; bottom: 8px; z-index: 4;
   max-width: min(300px, calc(100% - 16px));
+  max-height: calc(100% - 16px); overflow-y: auto; /* M4 legends are taller */
   background: var(--panel-translucent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -257,6 +262,7 @@ select:disabled { opacity: 0.45; }
 .legend-chip { flex: none; width: 14px; height: 12px; border-radius: 2px; border: 1px solid var(--border); }
 .legend-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .legend-col-title { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.legend-overlay { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
 .tooltip [hidden] { display: none; }
 
 .tooltip {

@@ -62,6 +62,59 @@ export const WIND_BASE_SPEED = 1.0;
 export const CALM_FLOOR = 0.15;
 export const CALM_EDGE_FRACTION = 0.25;
 
+// ---- Temperature (SPEC 6, M4) ----
+
+// Solar constant (W/m²): sunlight at the top of the atmosphere at Earth's
+// distance. With the SPEC declination and 12 mid-month days it gives
+// Tq ≈ 26.3 °C at the equator and −25.0 °C at the poles (LOG M4).
+export const SOLAR_CONSTANT = 1361;
+
+// Radiative temperature Tq = A·Q + B (°C from daily-mean insolation): a
+// linear fit standing in for the greenhouse effect and heat transport.
+export const TQ_SLOPE = 0.212;
+export const TQ_OFFSET = -61.7;
+
+// Seasonal swing: how much of the radiative seasonal cycle a surface
+// feels. Water's heat capacity damps it (ocean); deep interiors feel half.
+export const SWING_OCEAN = 0.15;
+export const SWING_INTERIOR = 0.5;
+
+// Seasonal lag (days): land warms and cools within weeks, the ocean's
+// mixed layer takes over a month, so the warmest month comes after the
+// solstice.
+export const LAG_LAND_DAYS = 15;
+export const LAG_OCEAN_DAYS = 45;
+
+// Continentality: maritime air loses its ocean character over ~1,500 km of
+// travel inland (tracer decay), and anywhere near a coast feels the sea
+// (sea breezes, mixing) over ~300 km whichever way the wind blows.
+export const MARITIME_DECAY_KM = 1500;
+export const COAST_DECAY_KM = 300;
+// Stop when no cell changes more than this in a sweep. At 1e-3 the tracer is
+// within ~4e-3 of the converged answer, which moves s by ≤ 0.0015 (under
+// 0.1 °C even for a 70 °C radiative swing); measured in M4 (LOG).
+export const TRACER_TOLERANCE = 1e-3;
+export const TRACER_MAX_SWEEPS = 200;
+// Over-relaxation of the tracer's in-place sweeps (numerical, not physics:
+// it only changes how fast the sweeps converge, not the answer).
+export const TRACER_SOR = 1.0;
+
+// Environmental lapse rate: air cools ~6.5 °C per km of height.
+export const LAPSE_C_PER_M = -0.0065;
+
+// Land ice reflects most sunlight (albedo), so ice sheets run colder.
+export const LAND_ICE_C = -5;
+
+// Mode thresholds (start values; SPEC 13.3 M4 definitions).
+export const GROWING_THRESHOLD_C = 5;      // thermal growing season: daily mean ≥ 5 °C
+export const TREE_LINE_C = 10;             // trees need a warmest month ≥ 10 °C
+export const SNOWLINE_C = 0;               // warmest month < 0 °C: snow never melts
+export const PERMAFROST_C = -2;            // mean annual ≤ −2 °C: discontinuous permafrost
+export const PERMAFROST_CONTINUOUS_C = -8; // mean annual ≤ −8 °C: continuous permafrost
+export const SNOW_COVER_C = -3;            // coldest month < −3 °C: lasting winter snow
+export const FREQUENT_FROST_C = 3;         // coldest month < 3 °C: frequent frost
+export const OCCASIONAL_FROST_C = 12;      // coldest month < 12 °C: occasional frost
+
 // ---- Terrain import (SPEC 2.3–2.7) ----
 
 // Silhouette land with auto-relief off: a low, flat plain, for testing pure

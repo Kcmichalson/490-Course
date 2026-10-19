@@ -6,6 +6,7 @@
 import { icon } from '../ui/icons.js';
 import { isAvailable, milestoneLabel } from '../ui/comingsoon.js';
 import { RENDERERS } from './modes/index.js';
+import { BOUNDARY_LINES } from './climateboundaries.js';
 
 function swatchList(items) {
   const list = document.createElement('ul');
@@ -21,8 +22,29 @@ function swatchList(items) {
   return list;
 }
 
-export function renderLegend(el, mode) {
+// Key for the Climate Boundaries toggle (M4), shown under the mode's legend
+// while the toggle is on. Line colors are UI colors (CSS variables).
+function boundaryKey() {
+  const wrap = document.createElement('div');
+  wrap.className = 'legend-overlay';
+  const h = document.createElement('div');
+  h.className = 'legend-col-title';
+  h.textContent = 'Climate Boundaries';
+  const items = BOUNDARY_LINES.map((l) => ({ color: `var(${l.cssVar})`, label: l.label }));
+  const note = document.createElement('p');
+  note.className = 'muted';
+  note.textContent = 'Lines follow the simulation grid. Predicted ice edge: coming in M7 (needs SST).';
+  wrap.append(h, swatchList(items), note);
+  return wrap;
+}
+
+export function renderLegend(el, mode, overlays = {}) {
   el.replaceChildren();
+  renderModeLegend(el, mode);
+  if (overlays['climate-boundaries'] && isAvailable(4)) el.append(boundaryKey());
+}
+
+function renderModeLegend(el, mode) {
   const title = document.createElement('div');
   title.className = 'legend-title';
   title.innerHTML = icon(mode.icon, 18);

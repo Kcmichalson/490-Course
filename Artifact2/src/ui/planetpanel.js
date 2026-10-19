@@ -92,6 +92,10 @@ export function createPlanetPanel(body, { planet, season, radiusKm, onPlanet, on
     label: 'Day of year', min: 0, max: YEAR_DAYS - 1, step: 1, value: lastDay, unit: '',
     onCommit: debounceCommit((v) => { lastDay = v; onSeason(createSeason({ day: v })); }),
   });
+  // Annual Mean has no single day: the slider is off (releasing it used to
+  // switch the season to that day). Custom day in the select turns it on.
+  const dayHint = el('span', { className: 'hint' }, 'Annual Mean: pick a preset or Custom day to choose a day.');
+  day.element.append(dayHint);
   const lunar = createSlider({
     label: 'Lunar pull', ...PLANET_RANGES.lunarPull, step: 0.05, value: planet.lunarPull, unit: '× Moon',
     onCommit: debounceCommit((v) => onPlanet({ lunarPull: v })),
@@ -113,6 +117,8 @@ export function createPlanetPanel(body, { planet, season, radiusKm, onPlanet, on
     setSeason(s) {
       seasonSelect.set(s);
       if (!s.annual) { lastDay = s.day; day.set(s.day); }
+      day.setDisabled(Boolean(s.annual));
+      dayHint.hidden = !s.annual;
     },
     setRadius(km) { radius.set(km); },
   };

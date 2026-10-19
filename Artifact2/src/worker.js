@@ -5,6 +5,8 @@
 //               { type: 'build', id, kind, rgba, maskRgba?, settings, cfg }
 //               { type: 'coastDistance', id, category, cfg }
 //               { type: 'climate', id, grid, planet, season }  (M3 wind)
+//                 + M4 temperature: terrain { category, elevation } (sim
+//                 cells), thermalKey, boundaryKey, needContinentality
 // Messages out: { type: 'pong', id }
 //               { type: 'done', id, result } | { type: 'error', id, message }
 
@@ -12,6 +14,12 @@ import { buildTerrain } from './sim/importpipeline.js';
 import { signedCoastDistanceKm } from './sim/distance.js';
 import { PLANET_RADIUS_KM } from './sim/constants.js';
 import { runClimate } from './sim/pipeline.js';
+import { climateBoundaries } from './sim/boundaries.js';
+
+// The last continentality (the slow part of temperature) and boundary lines,
+// by key, so season changes reuse them.
+let lastThermal = { key: null, value: null };
+let lastBounds = { key: null, value: null };
 
 self.addEventListener('message', (e) => {
   const msg = e.data;
@@ -42,9 +50,27 @@ self.addEventListener('message', (e) => {
   if (msg.type === 'climate') {
     try {
       const started = performance.now();
-      const result = runClimate({ grid: msg.grid, planet: msg.planet, season: msg.season });
+      // Temperature (M4) reuses the last continentality and boundaries when
+      // their keys match: a season change doesn't rerun the tracer.
+      const terrain = msg.terrain ?? null;
+      const reuse = terrain && lastThermal.key === msg.thermalKey ? lastThermal.value : null;
+      const result = runClimate({ grid: msg.grid, planet: msg.planet, season: msg.season, terrain, continentality: reuse });
+      const timing = { continentality: null, boundaries: null };
+      if (terrain) {
+        timing.continentality = reuse ? 'cached' : Math.round(performance.now() - started);
+        lastThermal = { key: msg.thermalKey, value: result.continentality };
+        if (lastBounds.key !== msg.boundaryKey) {
+          const t0 = performance.now();
+          lastBounds = { key: msg.boundaryKey, value: climateBoundaries(msg.grid, msg.planet.tiltDeg, terrain, result.continentality.s) };
+          timing.boundaries = Math.round(performance.now() - t0);
+        } else timing.boundaries = 'cached';
+        result.boundaries = lastBounds.value; // copied, not transferred: kept for reuse
+        if (!msg.needContinentality) delete result.continentality;
+      }
       result.ms = Math.round((performance.now() - started) * 10) / 10;
+      result.timing = timing;
       const transfer = [result.u.buffer, result.v.buffer, result.speed.buffer, result.pressure.buffer];
+      if (result.temperature) transfer.push(result.temperature.buffer);
       for (const m of result.months ?? []) for (const f of ['u', 'v', 'speed', 'pressure']) transfer.push(m.profile[f].buffer);
       self.postMessage({ type: 'done', id: msg.id, result }, transfer);
     } catch (err) {

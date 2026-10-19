@@ -415,6 +415,26 @@ after calibration).
   −2 to −5 °C next to cold ones), fading inland.
 - **Land ice:** −5 °C albedo modifier (start).
 
+**M4 decisions** (recorded in LOG.md before implementing):
+- Q uses S0 = 1361 W/m² (no eccentricity). With the SPEC declination and
+  the 12 mid-month days, Tq = 26.3 °C at the equator and −25.0 °C at the
+  top row center (89.82°), so the Tq start values stand.
+- Tannual is the mean of the 12 monthly Tq values (unlagged). Land, land
+  ice, and lakes lag 15 days; ocean and sea ice 45 days. Annual Mean is the
+  mean of the 12 monthly temperatures, cell by cell.
+- Continentality is annual: the maritime tracer M is the mean of 12 monthly
+  tracers, each carried along that month's wind (direction only) in
+  semi-Lagrangian steps of one north-south cell, iterated to a change under
+  1e-4. Ocean and sea-ice cells are sources (M = 1); off the map of a
+  partial map counts as ocean. Distance term D = exp(−d / 300 km).
+  m = 1 − (1 − M)(1 − D), s = 0.15 + (0.5 − 0.15)(1 − m).
+- Lakes count as land for continentality; painted sea ice counts as ocean
+  (no modifier until M7). Lapse is linear below 0 m too. Sim cells use mean
+  land elevation (land), the lake surface (lakes), or 0 m (ocean); the
+  display and tooltip use each pixel's own elevation and category.
+- Until M7, ocean cells use the same model (air over the sea, s = 0.15),
+  not SST, and the ocean-current term is off.
+
 ## 7. Precipitation and rain shadows
 
 - Moisture is carried along the final wind field (semi-Lagrangian
@@ -630,6 +650,25 @@ Terrain mode definitions (M2b):
   offshore ramp on water, and a km legend. Lakes count as land. Reruns
   after imports, reloads, map settings, undo/redo, and strokes that change
   land/water.
+Climate mode definitions (M4; start values). All use full-resolution
+elevation. Modes 2–5 come from the 12 monthly means and ignore the
+selected season. Daily values are linear between mid-month means.
+- **Temperature:** the selected season (Annual Mean = 12-month mean),
+  5 °C bands from ≤ −40 to ≥ 40 °C, purple → blue → pale → yellow → red;
+  water drawn darker.
+- **Temperature Range:** warmest minus coldest month: 0–5, 5–10, 10–20,
+  20–30, 30–40, 40–50, > 50 °C.
+- **Growing Season:** days with a daily mean ≥ 5 °C: none, 1–60, …, 300–364,
+  all year. Land only.
+- **Frost/Snow/Permafrost** (land, first match): ice-cap climate (warmest
+  month < 0 °C), continuous permafrost (MAAT ≤ −8 °C), discontinuous
+  permafrost (MAAT ≤ −2 °C), lasting snow cover (coldest month < −3 °C;
+  assumes enough precipitation), frequent frost (coldest < 3 °C),
+  occasional frost (coldest < 12 °C), frost-free.
+- **Winter Severity:** freezing degree-days, Σ max(0, −T) over the days of
+  the year: 0, < 100, 100–500, 500–1,500, 1,500–3,000, 3,000–5,000,
+  > 5,000 °C·days. Land only.
+
 - **Shaded Relief** (toggle): light from the northwest, ×20 vertical
   exaggeration, blended with `overlay` at 60% over any mode (Original Art
   included). Land and seafloor are shaded; lakes stay flat.
@@ -645,6 +684,12 @@ together.
   Polar Front & Storm Tracks (M8), Climate Boundaries (M4; snowline, tree
   line, permafrost line, predicted ice edge), Hurricane Zones (M7),
   Coastal Fog (M7)
+- **Climate Boundaries (M4):** contour lines over land from the sim grid
+  (cell elevation), so they don't exactly trace the full-resolution mode
+  colors: tree line = warmest month 10 °C, snowline = warmest month 0 °C
+  (permanent snow; M5 may raise it in dry regions), permafrost line = mean
+  annual −2 °C. The predicted (sea-)ice edge needs SST and arrives in M7.
+  The legend shows a key while the toggle is on.
 - **Ocean:** Ocean Currents (M7; red = warm, blue = cold, green = upwelling),
   Seasonal Sea-Ice Edges (M7), Sailing Routes (M10)
 - **Coast:** Coastline Type (M9), Wave Exposure (M9), Harbor Suitability (M9).
@@ -652,7 +697,8 @@ together.
 
 ### 13.5 Lookups and controls
 - **Tile inspector** (hover tooltip, optional via View menu): latitude/
-  longitude, elevation, summer and winter temperature, annual precipitation,
+  longitude, elevation, summer and winter temperature (M4: the warmest and
+  coldest month at the pixel's elevation), annual precipitation,
   wind direction and speed, current type, tidal range, Köppen code, day
   length (M3), and a real-world climate analog from a small built-in table
   of real cities (M6).

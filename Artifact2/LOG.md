@@ -1738,6 +1738,297 @@ today with M2a.
 
 ---
 
+## 2026-10-19 — Milestone 4: Temperature
+
+**Planned** (plan rev 1, approved with my changes)
+- SPEC §6 temperature as pipeline steps 4 and 6 (step 5 still passes the
+  base wind through, so pass 2 equals pass 1 until M8): insolation, the
+  radiative temperature, the seasonal swing with a land/ocean lag, the
+  continentality tracer plus a distance-to-coast term, the lapse rate, and
+  the land-ice modifier. Modes: Temperature, Temperature Range, Growing
+  Season, Frost/Snow/Permafrost, Winter Severity. Toggle: Climate
+  Boundaries. Tooltip: summer and winter temperature (SPEC §13.5).
+- M3 leftover: the Day of year slider is disabled while Annual Mean is
+  selected.
+- Out of scope: precipitation (M5), SST, currents, and sea ice (M7),
+  monsoons (M8). No extras.
+
+**Changed (decisions recorded before implementing)**
+- Day of year slider: it was not inert in Annual Mean (releasing it
+  switched the season to that day). Disabled while Annual Mean is selected;
+  "Custom day" in the season select re-enables it at the last day.
+- Calibration: computed, not tuned. S0 = 1361 W/m², the SPEC declination,
+  12 mid-month days: Tq = 26.3 °C at the equator and −25.0 °C at the top
+  row center (89.82°). The SPEC formula stays as written.
+- TqAnn = the mean of the 12 monthly Tq (unlagged). Lag: land, land ice,
+  and lakes 15 days; ocean and sea ice 45 days. Annual Mean = the mean of
+  the 12 monthly temperatures, cell by cell.
+- Continentality is annual: the mean of 12 monthly maritime tracers (each
+  carried along that month's wind), blended with exp(−d/300 km) as
+  m = 1 − (1 − M)(1 − D); s = 0.15 + 0.35·(1 − m). Used for every season.
+- Tracer: semi-Lagrangian upwind steps of one north-south cell, the wind
+  direction only (not its speed), Gauss–Seidel in alternating sweep orders
+  until the change is under 1e-4 (max 200 sweeps). Wraps east-west; past a
+  pole the row is clamped; off the map (partial maps) counts as open ocean.
+- Lakes count as land for continentality (as in Distance from Coast) and
+  use the land lag. Painted sea ice counts as ocean (no modifier until M7).
+- Lapse −6.5 °C/km is linear below 0 m too (land below sea level is
+  warmer). Cells: land uses mean land elevation, lakes their surface,
+  ocean 0 m. The display and tooltip use each pixel's own elevation and
+  category.
+- Ocean temperature in M4 is the same radiative model (s = 0.15, 45-day
+  lag, 0 m), not SST. The ocean-current term, upwelling, auto sea ice, and
+  SST are deferred to M7; snow needing precipitation is M5.
+- Temperature runs when a temperature mode, Climate Boundaries, or the
+  hover tooltip is on, and then the wind runs with it (no longer lazy).
+- Mode thresholds (start values): growing season = days with a mean
+  ≥ 5 °C; frost classes by coldest month (12, 3, −3 °C), MAAT (−2, −8 °C),
+  and warmest month < 0 °C (ice cap); winter severity = freezing
+  degree-days. Temperature scale fixed −40…+40 °C in 5 °C steps.
+- Climate Boundaries from the sim grid (marching squares, cell elevation):
+  tree line = warmest month 10 °C, snowline = warmest month 0 °C,
+  permafrost line = MAAT −2 °C. The predicted ice edge needs SST: M7.
+- Tooltip summer/winter = the warmest and coldest month (with month names).
+- Display performance (your change): every new mode's full render is timed
+  at 5632×2048; anything over ~200 ms on the main thread moves to the
+  worker or is chunked.
+- `CURRENT_MILESTONE` becomes `'4'` at the start of the build; nothing is
+  pushed until M4 is ticked.
+- Decided during the build (measured, see Problems): the tracer tolerance
+  is 1e-3, not the planned 1e-4; each update solves pairs of cells that
+  draw their air from each other exactly; the five modes render in time
+  slices; boundary contours are computed in the worker.
+
+**Built**
+- src/sim/temperature.js: daily-mean insolation, Tq, lagged Tq row tables
+  (season and monthly), lapse, land ice, cell surface elevation, cell
+  temperatures (steps 4 and 6).
+- src/sim/continentality.js: the maritime tracer (precomputed upwind
+  stencils, Gauss–Seidel in four sweep orders, exact self and pair
+  solves), the sea-distance term (reusing `distanceToFeatureKm`), and `s`.
+- src/sim/climatestats.js: growing days and freezing degree-days (closed
+  form between mid-months), curve stats, frost classes, marching squares.
+- src/sim/boundaries.js: tree line, snowline, and permafrost contours.
+- src/sim/climatefield.js: per-pixel classes and temperatures at each
+  pixel's own elevation and category.
+- src/sim/pipeline.js: `runClimate` takes an optional terrain and a reused
+  continentality; pass 2 reuses pass 1 while the final wind is the base wind.
+- src/sim/climatecache.js: `thermalKey` and `temperatureKey`; results stored
+  under their own key; temperature bytes counted.
+- Worker: the climate job takes the sim terrain, reuses the last
+  continentality and boundaries by key, and reports timings.
+- main.js: `simVersion` and `landVersion` (a stroke reruns the tracer only
+  if a sim cell changed category); temperature runs with a temperature
+  mode, Climate Boundaries, or the tooltip on; one climate job at a time;
+  the tooltip line "Summer … (Jul) · Winter … (Jan)" and mode readouts.
+- src/render/climateraster.js plus five mode renderers: chunked full-res
+  raster; brush strokes recompute just their rectangle (live lapse).
+- src/render/climateboundaries.js: crisp screen-space lines with halos;
+  the legend shows a key while the toggle is on; the legend now scrolls
+  instead of growing past the map (max-height).
+- Planet panel: Day of year disabled with a hint in Annual Mean.
+- New `:root` colors: tree line, snowline, permafrost line, halo.
+
+**Problems**
+- **Encoding damage, my mistake, repaired.** I edited continentality.js
+  and constants.js with Windows PowerShell 5.1 (`Get-Content -Raw` then
+  `Set-Content -Encoding utf8`). It read the UTF-8 files as ANSI and
+  wrote them back with a BOM, so every non-ASCII character became mojibake
+  (− → "âˆ’", ° → "Â°", …). Repaired with a Python script that maps each
+  character back to its Windows-1252 byte and decodes the bytes as UTF-8
+  (no BOM). My first verification script was itself saved as ASCII, so its
+  search patterns became "?" and it flagged every file containing a
+  ternary. That check proved nothing; you caught it (Prompt 3). The
+  re-check (a script written as UTF-8, patterns as \u escapes, with a
+  self-test): all 31 files changed this milestone decode as UTF-8, none has
+  a BOM, and none contains "Ã", "Â", "â€", or U+FFFD, except LOG.md, which
+  quotes them on purpose in three lines (this paragraph, the one above,
+  and Prompt 3), added after the check (Grep confirmed those are the only
+  hits). `git diff` of
+  constants.js shows only my 53 inserted lines (every committed line is
+  byte-identical); continentality.js is new. From then on, edits went
+  through the Edit tool or Python only.
+- **Tracer convergence.** The first version took ~100 sweeps per month
+  (6.6 s at 1024 in Node). Cause 1: an upwind point less than a cell away
+  lands partly on the cell itself, so each update moved only part of the
+  way. Fixed by solving that share exactly. Cause 2 (the main one): under
+  the pressure highs, pairs of cells draw their air from each other, and
+  sweeps shrink that error only by ≈ decay² ≈ 0.95 each. Over-relaxation
+  (SOR 1.5) never converged (200 sweeps every month), and starting each
+  month from the previous month's answer was slower (the divergence lines
+  move). Both were reverted (SOR stays at 1.0). Fixed by a two-cell
+  lookahead that solves such pairs exactly: 18–28 sweeps.
+- **Tolerance changed from 1e-4 to 1e-3**, measured against a near-exact
+  solve (tolerance 1e-7) on one month: the largest tracer error is
+  1.95e-3 at 1024 and 3.51e-3 at 2048. That moves s by at most 0.0012,
+  under 0.1 °C even for a 70 °C radiative swing. At 1e-4 it took 26–42
+  sweeps instead of 18–28.
+- **2048 is over my 3 s estimate.** Continentality takes 4.8 s in Node
+  and 7.0 s in the browser worker on the Earth heightmap (1.0 s / 1.6 s at
+  1024). It runs in the worker, so the UI stays responsive, and only after
+  terrain or planet changes (or a stroke that changes land/water); later
+  seasons take 30–57 ms. The method was not changed to hide this; the
+  options are under Next.
+- **A test expectation I changed (new test, not an existing one):** the
+  off-map tracer test first expected the west-edge cell of a 1° grid to
+  read above 0.95. The code gave 0.9286. The expectation was wrong: the
+  tracer always steps one full north-south cell back (dy = 111 km on a
+  1° grid), so a cell next to a source decays by at least one step,
+  exp(−111/1500) = 0.929. The test now expects at least that bound (−0.01).
+  At the default 1024 grid the same floor is one 39 km step, negligible
+  next to 1,500 km.
+- My planned Earth sample labels assumed Earth's westerlies at 62°N. With
+  the SPEC bands, 62°N in January sits in the polar easterlies (the
+  polar front is at ≈ 56°N then), so the Okhotsk coast is the windward
+  one there and W Norway the leeward one. The check (interior vs. coasts)
+  is unaffected.
+- The browser's long-task observer didn't fire here (a deliberate 80 ms
+  block went unseen), so main-thread blocking was measured with an
+  event-loop heartbeat instead, after confirming it caught that 80 ms block.
+
+**Verification checks**
+- PASS `node --test "tests/*.test.js"`: 191/191 (170 before M4). New:
+  temperature (7), continentality (6), climatestats (7), registry M4 (1).
+  Changed expectations, as allowed: comingsoon (M4 current) and registry
+  (the M3 test's "Temperature stays M4" check moved into the M4 test).
+- Timings, continentality (12 monthly tracers) + one season:
+
+  | Grid | Node | Browser worker |
+  |---|---|---|
+  | 1024 × 512 | 1.0 s (synthetic) | 1.56 s (GEBCO); boundaries 78 ms |
+  | 2048 × 1024 | 4.8 s (synthetic) | 7.0 s (GEBCO); boundaries 197 ms |
+  | later season, tracer reused | 7–9 ms / 27–35 ms | 13–19 ms / 57 ms |
+
+- Display at 5632×2048 (browser, synthetic map with 35% land, sliced):
+
+  | Mode | Compute | Wall | Longest main-thread block |
+  |---|---|---|---|
+  | Temperature | 521 ms | 636 ms | 25 ms |
+  | Temperature Range | 852 ms | 1,084 ms | 50 ms |
+  | Growing Season | 693 ms | 905 ms | 25 ms |
+  | Frost/Snow/Permafrost | 517 ms | 664 ms | 26 ms |
+  | Winter Severity | 673 ms | 872 ms | 23 ms |
+
+  Unsliced in Node they took 185–397 ms each, over the ~200 ms limit, hence
+  the slices.
+- PASS Earth sample points (GEBCO heightmap + BW mask, sea level 128, max
+  5,000 m, 1024 sim, browser worker):
+  - Equator (SPEC: 25–28 °C), annual: Pacific 26.3 °C, Amazon 26.2 °C,
+    Congo (291 m) 24.4 °C; equator rows' zonal mean 25.9 °C.
+  - Poles (SPEC: below −15 °C), annual: North Pole −24.9 °C; South Pole
+    −37.3 °C (cell 1,919 m).
+  - Siberia, coldest month: Yakutsk −32.0 °C vs. Okhotsk coast −18.5 °C
+    (13.5 °C colder) and W Norway (262 m) −22.8 °C (9.2 °C colder).
+  - Canada, coldest month: Winnipeg −20.7 °C vs. Vancouver Is. (489 m)
+    −10.4 °C and Newfoundland −7.5 °C (10.3 and 13.2 °C colder).
+  - Mountains, annual: Tibet (3,455 m) −8.8 °C vs. Punjab (332 m) 11.5 °C:
+    −20.3 °C, exactly −6.5 °C/km × 3,123 m. Altiplano (2,871 m) 4.4 °C vs.
+    the Bolivian lowland (125 m) 22.3 °C: −17.9 °C (lapse predicts
+    −17.85).
+  - Absolute values in NW Europe are far too cold (W Norway's coldest month
+    −22.8 °C vs. real ≈ +1 °C): no Gulf Stream until M7.
+- PASS Browser, non-visual (http://localhost:8000 in the app's own pane):
+  no console errors. On load the tooltip runs temperature ("Sim:
+  temperature 253 ms (continentality 206 ms)"). Annual Mean: the Day of
+  year slider and its number box are disabled and the hint shows.
+  Northern Summer Solstice re-enables them at 172 with "continentality
+  reused" (27 ms). Back to Annual Mean: "(cached)". 1024 boundaries:
+  4,086 tree-line, 3,244 snowline, and 2,447 permafrost segments.
+- By-eye checklist below: yours. M4 stays unticked until then.
+
+**By-eye checklist (your browser, ~1280 px wide, http://127.0.0.1:8000)**
+Setup: File > Import Map Image… → `gebco_bathy_heightmap.jpg` as
+Heightmap, sea level 128, the BW PNG as the mask, max height 5,000 m.
+1. Climate > Temperature (2, then E), Annual Mean: rows of color fill in
+   top to bottom within ~1 s, and the map stays pannable while they do.
+   Tropics orange/red; Antarctica, Greenland, and Tibet purple/blue; the
+   Andes a cold line down South America; oceans the same colors, darker.
+   The legend lists 9 bands and fits without covering the zoom controls.
+2. Season → Northern Summer Solstice: Siberia and Canada turn
+   yellow/orange (≈ 10–20 °C), and southern continents cool. Southern
+   Summer Solstice: the reverse; Siberia deep blue/purple.
+3. Temperature Range (R): darkest (> 40 °C) over NE Siberia and northern
+   Canada; palest (< 5 °C) over equatorial oceans; coasts paler than
+   interiors.
+4. Growing Season (T): tropics dark green (all year); the Arctic and
+   Antarctica "none"; Tibet and the Andes much lighter than nearby
+   lowlands; water muted blue-gray.
+5. Frost/Snow/Permafrost (Y): an ice-cap white over Antarctica and
+   Greenland; purple permafrost bands across Siberia and N Canada; light
+   blue snow cover over the mid-latitude interiors; tan frost-free tropics.
+6. Winter Severity (U): darkest navy in NE Siberia; none in the tropics;
+   the tooltip reads "Winter: N freezing degree-days".
+7. Overlays > Climate Boundaries: green tree line near the Arctic coasts
+   and around Tibet/Andes, dashed white snowline over Antarctica,
+   Greenland, and the highest mountains, dotted purple permafrost line
+   across Siberia/Canada. Lines stay crisp when zoomed, continue across the
+   date line, and stop at coasts. The legend adds a "Climate Boundaries"
+   key, which mentions the ice edge coming in M7. The lines follow the sim
+   grid, so they don't exactly trace the mode colors (as agreed).
+8. Tooltip anywhere: "Summer … (month) · Winter … (month)". Over Yakutsk
+   the winter is ≈ −32 °C; over the Okhotsk coast ≈ −18 °C. **Note:
+   absolute temperatures in NW Europe stay far too cold until M7 (no
+   Gulf Stream yet); only the relative interior-vs-coast check applies
+   in M4.**
+9. Sculpt > Raise on a lowland with Temperature showing: the painted area
+   turns colder during the stroke; the status bar says "continentality
+   reused" afterwards (elevation only). Draw Land in the ocean: after
+   letting go, the tracer reruns (the status shows its time) and the map
+   redraws.
+10. Planet panel in Annual Mean: Day of year greyed out with the hint
+    "Annual Mean: pick a preset or Custom day…"; choosing Custom day
+    enables it.
+11. ~1280 px: nothing clipped; the legend doesn't cover the toggles
+    dropdown or the zoom controls (it scrolls if taller than the map).
+
+**Next**
+- After your checklist: tick M4, commit, push. Not started: M5.
+- 2048 continentality (7 s in the browser): your decision (Prompt 4) is to
+  keep the method as is. Capping the tracer grid at 1024 and upsampling
+  remains an idea only, not built.
+
+---
+
+## 2026-10-19 — Session 6 prompt log (M4)
+
+### Prompt 1
+* **User Prompt:**  
+  > *[Read CLAUDE.md, SPEC.md, and LOG.md; M3 is done; we're doing M4 (Temperature). Start a "Session 6 prompt log". In Plan mode, propose the M4 files, data flow, and tests; no code until approved. First, the M3 leftover: does the Day of year slider do anything in Annual Mean? If not, disable it there. Scope: SPEC §6, §12 steps 4 and 6, the five M4 modes, Climate Boundaries, summer/winter in the tooltip. The plan should cover: the pipeline and what reruns (pass 2 vs. pass 1, wind no longer lazy, terrain in the cache key, whether a stroke reruns the whole map); the missing SST; checking the Tq calibration with a stated solar constant; lag and Annual Mean; the tracer (iterations, convergence, wrap, cos-latitude spacing, distance term, lakes, land below sea level, timings); lapse rate and full-resolution display; each mode's definition, colors, thresholds; boundary definitions; Earth sample points run in the browser worker. Tests listed; fix code, not expectations; list which existing tests change. Verification, ambiguities, extras as suggestions only. Stop after the plan.]*
+* **What the AI Provided:**  
+  Read the docs and the M3 code. Found that the Day slider is not inert in Annual Mean (releasing it switches to that day). Computed the calibration in Python (Node was not on this shell's PATH): S0 = 1361 W/m² gives 26.3 °C at the equator and −25.0 °C at the poles, so no tuning. Wrote plan rev 1: pipeline and rerun table, deferred SST items, lag, the tracer design with timing estimates, lapse rate and per-pixel display, mode and boundary definitions, sample points, tests, verification, 16 ambiguities, and extras.
+
+### Prompt 2 (my reply to the plan-approval prompt)
+* **User Prompt:**  
+  > *[Approved with changes: A14, this is a different computer; Node.js LTS is now installed at the default location (use "C:\Program Files\nodejs\node.exe" if `node` isn't on PATH); confirm the version and that `py serve.py` works, and tell me if Python is missing instead of working around it. Time a full render of each new mode at 5632×2048; anything that blocks the main thread over ~200 ms moves to the worker or is chunked; report it. A1–A13, A15, A16: your defaults (sim-grid boundary lines won't exactly trace the full-resolution colors). No extras. The checklist must say NW Europe stays too cold until M7; only the relative interior-vs-coast check applies. Then step 0 and build M4; only comingsoon and registry expectations may change. Stop with the checklist and a commit message; don't start M5.]*
+* **What the AI Provided:**  
+  Confirmed Node v24.22.0 (by full path; not on this shell's PATH yet) and Python 3.14.6; `py serve.py` served the app with no console errors, and the existing suite passed 170/170. Then step 0 (this log, SPEC), then the build (see the M4 entry).
+* **Root Cause Discovered:**  
+  - Encoding damage I caused: Windows PowerShell 5.1 read two UTF-8 files as ANSI and wrote them back, turning non-ASCII characters into mojibake. Repaired with Python.
+  - Slow tracer: an upwind point less than a cell away sampled the cell itself, and pairs of cells under pressure highs fed each other. Fixed with exact self and pair solves.
+  - My new off-map test expected more than the method allows (one full step of decay); the expectation was fixed with that reasoning.
+* **How It Was Verified:**  
+  - Encoding: see Prompt 3.
+  - Tracer: sweeps fell from ~100 to 18–28 per month. The tolerance change was measured against a near-exact solve (largest error 3.5e-3 at 2048). Tests 191/191.
+  - Display: every mode at 5632×2048 blocks the main thread ≤ 50 ms (event-loop heartbeat, checked against a deliberate 80 ms block).
+
+### Prompt 3 (sent while Claude was working)
+* **User Prompt:**  
+  > *[Before the final report: re-check every file changed this milestone for encoding damage with a working script (the earlier check was saved as ASCII, so its patterns became "?" and it flagged every file with a ternary). Decode each as UTF-8, report any BOM, and search for "Ã", "Â", "â€", and U+FFFD. Also record in the M4 entry: the encoding incident and its repair, the tolerance change to 1e-3 with the measured error, the 2048 continentality timing over the 3 s estimate, and the changed expectation in the off-map tracer test with its reasoning.]*
+* **What the AI Provided:**  
+  A new check script, written with the Write tool as UTF-8, with the patterns as \u escapes and a self-test that they aren't "?" and that a mojibake sample is found. Run on all 31 files git lists as changed or new; recorded all four items in the M4 entry's Problems.
+* **Where the Model Misread Me:**  
+  Not a misreading; my own verification was broken. The first check script was piped through PowerShell as ASCII, so I treated "flagged" results as noise instead of noticing that the check itself was damaged.
+* **How It Was Verified:**  
+  All 31 files decode as UTF-8, none has a BOM, and none contains the four sequences; the script's self-test passed. `git diff` of constants.js shows 53 insertions and no removed lines.
+
+### Prompt 4 (answer to Claude's question)
+* **User Prompt:**  
+  > *"Keep the 2048 continentality method as is; I'll run the M4 checklist."*
+* **What the AI Provided:**  
+  Recorded the decision in the M4 entry's Next (no code change) and suggested a commit message. M4 stays unticked until the checklist results arrive.
+
+---
+
 ## Entry template
 
 ## YYYY-MM-DD — Milestone N: Name

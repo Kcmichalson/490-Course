@@ -10,7 +10,12 @@ import { createEdits, cloneEdits, writableTerrain, composeRect, addDirty, isEmpt
 import { applyDab, strokeDabs, BRUSH_IDS } from './sim/brushes.js';
 import { liveState, snapshotOf, stateEntry, strokeEntry, bitmapsOf, hasImport, withArt } from './sim/mapstate.js';
 import { createPlanet, createSeason, dayLengthText } from './sim/planet.js';
-import { createClimateCache, climateKey } from './sim/climatecache.js';
+import { createClimateCache, climateKey, thermalKey, temperatureKey } from './sim/climatecache.js';
+import { simSurfaceElevation } from './sim/temperature.js';
+import { pixelTemperature, pixelMonths } from './sim/climatefield.js';
+import {
+  curveStats, growingDays, freezingDegreeDays, frostClass, FROST_LABELS, MONTH_NAMES,
+} from './sim/climatestats.js';
 import {
   pixelToLatLon, latLonToPixel, sourcePixel, sourceToSimCell, formatLatLon, parseLatLon, wrapX,
 } from './sim/coords.js';
@@ -21,6 +26,8 @@ import { MapView } from './render/mapview.js';
 import { CATEGORIES, getMode, modesInCategory } from './render/modes.js';
 import { OVERLAYS, defaultOverlayState } from './render/overlays.js';
 import { renderLegend } from './render/legend.js';
+import { TEMPERATURE_MODES } from './render/modes/index.js';
+import { setClimateRasterListener, climateCtx } from './render/climateraster.js';
 import { TOOLS, getTool, DEFAULT_TOOL_ID, getBrush, DEFAULT_BRUSH_ID } from './ui/tools.js';
 import { isAvailable } from './ui/comingsoon.js';
 import {
@@ -111,6 +118,9 @@ const state = {
 //   source   the imported image(s) and settings, for Reload and Map settings
 // `version` changes on every wholesale change, so cached base layers know
 // they are stale; strokes redraw just their dirty rectangles instead.
+// `simVersion` changes whenever the sim grid changes (cell elevations), and
+// `landVersion` only when a sim cell's category changes (the land/sea
+// layout the continentality tracer follows, M4).
 const startBase = blankTerrain(state.map.sourceWidth, state.map.sourceHeight);
 const startSim = downsampleTerrain(startBase, state.map);
 const store = {
@@ -121,8 +131,12 @@ const store = {
   sim: startSim,
   source: null,
   version: 1,
+  simVersion: 1,
+  landVersion: 1,
   coast: null, // Distance from Coast result: { data, width, height, version, mask }
-  climate: null, // wind result on show: { result, grid, key, version }
+  // climate result on show: { result, grid, key, version, planet, season,
+  // thermal (continentality { s, maritime, coast } when temperature ran) }
+  climate: null,
 };
 
 function savePrefs() {
@@ -256,17 +270,53 @@ function updateHover() {
   inspector.show(hover.x, hover.y, {
     latLon: text,
     elevation: formatMeters(meters),
-    lines: [dayLengthText(ll.lat, state.planet, state.season), windReadout(src), modeReadout(px, cell)],
+    lines: [dayLengthText(ll.lat, state.planet, state.season), temperatureReadout(px), windReadout(src), modeReadout(px, cell)],
     ...px,
     ...cell,
   });
 }
 
-// The current wind result, if it matches the map, planet, and season (else
-// null: e.g. no wind view is on, or a new run hasn't arrived yet).
+// The current climate result, if it matches the map, planet, season, and
+// terrain (else null: e.g. no climate view is on, or a new run hasn't
+// arrived yet).
 function currentClimate() {
   const c = store.climate;
-  return c && c.key === climateKey(climateGrid(state.map), state.planet, state.season) ? c : null;
+  return c && c.key === climateRequest().key ? c : null;
+}
+
+const fmtC = (t) => `${t < 0 ? '−' : ''}${Math.abs(t).toFixed(1)} °C`;
+
+// "Summer 18.2 °C (Jul) · Winter −31.5 °C (Jan)" (SPEC 13.5): the warmest
+// and coldest month at this pixel's own elevation. '' until temperature runs.
+// While a stroke's sim update is pending it still shows the last result.
+function temperatureReadout(px) {
+  const c = store.climate;
+  const ctx = c?.thermal ? climateCtx('monthly', state.map, store.terrain, c) : null;
+  if (!ctx) return '';
+  const st = curveStats(pixelMonths(ctx, px.px, px.py));
+  return `Summer ${fmtC(st.warmest)} (${MONTH_NAMES[st.warmMonth]}) · Winter ${fmtC(st.coldest)} (${MONTH_NAMES[st.coldMonth]})`;
+}
+
+// The temperature modes' own readouts.
+function temperatureModeReadout({ px, py }) {
+  const c = store.climate;
+  if (!c?.thermal) return '';
+  if (state.modeId === 'temperature') {
+    const ctx = climateCtx('season', state.map, store.terrain, c);
+    return ctx ? `Temperature ${fmtC(pixelTemperature(ctx, px, py))} (${c.season.annual ? 'Annual Mean' : `day ${c.season.day}`})` : '';
+  }
+  const ctx = climateCtx('monthly', state.map, store.terrain, c);
+  if (!ctx) return '';
+  const i = py * store.terrain.width + px;
+  const water = !isLand(store.terrain, i);
+  const t = pixelMonths(ctx, px, py);
+  const st = curveStats(t);
+  if (state.modeId === 'temp-range') return `Range ${(st.warmest - st.coldest).toFixed(1)} °C (warmest − coldest month)`;
+  if (water) return '';
+  if (state.modeId === 'growing-season') return `Growing season ${Math.round(growingDays(t))} days (mean ≥ 5 °C)`;
+  if (state.modeId === 'winter-severity') return `Winter: ${Math.round(freezingDegreeDays(t)).toLocaleString('en-US')} freezing degree-days`;
+  if (state.modeId === 'frost') return `${FROST_LABELS[frostClass(st.warmest, st.coldest, st.mean)]} (mean annual ${fmtC(st.mean)})`;
+  return '';
 }
 
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
@@ -291,6 +341,7 @@ function modeReadout({ px, py }, cell) {
     const p = c.result.pressure[cell.j * c.grid.width + cell.i];
     return `Pressure: ${p >= 0 ? 'high' : 'low'} (${p >= 0 ? '+' : '−'}${Math.abs(p).toFixed(2)})`;
   }
+  if (TEMPERATURE_MODES.has(state.modeId)) return temperatureModeReadout({ px, py });
   if (state.modeId !== 'slope') return '';
   const i = py * store.terrain.width + px;
   if (!isLand(store.terrain, i)) return 'Ruggedness (TRI): water';
@@ -336,7 +387,7 @@ function refreshUI() {
   overlayPanel.update(state.overlays);
   contextbar.setTool(state.toolId, state.toolId === 'sculpt' ? sculptPanel.element : null);
   const legend = $('legend');
-  renderLegend(legend, getMode(state.modeId));
+  renderLegend(legend, getMode(state.modeId), state.overlays);
   legend.hidden = !state.legendOn;
   navigation.updateCursor();
 }
@@ -386,6 +437,7 @@ function setOverlay(id, on) {
 function setTooltip(on) {
   state.tooltipOn = on;
   savePrefs();
+  ensureClimate(); // the tooltip shows summer and winter temperature
   updateHover();
 }
 
@@ -422,6 +474,8 @@ function applySnapshot(snap, { keepView = false } = {}) {
     base: live.base, baseSim: live.baseSim, edits: live.edits, terrain: live.terrain, sim: live.sim, source: live.source,
   });
   store.version++;
+  store.simVersion++;
+  store.landVersion++;
   markCoastStale();
   // A wind result for another sim grid or latitude range can't be drawn here.
   if (store.climate && climateGridKey(store.climate.grid) !== climateGridKey(climateGrid(state.map))) store.climate = null;
@@ -470,7 +524,21 @@ let simTimer = 0;
 // base grid on the first edit).
 function rebuildSim(rects) {
   if (store.sim === store.baseSim) store.sim = cloneSim(store.baseSim);
-  for (const r of rects) downsampleRegion(store.terrain, state.map, store.sim, r);
+  const before = store.sim.category.slice();
+  let landChanged = false;
+  for (const r of rects) {
+    const cells = downsampleRegion(store.terrain, state.map, store.sim, r);
+    if (!cells || landChanged) continue;
+    for (let j = cells.j0; j < cells.j1 && !landChanged; j++) {
+      for (let i = cells.i0; i < cells.i1; i++) {
+        const k = j * store.sim.width + i;
+        if (before[k] !== store.sim.category[k]) { landChanged = true; break; }
+      }
+    }
+  }
+  store.simVersion++;
+  if (landChanged) store.landVersion++; // the tracer reruns over the whole map
+  ensureClimate();
 }
 
 // The sim recomputes when a stroke ends (debounced), not during it.
@@ -597,60 +665,112 @@ function ensureCoast() {
     });
 }
 
-// ---- Wind (SPEC 4, 12): a worker job per season, cached per season, and
-// run lazily: only while the Wind Speed & Pressure mode, Wind Arrows, or
-// Pressure & ITCZ is showing. Until a new result arrives the views show the
-// previous one. A newer request supersedes an older one; late results are
-// still cached under their own key. ----
+// ---- Climate (SPEC 4, 6, 12): a worker job per season, cached per season.
+// Wind alone runs while a wind view is showing (M3). Temperature (M4) runs
+// while a temperature mode, Climate Boundaries, or the hover tooltip (summer
+// and winter temperature) is on, and then the wind runs with it, since
+// temperature follows the wind. Temperature keys add the terrain (sim and
+// land versions) and the km grid. Until a new result arrives the views show
+// the previous one. One job runs at a time; when it ends, the latest
+// settings are requested next (so a burst of strokes doesn't queue up whole
+// tracer runs). ----
 
 const climateCache = createClimateCache();
-const climateJob = { generation: 0, pendingKey: null };
+const climateJob = { busy: false };
 
-// The sim grid the wind runs on (wind is zonal in M3: longitude doesn't matter).
+// Continentality layers by thermal key (the slow part; season-independent).
+// A few are kept, so switching back and forth doesn't rerun the tracer.
+const thermals = new Map();
+function rememberThermal(key, value) {
+  thermals.delete(key);
+  thermals.set(key, value);
+  while (thermals.size > 3) thermals.delete(thermals.keys().next().value);
+}
+
+// The sim grid the climate runs on, with its km size (radius, span, wrap).
 function climateGrid(map) {
-  return { ...simGridSize(map), latTop: map.latTop, latBottom: map.latBottom };
+  return {
+    ...simGridSize(map), latTop: map.latTop, latBottom: map.latBottom, lonSpan: map.lonSpan, wraps: map.wraps, radiusKm: map.radiusKm,
+  };
 }
 const climateGridKey = (g) => `${g.width}x${g.height}|${g.latTop}|${g.latBottom}`;
 
 const windViewShown = () => state.modeId === 'wind-pressure' || Boolean(state.overlays['wind-arrows'] || state.overlays['pressure-itcz']);
+const temperatureViewShown = () => TEMPERATURE_MODES.has(state.modeId) || Boolean(state.overlays['climate-boundaries']);
+const temperatureNeeded = () => temperatureViewShown() || state.tooltipOn;
 
-function showClimate(result, grid, key) {
-  store.climate = { result, grid, key, version: (store.climate?.version ?? 0) + 1 };
+// What the current settings need: { grid, planet, season, key, temp, thermalKey?, boundaryKey? }.
+function climateRequest() {
+  const grid = climateGrid(state.map);
+  const { planet, season } = state;
+  if (!temperatureNeeded()) return { grid, planet, season, temp: false, key: climateKey(grid, planet, season) };
+  const tk = thermalKey(grid, planet, store.landVersion);
+  return {
+    grid, planet, season, temp: true, thermalKey: tk, boundaryKey: `${tk}|sim${store.simVersion}`,
+    key: temperatureKey(grid, planet, season, store.landVersion, store.simVersion),
+  };
+}
+
+function showClimate(result, req) {
+  store.climate = {
+    result, grid: req.grid, key: req.key, planet: req.planet, season: req.season,
+    thermal: req.temp ? thermals.get(req.thermalKey) ?? null : null,
+    version: (store.climate?.version ?? 0) + 1,
+  };
   requestDraw();
+  updateHover();
+}
+
+function simText(result, temp) {
+  if (!temp) return `Sim: wind ${result.ms} ms`;
+  const c = result.timing?.continentality;
+  return `Sim: temperature ${Math.round(result.ms)} ms (continentality ${c === 'cached' ? 'reused' : `${c} ms`})`;
 }
 
 function ensureClimate() {
-  if (!worker || !windViewShown()) return;
-  const grid = climateGrid(state.map);
-  const { planet, season } = state;
-  const key = climateKey(grid, planet, season);
-  if (store.climate?.key === key) return;
-  const cached = climateCache.get(key);
-  if (cached) {
-    statusbar.setSim('Sim: wind (cached)');
-    showClimate(cached, grid, key);
+  if (!worker || (!temperatureNeeded() && !windViewShown())) return;
+  const req = climateRequest();
+  if (store.climate?.key === req.key) return;
+  const cached = climateCache.get(req.key);
+  if (cached && (!req.temp || thermals.has(req.thermalKey))) {
+    statusbar.setSim(req.temp ? 'Sim: temperature (cached)' : 'Sim: wind (cached)');
+    showClimate(cached, req);
     return;
   }
-  if (climateJob.pendingKey === key) return;
-  climateJob.pendingKey = key;
-  const generation = ++climateJob.generation;
-  statusbar.setSim('Sim: computing wind…');
-  worker.request('climate', { grid, planet: { ...planet }, season: { ...season } })
+  if (climateJob.busy) return; // the running job asks again when it ends
+  climateJob.busy = true;
+  statusbar.setSim(req.temp ? 'Sim: computing temperature…' : 'Sim: computing wind…');
+  const msg = { grid: req.grid, planet: { ...req.planet }, season: { ...req.season } };
+  const transfer = [];
+  if (req.temp) {
+    const terrain = { category: store.sim.category.slice(), elevation: simSurfaceElevation(store.sim) };
+    Object.assign(msg, {
+      terrain, thermalKey: req.thermalKey, boundaryKey: req.boundaryKey, needContinentality: !thermals.has(req.thermalKey),
+    });
+    transfer.push(terrain.category.buffer, terrain.elevation.buffer);
+  }
+  worker.request('climate', msg, transfer)
     .then((result) => {
-      const main = climateCache.put(grid, planet, result);
-      if (generation !== climateJob.generation) return; // superseded; kept in the cache
-      statusbar.setSim(`Sim: wind ${result.ms} ms`);
-      if (climateKey(climateGrid(state.map), state.planet, state.season) === key) showClimate(main, grid, key);
+      if (result.continentality) rememberThermal(req.thermalKey, result.continentality);
+      const main = climateCache.put(req.grid, req.planet, result, req.key);
+      statusbar.setSim(simText(result, req.temp));
+      if (climateRequest().key === req.key) showClimate(main, req);
     })
     .catch((err) => {
-      statusbar.setSim('Sim: wind failed');
-      contextbar.flash(`Wind simulation failed: ${err.message}`, 8000);
+      statusbar.setSim('Sim: climate failed');
+      contextbar.flash(`Climate simulation failed: ${err.message}`, 8000);
     })
     .finally(() => {
-      if (climateJob.pendingKey === key) climateJob.pendingKey = null;
-      ensureClimate(); // settings changed again while this one ran
+      climateJob.busy = false;
+      ensureClimate(); // settings changed while this one ran
     });
 }
+
+// The chunked temperature raster reports its rows as they arrive.
+setClimateRasterListener(({ done, ms, mode }) => {
+  requestDraw();
+  if (done) statusbar.setSim(`Sim: ${mode} drawn in ${Math.round(ms)} ms (in slices)`);
+});
 
 // ---- Planet settings (SPEC 3). Rotation, spin, tilt, lunar pull, and the
 // season are settings (persisted, not undoable). The radius is part of the

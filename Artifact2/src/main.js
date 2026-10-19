@@ -1025,6 +1025,17 @@ async function setArtImage() {
   contextbar.flash(`Art image: ${picked.file.name}. Original Art (1, Q) shows it.${note ? ` ${note}` : ''}`, note ? 8000 : 4000);
 }
 
+// File > Load Sample Map: opens the import dialog with a bundled test map
+// (relative path, so it works locally and on GitHub Pages). Without a file
+// handle, Reload falls back to the file picker.
+const SAMPLE_MAP = './test-maps/continent_map_2.png';
+async function loadSampleMap() {
+  const res = await fetch(SAMPLE_MAP);
+  if (!res.ok) throw new Error(`${SAMPLE_MAP} (${res.status})`);
+  const blob = await res.blob();
+  await importDialog.open({ file: new File([blob], 'continent_map_2.png', { type: blob.type || 'image/png' }) });
+}
+
 function removeArtImage() {
   if (busy || stroke || !store.source?.art) return;
   commitState('Remove Art Image', { ...currentState(), source: withArt(store.source, null) }, { keepView: true });
@@ -1128,6 +1139,7 @@ createMenuBar($('menubar'), [
       { label: 'New Map…', action: () => newMapDialog.open(state.map) },
       { separator: true },
       { label: 'Import Map Image…', milestone: '2a', action: () => importDialog.openFromPicker().catch((err) => contextbar.flash(err.message, 8000)) },
+      { label: 'Load Sample Map', milestone: '2a', action: () => loadSampleMap().catch((err) => contextbar.flash(`Sample map failed: ${err.message}`, 8000)) },
       { label: 'Reload Map Image', shortcut: 'Ctrl+Shift+R', milestone: '2a', action: reloadMap },
       { label: 'Art Image…', milestone: '2b', action: () => setArtImage().catch((err) => contextbar.flash(`Art image failed: ${err.message}`, 8000)) },
       { label: 'Remove Art Image', milestone: '2b', disabled: !store.source?.art, action: removeArtImage },

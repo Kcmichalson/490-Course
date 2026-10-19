@@ -1,5 +1,5 @@
 // Status bar: cursor lat/lon, elevation (M2a), climate code (M6), map info,
-// and the simulation worker's status.
+// the simulation progress, and the simulation worker's status.
 
 import { simGridSize } from '../sim/mapconfig.js';
 
@@ -15,10 +15,12 @@ export function createStatusBar(root) {
     <span class="sb-climate" title="Climate code arrives in M6">Climate: —</span>
     <span class="sb-spacer"></span>
     <span class="sb-map"></span>
+    <span class="sb-sim" hidden></span>
     <span class="sb-worker">Worker: starting…</span>`;
   const cursor = root.querySelector('.sb-cursor');
   const mapInfo = root.querySelector('.sb-map');
   const worker = root.querySelector('.sb-worker');
+  const simStatus = root.querySelector('.sb-sim');
   const elev = root.querySelector('.sb-elev');
   elev.removeAttribute('title');
 
@@ -35,6 +37,11 @@ export function createStatusBar(root) {
       const sim = simGridSize(map);
       const lat = `${map.latTop}° to ${map.latBottom}°`;
       mapInfo.textContent = `${map.sourceWidth} × ${map.sourceHeight} px · lat ${lat} · lon ${map.lonWest}° + ${map.lonSpan}°${map.wraps ? ' · wraps' : ''} · sim ${sim.width} × ${sim.height}`;
+    },
+    // Simulation progress (SPEC 12): text such as "Sim: computing wind…", or null to hide.
+    setSim(text) {
+      simStatus.hidden = !text;
+      simStatus.textContent = text ?? '';
     },
     setWorker(status) {
       worker.textContent = status === 'ready' ? 'Worker: ready' : status === 'error' ? 'Worker: failed' : 'Worker: starting…';

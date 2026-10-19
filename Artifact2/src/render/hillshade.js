@@ -32,7 +32,7 @@ export function shadeValue(east, north, exaggeration = RELIEF_EXAGGERATION) {
 let cache = { cfg: null, spacing: null };
 
 export function drawHillshade(g, { map, terrain, rect = null }) {
-  if (cache.cfg !== map) cache = { cfg: map, spacing: spacingM(map, PLANET_RADIUS_KM) };
+  if (cache.cfg !== map) cache = { cfg: map, spacing: spacingM(map, map.radiusKm ?? PLANET_RADIUS_KM) };
   const r = rect
     ? { x0: Math.max(0, rect.x0 - 1), y0: Math.max(0, rect.y0 - 1), x1: Math.min(map.sourceWidth, rect.x1 + 1), y1: Math.min(map.sourceHeight, rect.y1 + 1) }
     : { x0: 0, y0: 0, x1: map.sourceWidth, y1: map.sourceHeight };

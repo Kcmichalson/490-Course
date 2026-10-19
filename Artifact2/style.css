@@ -45,6 +45,13 @@
   --brush-outline: rgba(255, 255, 255, 0.9);
   --brush-halo: rgba(0, 0, 0, 0.55);
   --palette-unmatched: #ff00ff;
+  --tropic-line: rgba(255, 214, 102, 0.55);
+  --wind-arrow: rgba(255, 255, 255, 0.92);
+  --wind-arrow-halo: rgba(0, 0, 0, 0.55);
+  --band-label: rgba(255, 255, 255, 0.9);
+  --pressure-high: #7fc4ff;
+  --pressure-low: #ff8f7a;
+  --itcz-line: #ff6b5a;
 
   --radius: 4px;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -229,6 +236,8 @@ select:disabled { opacity: 0.45; }
 .check { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
 .check.is-coming { color: var(--faint); cursor: default; }
 .check .badge { margin-left: auto; }
+.check.is-child { padding-left: 22px; }
+.check.is-off { color: var(--faint); cursor: default; }
 
 /* Bottom-right: the left edge holds the graticule's latitude labels and the
    top edge its longitude labels. */
@@ -277,6 +286,18 @@ select:disabled { opacity: 0.45; }
 .planet-panel.is-open { transform: none; visibility: visible; transition: transform 160ms ease-out; }
 .planet-panel-head { display: flex; align-items: center; justify-content: space-between; }
 .planet-panel p { margin: 4px 0 0; }
+.planet-panel { max-height: 60%; overflow-y: auto; }
+.planet-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+.planet-col { min-width: 0; margin-top: 4px; }
+.planet-col .slider-row label:not(.check), .planet-col .field-label { min-width: 112px; color: var(--muted); }
+.planet-col .slider-row input[type="number"] { width: 84px; }
+.planet-col .unit { min-width: 52px; }
+.planet-col .hint { margin: 0; }
+.planet-cells { flex-basis: 100%; padding-left: 120px; }
+.planet-foot { grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .planet-body { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ---------- Context bar ---------- */
 .contextbar {

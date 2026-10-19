@@ -1,5 +1,7 @@
 // Hover tooltip (tile inspector): lat/lon, elevation, the source pixel, and
-// the sim cell; later milestones add temperature, rain, wind, etc.
+// the sim cell, then extra lines: day length (M3), wind (M3, while wind data
+// is loaded), and a mode-specific line. Later milestones add temperature,
+// rain, etc.
 
 const OFFSET = 16;
 
@@ -9,16 +11,19 @@ export function createInspector(el, container) {
   const sub = document.createElement('div');
   sub.className = 'tt-sub';
   const extra = document.createElement('div');
-  extra.className = 'tt-sub';
   el.append(main, sub, extra);
 
   return {
-    // info: { latLon, elevation?, extra? (a mode-specific line), px, py, i, j }
+    // info: { latLon, elevation?, lines? (extra lines, '' skipped), px, py, i, j }
     show(sx, sy, info) {
       main.textContent = info.latLon;
       sub.textContent = `${info.elevation ? `${info.elevation} · ` : ''}Pixel ${info.px}, ${info.py} · Sim cell ${info.i}, ${info.j}`;
-      extra.textContent = info.extra ?? '';
-      extra.hidden = !info.extra;
+      extra.replaceChildren(...(info.lines ?? []).filter(Boolean).map((text) => {
+        const line = document.createElement('div');
+        line.className = 'tt-sub';
+        line.textContent = text;
+        return line;
+      }));
       el.hidden = false;
       const w = el.offsetWidth;
       const h = el.offsetHeight;

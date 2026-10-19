@@ -66,3 +66,14 @@ test('squarePixelLatSpan', () => {
   assert.ok(Math.abs(squarePixelLatSpan(5632, 2048, 360) - 130.909) < 0.001);
   assert.equal(squarePixelLatSpan(2048, 1024, 360), 180);
 });
+
+test('planet radius lives in the map config (M3): default, range, carried through', () => {
+  assert.equal(createMapConfig().radiusKm, 6371);
+  assert.equal(createMapConfig({ radiusKm: '3389.5' }).radiusKm, 3389.5);
+  assert.throws(() => createMapConfig({ radiusKm: 999 }), /radius/);
+  assert.throws(() => createMapConfig({ radiusKm: 20001 }), /radius/);
+  assert.match(validateMapConfig({ ...DEFAULT_MAP, radiusKm: NaN }).join(' '), /radius/);
+  // A new config built from an existing one keeps its radius.
+  const mars = createMapConfig({ radiusKm: 3390 });
+  assert.equal(createMapConfig({ ...mars, latTop: 80 }).radiusKm, 3390);
+});

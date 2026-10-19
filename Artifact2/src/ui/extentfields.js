@@ -2,7 +2,7 @@
 // width) for a map whose pixel size is fixed, shared by the Import and Map
 // settings dialogs.
 
-import { allowedSimWidths, isFullSpan, validateMapConfig, simGridSize } from '../sim/mapconfig.js';
+import { allowedSimWidths, isFullSpan, validateMapConfig, simGridSize, extentValues } from '../sim/mapconfig.js';
 
 let nextId = 1;
 
@@ -33,6 +33,7 @@ export function createExtentFields(container, { onChange } = {}) {
   let size = { width: 1024, height: 512 };
   let wrapWanted = true;
   let simWanted = 1024;
+  let radiusKm; // the map's planet radius (not a field here; the Planet panel owns it)
 
   const num = (el) => (el.value.trim() === '' ? Number.NaN : Number(el.value));
 
@@ -54,9 +55,11 @@ export function createExtentFields(container, { onChange } = {}) {
   sim.addEventListener('change', () => { simWanted = Number(sim.value); refresh(); onChange?.(); });
 
   return {
-    // values: { latTop, latBottom, lonWest, lonSpan, wraps, simWidth }; px size fixed.
+    // values: { latTop, latBottom, lonWest, lonSpan, wraps, simWidth, radiusKm };
+    // px size fixed. radiusKm is carried through unchanged into get().
     set(values, width, height) {
       size = { width, height };
+      radiusKm = values.radiusKm;
       top.value = values.latTop;
       bottom.value = values.latBottom;
       west.value = values.lonWest;
@@ -66,16 +69,14 @@ export function createExtentFields(container, { onChange } = {}) {
       refresh();
     },
     get() {
-      return {
-        sourceWidth: size.width,
-        sourceHeight: size.height,
+      return extentValues({
         latTop: num(top),
         latBottom: num(bottom),
         lonWest: num(west),
         lonSpan: num(span),
         wraps: wraps.checked,
         simWidth: Number(sim.value),
-      };
+      }, size, radiusKm);
     },
     errors() {
       return validateMapConfig(this.get());

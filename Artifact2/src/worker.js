@@ -4,12 +4,14 @@
 // Messages in:  { type: 'ping', id }
 //               { type: 'build', id, kind, rgba, maskRgba?, settings, cfg }
 //               { type: 'coastDistance', id, category, cfg }
+//               { type: 'climate', id, grid, planet, season }  (M3 wind)
 // Messages out: { type: 'pong', id }
 //               { type: 'done', id, result } | { type: 'error', id, message }
 
 import { buildTerrain } from './sim/importpipeline.js';
 import { signedCoastDistanceKm } from './sim/distance.js';
 import { PLANET_RADIUS_KM } from './sim/constants.js';
+import { runClimate } from './sim/pipeline.js';
 
 self.addEventListener('message', (e) => {
   const msg = e.data;
@@ -37,10 +39,23 @@ self.addEventListener('message', (e) => {
     }
     return;
   }
+  if (msg.type === 'climate') {
+    try {
+      const started = performance.now();
+      const result = runClimate({ grid: msg.grid, planet: msg.planet, season: msg.season });
+      result.ms = Math.round((performance.now() - started) * 10) / 10;
+      const transfer = [result.u.buffer, result.v.buffer, result.speed.buffer, result.pressure.buffer];
+      for (const m of result.months ?? []) for (const f of ['u', 'v', 'speed', 'pressure']) transfer.push(m.profile[f].buffer);
+      self.postMessage({ type: 'done', id: msg.id, result }, transfer);
+    } catch (err) {
+      self.postMessage({ type: 'error', id: msg.id, message: err.message || String(err) });
+    }
+    return;
+  }
   if (msg.type === 'coastDistance') {
     try {
       const started = performance.now();
-      const data = signedCoastDistanceKm(msg.category, msg.cfg, PLANET_RADIUS_KM);
+      const data = signedCoastDistanceKm(msg.category, msg.cfg, msg.cfg.radiusKm ?? PLANET_RADIUS_KM);
       const result = { data, width: msg.cfg.sourceWidth, height: msg.cfg.sourceHeight, ms: Math.round(performance.now() - started) };
       self.postMessage({ type: 'done', id: msg.id, result }, [data.buffer]);
     } catch (err) {

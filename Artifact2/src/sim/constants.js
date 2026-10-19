@@ -3,8 +3,64 @@
 // effect it approximates.
 
 // Planet radius in km (Earth). Converts grid cells to km; east-west cell
-// width shrinks with cos(latitude). Becomes a planet slider in M3.
+// width shrinks with cos(latitude). The default for the map config's
+// `radiusKm` (the Planet panel slider, M3).
 export const PLANET_RADIUS_KM = 6371;
+export const PLANET_RADIUS_MIN_KM = 1000;
+export const PLANET_RADIUS_MAX_KM = 20000;
+
+// ---- Planet and seasons (SPEC 3) ----
+
+// Rotation period (h): sets the number of circulation cells (Coriolis
+// strength) and the length of a day. Earth = 24 h.
+export const ROTATION_DEFAULT_H = 24;
+export const ROTATION_MIN_H = 4;
+export const ROTATION_MAX_H = 240;
+
+// Axial tilt (°): sets the solar declination swing, so the seasons, the
+// tropics, and the polar circles. Earth = 23.5°.
+export const TILT_DEFAULT_DEG = 23.5;
+export const TILT_MAX_DEG = 45;
+
+// Lunar pull (1 = Earth's Moon): tidal range, used from M9.
+export const LUNAR_PULL_DEFAULT = 1;
+export const LUNAR_PULL_MAX = 3;
+
+// Days in the year used by the declination formula (no orbital-period
+// setting yet; SPEC 3), and the day of the northern spring equinox.
+export const YEAR_DAYS = 365;
+export const EQUINOX_DAY = 80;
+
+// Rotation-period thresholds for circulation cells per hemisphere (SPEC 3):
+// slower rotation = weaker Coriolis = fewer, wider cells.
+//   > 40 h → 1; 14 ≤ P ≤ 40 → 3; 8 ≤ P < 14 → 5; < 8 → 7
+export const CELLS_ONE_ABOVE_H = 40;
+export const CELLS_THREE_FROM_H = 14;
+export const CELLS_FIVE_FROM_H = 8;
+
+// ---- Wind (SPEC 4.1–4.3) ----
+
+// The ITCZ follows the sun at half its declination (thermal lag and ocean
+// inertia keep it from tracking the sun fully).
+export const ITCZ_FACTOR = 0.5;
+
+// Wind angle limits (degrees off due east/west) by rotation period: fast
+// rotation (strong Coriolis) turns the wind east-west; slow rotation lets air
+// flow more directly north-south. Interpolated in log(period), clamped.
+export const WIND_ANGLE_ANCHORS = Object.freeze([
+  Object.freeze({ hours: 4, min: 5, max: 45 }),
+  Object.freeze({ hours: 24, min: 15, max: 75 }),
+  Object.freeze({ hours: 40, min: 50, max: 85 }),
+]);
+
+// Base wind speed over ocean (relative units, 1 = base ocean wind).
+export const WIND_BASE_SPEED = 1.0;
+
+// Calm belts at band edges (doldrums at the ITCZ, horse latitudes at the
+// subtropical highs, calm polar highs): speed ramps down to CALM_FLOOR over
+// the CALM_EDGE_FRACTION of each band nearest each edge.
+export const CALM_FLOOR = 0.15;
+export const CALM_EDGE_FRACTION = 0.25;
 
 // ---- Terrain import (SPEC 2.3–2.7) ----
 

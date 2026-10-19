@@ -15,6 +15,13 @@ const VARIABLES = {
   brushOutline: '--brush-outline',
   brushHalo: '--brush-halo',
   paletteUnmatched: '--palette-unmatched',
+  tropicLine: '--tropic-line',
+  windArrow: '--wind-arrow',
+  windArrowHalo: '--wind-arrow-halo',
+  bandLabel: '--band-label',
+  pressureHigh: '--pressure-high',
+  pressureLow: '--pressure-low',
+  itczLine: '--itcz-line',
 };
 
 export function readTheme(el = document.documentElement) {

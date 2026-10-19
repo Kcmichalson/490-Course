@@ -26,7 +26,7 @@ export function createOverlayPanel(root, { onToggle }) {
     section.innerHTML = `<h3>${group.label}</h3>`;
     for (const o of OVERLAYS.filter((x) => x.group === group.id)) {
       const label = document.createElement('label');
-      label.className = 'check';
+      label.className = o.parent ? 'check is-child' : 'check';
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.addEventListener('change', () => onToggle(o.id, input.checked));
@@ -53,7 +53,15 @@ export function createOverlayPanel(root, { onToggle }) {
 
   return {
     update(overlays) {
-      for (const [id, input] of inputs) input.checked = Boolean(overlays[id]);
+      for (const [id, input] of inputs) {
+        input.checked = Boolean(overlays[id]);
+        // A sub-option is only usable while its parent toggle is on.
+        const o = OVERLAYS.find((x) => x.id === id);
+        if (o.parent && isAvailable(o.milestone)) {
+          input.disabled = !overlays[o.parent];
+          input.closest('label').classList.toggle('is-off', !overlays[o.parent]);
+        }
+      }
     },
   };
 }

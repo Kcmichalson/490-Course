@@ -13,6 +13,8 @@ export const OVERLAYS = [
   { id: 'shaded-relief', label: 'Shaded Relief', group: 'reference', milestone: '2b' },
   { id: 'water-body-labels', label: 'Water Body Labels', group: 'reference', milestone: 9 },
   { id: 'wind-arrows', label: 'Wind Arrows', group: 'atmosphere', milestone: 3 },
+  // A sub-option of Wind Arrows (SPEC 13.4 "optional band labels"); only drawn with the arrows.
+  { id: 'wind-band-labels', label: 'Band labels', group: 'atmosphere', milestone: 3, parent: 'wind-arrows', defaultOn: true },
   { id: 'pressure-itcz', label: 'Pressure & ITCZ', group: 'atmosphere', milestone: 3 },
   { id: 'polar-front', label: 'Polar Front & Storm Tracks', group: 'atmosphere', milestone: 8 },
   { id: 'climate-boundaries', label: 'Climate Boundaries', group: 'atmosphere', milestone: 4 },

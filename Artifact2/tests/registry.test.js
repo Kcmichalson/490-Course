@@ -121,3 +121,21 @@ test('M2b is complete: Slope, Distance from Coast, Shaded Relief, and Art Image 
   const main = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
   assert.match(main, /label: 'Art Image…', milestone: '2b'/);
 });
+
+// M3 (Session 5): the wind mode and overlays are live; M4 items stay locked.
+test('M3 is live: Wind Speed & Pressure, Wind Arrows (with band labels), Pressure & ITCZ; Temperature stays M4', async () => {
+  const { RENDERERS } = await import('../src/render/modes/index.js');
+  const wind = MODES.find((m) => m.id === 'wind-pressure');
+  assert.ok(isAvailable(wind.milestone) && RENDERERS['wind-pressure'], 'wind mode has a renderer');
+  assert.equal(typeof RENDERERS['wind-pressure'].drawScreen, 'function', 'belt lines drawn in screen space');
+  for (const id of ['wind-arrows', 'wind-band-labels', 'pressure-itcz']) {
+    assert.ok(isAvailable(OVERLAYS.find((o) => o.id === id).milestone), id);
+  }
+  const labels = OVERLAYS.find((o) => o.id === 'wind-band-labels');
+  assert.equal(labels.parent, 'wind-arrows');
+  assert.equal(OVERLAYS.findIndex((o) => o.id === 'wind-band-labels'), OVERLAYS.findIndex((o) => o.id === 'wind-arrows') + 1, 'listed right under its parent');
+  assert.ok(!isAvailable(MODES.find((m) => m.id === 'temperature').milestone));
+  const { readFile } = await import('node:fs/promises');
+  const toolbar = await readFile(new URL('../src/ui/toolbar.js', import.meta.url), 'utf8');
+  assert.match(toolbar, /applyComingSoon\(play, 11, 'Season playback'\)/, 'play button stays M11');
+});

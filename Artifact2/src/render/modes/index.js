@@ -6,6 +6,7 @@ import { drawPhysical } from './physical.js';
 import { drawElevation } from './elevation.js';
 import { drawSlope } from './slope.js';
 import { drawCoastDistance } from './coastdistance.js';
+import { drawWindPressure } from './windpressure.js';
 
 export const RENDERERS = {
   'original-art': drawOriginalArt,
@@ -13,4 +14,5 @@ export const RENDERERS = {
   elevation: drawElevation,
   slope: drawSlope,
   'coast-distance': drawCoastDistance,
+  'wind-pressure': drawWindPressure,
 };

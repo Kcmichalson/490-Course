@@ -1,13 +1,16 @@
 // App entry: state, wiring, and the render loop.
 
-import { DEFAULT_MAP, createMapConfig } from './sim/mapconfig.js';
+import {
+  DEFAULT_MAP, createMapConfig, simGridSize, newMapConfig, importConfig, settingsConfig,
+} from './sim/mapconfig.js';
 import { blankTerrain, makeTerrain, isOceanCategory, isLand } from './sim/terrain.js';
 import { ruggednessAt } from './sim/slope.js';
 import { downsampleTerrain, downsampleRegion, cloneSim } from './sim/downsample.js';
 import { createEdits, cloneEdits, writableTerrain, composeRect, addDirty, isEmptyEdits } from './sim/edits.js';
 import { applyDab, strokeDabs, BRUSH_IDS } from './sim/brushes.js';
 import { liveState, snapshotOf, stateEntry, strokeEntry, bitmapsOf, hasImport, withArt } from './sim/mapstate.js';
-import { PLANET_RADIUS_KM } from './sim/constants.js';
+import { createPlanet, createSeason, dayLengthText } from './sim/planet.js';
+import { createClimateCache, climateKey } from './sim/climatecache.js';
 import {
   pixelToLatLon, latLonToPixel, sourcePixel, sourceToSimCell, formatLatLon, parseLatLon, wrapX,
 } from './sim/coords.js';
@@ -41,17 +44,26 @@ import { formatMeters } from './ui/statusbar.js';
 import { createHistory } from './ui/history.js';
 import { createSculptPanel, BRUSH_SIZE, BRUSH_STRENGTH } from './ui/sculptpanel.js';
 import { createConfirmDialog } from './ui/confirmdialog.js';
+import { createPlanetPanel } from './ui/planetpanel.js';
+import { latestOnly } from './ui/debounce.js';
+import { sampleWind } from './render/windarrows.js';
 
 const $ = (id) => document.getElementById(id);
 
 // ---------- State ----------
 
+// Planet settings (SPEC 3) persist in fcm:planet. The radius belongs to the
+// map config; the saved radius only seeds the startup map.
+const savedPlanet = load('planet', null) ?? {};
+
 function initialMap() {
-  try {
-    return createMapConfig(load('newMap', DEFAULT_MAP) ?? DEFAULT_MAP);
-  } catch {
-    return createMapConfig();
+  const saved = load('newMap', DEFAULT_MAP) ?? DEFAULT_MAP;
+  for (const opts of [{ ...saved, radiusKm: savedPlanet.radiusKm ?? saved.radiusKm }, saved, {}]) {
+    try {
+      return createMapConfig(opts);
+    } catch { /* try the next fallback */ }
   }
+  return createMapConfig();
 }
 
 // Saved overlay choices only apply to overlays that exist in this milestone.
@@ -83,6 +95,9 @@ const state = {
     size: clampTo(prefs.brush?.size, BRUSH_SIZE),
     strength: clampTo(prefs.brush?.strength, BRUSH_STRENGTH),
   },
+  planet: createPlanet(savedPlanet),
+  season: createSeason(savedPlanet.season),
+  tiltPreview: null, // axial tilt while its slider is being dragged (tropics follow live)
 };
 
 // Terrain store (SPEC 2.1, 2.8). Layers:
@@ -107,11 +122,16 @@ const store = {
   source: null,
   version: 1,
   coast: null, // Distance from Coast result: { data, width, height, version, mask }
+  climate: null, // wind result on show: { result, grid, key, version }
 };
 
 function savePrefs() {
   const { modeId, categoryId, overlays, tooltipOn, legendOn, brush } = state;
   save('ui', { modeId, categoryId, overlays, tooltipOn, legendOn, brush });
+}
+
+function savePlanet() {
+  save('planet', { ...state.planet, season: state.season, radiusKm: state.map.radiusKm });
 }
 
 // ---------- Viewport ----------
@@ -185,6 +205,7 @@ function frame() {
     selected: state.selected,
     reserved: reservedRects(),
     brush: brushCursor(),
+    planet: state.tiltPreview == null ? state.planet : { ...state.planet, tiltDeg: state.tiltPreview },
   });
   toolbar.setZoom(zoomPercent(state.view));
   updateHover();
@@ -231,17 +252,45 @@ function updateHover() {
     inspector.hide();
     return;
   }
+  const cell = sourceToSimCell(state.map, src.x, src.y);
   inspector.show(hover.x, hover.y, {
     latLon: text,
     elevation: formatMeters(meters),
-    extra: modeReadout(px),
+    lines: [dayLengthText(ll.lat, state.planet, state.season), windReadout(src), modeReadout(px, cell)],
     ...px,
-    ...sourceToSimCell(state.map, src.x, src.y),
+    ...cell,
   });
 }
 
+// The current wind result, if it matches the map, planet, and season (else
+// null: e.g. no wind view is on, or a new run hasn't arrived yet).
+function currentClimate() {
+  const c = store.climate;
+  return c && c.key === climateKey(climateGrid(state.map), state.planet, state.season) ? c : null;
+}
+
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+
+// "Wind from ENE (68°) · 0.82" (SPEC 13.5): the direction the wind blows
+// from; in Annual Mean, the prevailing wind. '' while no wind data is loaded.
+function windReadout(src) {
+  const c = currentClimate();
+  if (!c) return '';
+  const w = sampleWind(c, state.map, wrapX(state.map, src.x), src.y);
+  const mag = Math.hypot(w.u, w.v);
+  if (c.result.meta.annual && mag < 0.05) return `Wind variable (mean speed ${w.speed.toFixed(2)})`;
+  const from = ((Math.atan2(-w.u, -w.v) * 180) / Math.PI + 360) % 360;
+  return `Wind from ${COMPASS[Math.round(from / 22.5) % 16]} (${Math.round(from) % 360}°) · ${mag.toFixed(2)}`;
+}
+
 // An extra tooltip line for the current mode, or ''.
-function modeReadout({ px, py }) {
+function modeReadout({ px, py }, cell) {
+  if (state.modeId === 'wind-pressure') {
+    const c = currentClimate();
+    if (!c || !cell) return '';
+    const p = c.result.pressure[cell.j * c.grid.width + cell.i];
+    return `Pressure: ${p >= 0 ? 'high' : 'low'} (${p >= 0 ? '+' : '−'}${Math.abs(p).toFixed(2)})`;
+  }
   if (state.modeId !== 'slope') return '';
   const i = py * store.terrain.width + px;
   if (!isLand(store.terrain, i)) return 'Ruggedness (TRI): water';
@@ -258,7 +307,7 @@ function brushCursor() {
 
 // East-west width of the brush in km at a latitude.
 function brushKmText(lat) {
-  const kmPerPx = ((state.map.lonSpan / state.map.sourceWidth) * Math.PI / 180) * PLANET_RADIUS_KM * Math.cos((lat * Math.PI) / 180);
+  const kmPerPx = ((state.map.lonSpan / state.map.sourceWidth) * Math.PI / 180) * state.map.radiusKm * Math.cos((lat * Math.PI) / 180);
   const km = 2 * state.brush.size * kmPerPx;
   return `≈ ${km >= 10 ? Math.round(km).toLocaleString() : km.toFixed(1)} km across here`;
 }
@@ -299,6 +348,7 @@ function setMode(id) {
   savePrefs();
   refreshUI();
   ensureCoast();
+  ensureClimate();
   requestDraw();
 }
 
@@ -329,6 +379,7 @@ function setOverlay(id, on) {
   state.overlays = { ...state.overlays, [id]: on };
   savePrefs();
   refreshUI();
+  ensureClimate();
   requestDraw();
 }
 
@@ -372,6 +423,13 @@ function applySnapshot(snap, { keepView = false } = {}) {
   });
   store.version++;
   markCoastStale();
+  // A wind result for another sim grid or latitude range can't be drawn here.
+  if (store.climate && climateGridKey(store.climate.grid) !== climateGridKey(climateGrid(state.map))) store.climate = null;
+  ensureClimate();
+  // The radius lives in the map: undo/redo and every map change move the
+  // Planet panel's radius slider, and the saved radius follows.
+  planetPanel?.setRadius(state.map.radiusKm);
+  savePlanet();
   statusbar.setMap(state.map);
   clearSelection();
   if (keepView && sameSize) setView(state.view);
@@ -395,6 +453,7 @@ async function newMap(cfg) {
     });
     if (!ok) return;
   }
+  cfg = newMapConfig(cfg, state.map); // New Map keeps the planet's radius
   const base = blankTerrain(cfg.sourceWidth, cfg.sourceHeight);
   commitState('New Map', {
     map: cfg, source: null, base, baseSim: downsampleTerrain(base, cfg), edits: createEdits(cfg.sourceWidth, cfg.sourceHeight),
@@ -538,6 +597,113 @@ function ensureCoast() {
     });
 }
 
+// ---- Wind (SPEC 4, 12): a worker job per season, cached per season, and
+// run lazily: only while the Wind Speed & Pressure mode, Wind Arrows, or
+// Pressure & ITCZ is showing. Until a new result arrives the views show the
+// previous one. A newer request supersedes an older one; late results are
+// still cached under their own key. ----
+
+const climateCache = createClimateCache();
+const climateJob = { generation: 0, pendingKey: null };
+
+// The sim grid the wind runs on (wind is zonal in M3: longitude doesn't matter).
+function climateGrid(map) {
+  return { ...simGridSize(map), latTop: map.latTop, latBottom: map.latBottom };
+}
+const climateGridKey = (g) => `${g.width}x${g.height}|${g.latTop}|${g.latBottom}`;
+
+const windViewShown = () => state.modeId === 'wind-pressure' || Boolean(state.overlays['wind-arrows'] || state.overlays['pressure-itcz']);
+
+function showClimate(result, grid, key) {
+  store.climate = { result, grid, key, version: (store.climate?.version ?? 0) + 1 };
+  requestDraw();
+}
+
+function ensureClimate() {
+  if (!worker || !windViewShown()) return;
+  const grid = climateGrid(state.map);
+  const { planet, season } = state;
+  const key = climateKey(grid, planet, season);
+  if (store.climate?.key === key) return;
+  const cached = climateCache.get(key);
+  if (cached) {
+    statusbar.setSim('Sim: wind (cached)');
+    showClimate(cached, grid, key);
+    return;
+  }
+  if (climateJob.pendingKey === key) return;
+  climateJob.pendingKey = key;
+  const generation = ++climateJob.generation;
+  statusbar.setSim('Sim: computing wind…');
+  worker.request('climate', { grid, planet: { ...planet }, season: { ...season } })
+    .then((result) => {
+      const main = climateCache.put(grid, planet, result);
+      if (generation !== climateJob.generation) return; // superseded; kept in the cache
+      statusbar.setSim(`Sim: wind ${result.ms} ms`);
+      if (climateKey(climateGrid(state.map), state.planet, state.season) === key) showClimate(main, grid, key);
+    })
+    .catch((err) => {
+      statusbar.setSim('Sim: wind failed');
+      contextbar.flash(`Wind simulation failed: ${err.message}`, 8000);
+    })
+    .finally(() => {
+      if (climateJob.pendingKey === key) climateJob.pendingKey = null;
+      ensureClimate(); // settings changed again while this one ran
+    });
+}
+
+// ---- Planet settings (SPEC 3). Rotation, spin, tilt, lunar pull, and the
+// season are settings (persisted, not undoable). The radius is part of the
+// map: releasing its slider is an undoable "Planet Radius" change that
+// rebuilds the km-based terrain (generated depths, relief, distances). ----
+
+function setPlanet(patch) {
+  state.planet = createPlanet({ ...state.planet, ...patch });
+  state.tiltPreview = null;
+  savePlanet();
+  ensureClimate();
+  requestDraw();
+  updateHover();
+}
+
+function setSeason(season) {
+  state.season = createSeason(season);
+  toolbar.setSeason(state.season);
+  planetPanel.setSeason(state.season);
+  savePlanet();
+  ensureClimate();
+  requestDraw();
+  updateHover();
+}
+
+// One rebuild per settled radius: while one runs, only the latest waits.
+const applyRadius = latestOnly(async (km) => {
+  if (km === state.map.radiusKm) return;
+  if (busy || stroke) {
+    contextbar.flash('Another map update is still running; the radius was not changed.');
+    planetPanel.setRadius(state.map.radiusKm);
+    return;
+  }
+  try {
+    const cfg = createMapConfig({ ...state.map, radiusKm: km });
+    if (!hasImport(store.source)) {
+      // Blank map: nothing generated from km yet, so only the config changes.
+      commitState('Planet Radius', { ...currentState(), map: cfg, edits: cloneEdits(store.edits) }, { keepView: true });
+      contextbar.flash(`Planet radius ${km.toLocaleString('en-US')} km (Ctrl+Z reverts it).`);
+      return;
+    }
+    contextbar.flash(`Rebuilding the terrain for a ${km.toLocaleString('en-US')} km radius…`);
+    const built = await whileBusy(() => buildFromSource(store.source, cfg));
+    commitState('Planet Radius', {
+      map: cfg, source: built.source, base: built.base, baseSim: built.baseSim, edits: cloneEdits(store.edits),
+    }, { keepView: true });
+    contextbar.flash(`Planet radius ${km.toLocaleString('en-US')} km: terrain rebuilt in ${(built.ms / 1000).toFixed(1)} s (Ctrl+Z reverts it).`);
+  } catch (err) {
+    contextbar.flash(`Radius change failed: ${err.message}`, 8000);
+    planetPanel.setRadius(state.map.radiusKm);
+  }
+});
+
 function undo() {
   if (busy || stroke) return;
   flushSim();
@@ -605,7 +771,7 @@ async function importMap(payload) {
   if (!worker) throw new Error('The simulation worker is not running.');
   if (busy) throw new Error('Another map update is still running.');
   const mapSize = fitWithinMax(payload.natural.width, payload.natural.height);
-  const cfg = createMapConfig({ ...payload.cfgValues, sourceWidth: mapSize.width, sourceHeight: mapSize.height });
+  const cfg = importConfig(payload.cfgValues, mapSize, state.map);
   const source = {
     kind: payload.kind,
     file: payload.file,
@@ -707,7 +873,7 @@ async function reloadMap() {
 
 async function applyMapSettings(values) {
   if (busy) throw new Error('Another map update is still running.');
-  const cfg = createMapConfig({ ...values, sourceWidth: state.map.sourceWidth, sourceHeight: state.map.sourceHeight });
+  const cfg = settingsConfig(values, state.map);
   if (!hasImport(store.source)) {
     // Blank map: the same base (and art) with the new extent (and maybe sim width).
     commitState('Map Settings', {
@@ -889,6 +1055,19 @@ const toolbar = createToolbar($('toolbar'), {
   onZoomInput: zoomToPercent,
   onGoTo: goTo,
   bookmarks: { getCurrent: currentView, onGo: goToBookmark },
+  onSeason: setSeason,
+  customDay: () => (state.season.annual ? 172 : state.season.day),
+});
+toolbar.setSeason(state.season);
+
+const planetPanel = createPlanetPanel($('planet-body'), {
+  planet: state.planet,
+  season: state.season,
+  radiusKm: state.map.radiusKm,
+  onPlanet: setPlanet,
+  onSeason: setSeason,
+  onRadius: applyRadius,
+  onTiltInput: (tilt) => { state.tiltPreview = tilt; requestDraw(); },
 });
 
 const overlayPanel = createOverlayPanel($('overlay-control'), { onToggle: setOverlay });
@@ -983,7 +1162,7 @@ function startWorker() {
       console.error('Simulation worker failed to start:', e.message || e);
     });
     worker = createWorkerClient(w);
-    worker.request('ping').then(() => { statusbar.setWorker('ready'); ensureCoast(); });
+    worker.request('ping').then(() => { statusbar.setWorker('ready'); ensureCoast(); ensureClimate(); });
   } catch (err) {
     statusbar.setWorker('error');
     console.error('Simulation worker failed to start:', err);

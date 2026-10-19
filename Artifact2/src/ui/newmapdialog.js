@@ -3,8 +3,8 @@
 // Remembers the last values in localStorage (fcm:newMap).
 
 import {
-  SIZE_PRESETS, allowedSimWidths, validateMapConfig, createMapConfig, isFullSpan,
-  squarePixelLatSpan, simGridSize, MIN_SOURCE_SIZE,
+  SIZE_PRESETS, allowedSimWidths, validateMapConfig, isFullSpan,
+  squarePixelLatSpan, simGridSize, MIN_SOURCE_SIZE, newMapValues, newMapConfig,
 } from '../sim/mapconfig.js';
 import { load, save } from '../io/storage.js';
 
@@ -32,9 +32,10 @@ export function createNewMapDialog(dialog, { onCreate }) {
 
   let wrapWanted = true;
   let simWanted = 1024;
+  let currentMap = null; // the map open when the dialog opened: a new map keeps its planet radius
 
   const num = (input) => (input.value.trim() === '' ? Number.NaN : Number(input.value));
-  const read = () => ({
+  const read = () => newMapValues({
     sourceWidth: num(width),
     sourceHeight: num(height),
     latTop: num(latTop),
@@ -43,7 +44,7 @@ export function createNewMapDialog(dialog, { onCreate }) {
     lonSpan: num(lonSpan),
     wraps: wraps.checked,
     simWidth: Number(sim.value),
-  });
+  }, currentMap?.radiusKm);
 
   function syncPresetFromSize() {
     const match = SIZE_PRESETS.find((p) => p.width === num(width) && p.height === num(height));
@@ -117,15 +118,16 @@ export function createNewMapDialog(dialog, { onCreate }) {
   dialog.querySelector('form').addEventListener('submit', (e) => {
     e.preventDefault();
     if (validateMapConfig(read()).length) { refresh(); return; }
-    const cfg = createMapConfig(read());
+    const cfg = newMapConfig(read(), currentMap);
     save('newMap', { ...cfg });
     dialog.close();
     onCreate(cfg);
   });
 
   return {
-    open(currentMap) {
-      const start = { ...currentMap, ...(load('newMap', null) ?? {}) };
+    open(map) {
+      currentMap = map;
+      const start = { ...map, ...(load('newMap', null) ?? {}) };
       width.value = start.sourceWidth;
       height.value = start.sourceHeight;
       latTop.value = start.latTop;

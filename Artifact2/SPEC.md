@@ -57,10 +57,12 @@ workflow; painting in-app is secondary.
   Access API in Chrome/Edge (keeps a file handle, no picker needed), falling
   back to the file picker in other browsers.
 - **Undo/redo** (Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z) covers brush strokes,
-  imports, reloads, map settings changes, and New Map. Undo is
+  imports, reloads, map settings changes, New Map, and Planet Radius
+  changes (M3; radius rebuilds the km-based terrain). Other planet
+  settings are not undo entries. Undo is
   region-based: a stroke entry stores before/after copies of only the edit
   tiles it touched, so undoing it rebuilds just that region. Imports,
-  reloads, map settings, and New Map store whole-state entries (map config,
+  reloads, map settings, Planet Radius, and New Map store whole-state entries (map config,
   source, imported terrain, and a copy of the edits layer), which hold
   references to existing arrays instead of copies. The undo history has a
   memory budget (256 MB, start) that counts each distinct buffer once;
@@ -265,11 +267,31 @@ become +1 m, and mask-ocean pixels above it get generated depth (2.7).
 | 8–14 h | 5 | narrower alternating bands |
 | < 8 h | 7 | Jupiter-style banding |
 
+Boundaries (M3): exactly 40 h and 14 h give 3 cells, exactly 8 h gives 5
+(> 40 → 1; 14 ≤ P ≤ 40 → 3; 8 ≤ P < 14 → 5; < 8 → 7).
+
 Season presets: Northern Spring Equinox (day 80), Northern Summer Solstice
 (day 172), Autumn Equinox (day 266), Southern Summer Solstice (day 355),
-Annual Mean (average of 12 monthly runs).
+Annual Mean (average of 12 monthly runs, mid-month days
+`floor((m + 0.5) · 365 / 12)`).
 
-Solar declination: `decl = tilt * sin(2π * (day − 80) / 365)`.
+Solar declination: `decl = tilt * sin(2π * (day − 80) / 365)`. With this
+formula the declination crosses zero at day 262.5, so the Autumn Equinox
+preset (day 266, the real calendar date) has δ ≈ −1.4° at 23.5° tilt; the
+preset stays at 266.
+
+- **Planet radius** is stored in the map config (M3), so it travels with
+  undo and the worker; releasing the slider rebuilds the km-based terrain
+  (generated bathymetry, auto-relief, distances) as an undoable change.
+- **Year length:** there is no orbital-period setting. "Day of year" means
+  1/365 of an orbit (a calendar fraction), not one rotation, so a slowly or
+  quickly rotating planet still has days 0–364 and the same seasons.
+- **Day length:** `cos h0 = −tanφ tanδ` (clamped: polar night 0 h, polar
+  day = the whole rotation period), `dayLength = rotationPeriod · h0 / π`.
+  The rotation period is treated as the solar day (the sidereal/solar
+  difference and spin direction are ignored).
+- Planet settings (except radius, which lives in the map) persist in
+  localStorage `fcm:planet`.
 
 ## 4. Wind
 
@@ -295,10 +317,29 @@ v = poleward * hemi * Math.sin(angle);    // + = toward north
 - Angle limits (degrees off due east/west) scale with rotation: 15°–75°
   at 24 h (start), shifting toward north-south flow for slow rotation
   (e.g., 50°–85° at 1 cell) and toward east-west flow for fast rotation.
+  Rule (M3, start values): linear in log(rotation period) between anchors
+  4 h → 5°–45°, 24 h → 15°–75°, 40 h → 50°–85°, clamped outside them, so
+  every 1-cell planet gets 50°–85° and dragging rotation never makes the
+  angles jump.
 - Base wind speed: 1.0 over ocean (start). Speed falls toward band edges
-  where the wind is calm (doldrums, horse latitudes).
-- Band names for the overlay: n = 3 → Trade Winds, Westerlies, Polar
-  Easterlies. Other n → "Easterlies" / "Westerlies" by direction.
+  where the wind is calm (doldrums, horse latitudes). Rule (M3, start):
+  `speed = base · (floor + (1 − floor) · smoothstep(0, edge, min(t, 1 − t)))`
+  with floor 0.15 and edge 0.25 of the band, so each band has a steady core
+  and calm edges. Every band edge is calm in M3, including the subpolar low
+  (its storminess comes with Polar Front & Storm Tracks, M8). Speeds are
+  relative (1.0 = base ocean wind), not m/s.
+- Band names for the overlay: n = 3 prograde → Trade Winds, Westerlies,
+  Polar Easterlies. Other n, and retrograde at any n → "Easterlies" /
+  "Westerlies" by direction.
+- **Annual Mean wind:** u, v are the vector mean of the 12 monthly fields
+  (the prevailing wind); speed is the mean of the monthly scalar speeds;
+  pressure is the mean of the monthly pressure index. Where the band edges
+  sweep back and forth (≈ 30° and 60° at defaults) the vector mean nearly
+  cancels, so Annual Mean arrows vanish there and a "variable winds"
+  marker is drawn instead; at the equator both trades are easterly, so
+  only v cancels. The ITCZ line in Annual Mean sits at the mean ITCZ
+  latitude, with dashed lines at its northernmost and southernmost
+  positions.
 
 ### 4.2 Seasonal ITCZ shift
 - `itcz = itczFactor * decl`, itczFactor = 0.5 (start).
@@ -310,7 +351,9 @@ v = poleward * hemi * Math.sin(angle);    // + = toward north
 Band boundaries at `j * bandWidth` (in latEff): even j = low pressure
 (ITCZ at 0°, subpolar low at 60° for n = 3), odd j = high pressure
 (subtropical highs at 30°, polar highs at 90°). Used by the precipitation
-model and the Pressure & ITCZ overlay.
+model and the Pressure & ITCZ overlay. Pressure index (M3): `p = −cos(π ·
+|latEff| / bandWidth)`, −1 at lows and +1 at highs (unitless; hPa only
+after calibration).
 
 ### 4.4 Land-sea thermal effects (monsoons)
 - After a first temperature pass, each land cell gets a pressure anomaly
@@ -650,7 +693,10 @@ amphidromic tidal phase, simulating individual storms and hurricanes (v1
 only maps hurricane zones and storm tracks as climate overlays), deep ocean
 circulation and salinity, multiple moons, 3D globe view, a single-file build
 that opens by double-clicking (no server), an installable offline
-version of the online site (PWA), and non-equirectangular maps: Mercator,
+version of the online site (PWA), an orbital-period (year length) setting
+(raised in M3 planning: day of year is fixed at 0–364 with 365 in the
+declination formula, so a real orbital period would change how many
+rotations a year has and how long seasons last), and non-equirectangular maps: Mercator,
 and custom latitude control points ("this row is 36°N") for distorted maps
 such as Paradox's, whose far south stays squashed even after setting the
 latitude range.
@@ -723,8 +769,10 @@ All planet sliders, season selector, circulation bands, ITCZ shift,
 pressure belts, wind arrow overlay with band labels, Pressure & ITCZ toggle,
 tropics and polar circles on the graticule, day length in the inspector.
 Mode: Wind Speed & Pressure.
-- At default settings, the wind arrows match the reference map, compared
-  side by side with it open in my own image viewer (not imported).
+- At default settings with the season set to the Northern Spring Equinox
+  (day 80), the wind arrows match the reference map, compared side by side
+  with it open in my own image viewer (not imported). (Not Annual Mean:
+  its vector-mean arrows vanish near 30° and 60° by design, §4.1.)
 - 72 h rotation → 1 cell; 6 h → 7 bands. Retrograde flips east/west.
 - At northern summer solstice the ITCZ sits north of the equator.
 - Node tests cover wind direction signs in each band and hemisphere.

@@ -146,7 +146,7 @@ function paletteElevation({ rgba, settings, cfg, radiusKm }) {
   return { elev, category, info: { unmatchedFraction: unmatched / n, ignoredFraction: ignored / n } };
 }
 
-export function buildTerrain({ kind, rgba, maskRgba = null, settings, cfg, radiusKm = PLANET_RADIUS_KM }) {
+export function buildTerrain({ kind, rgba, maskRgba = null, settings, cfg, radiusKm = cfg.radiusKm ?? PLANET_RADIUS_KM }) {
   const args = { rgba, maskRgba, settings, cfg, radiusKm };
   let built;
   if (kind === 'palette') built = paletteElevation(args);

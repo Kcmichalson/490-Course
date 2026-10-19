@@ -10,9 +10,14 @@ import { drawGraticule } from './graticule.js';
 import { readTheme } from './theme.js';
 import { RENDERERS } from './modes/index.js';
 import { drawHillshade, RELIEF_ALPHA } from './hillshade.js';
+import { drawWindArrows } from './windarrows.js';
+import { drawPressureItcz } from './pressure.js';
 
+// Screen-space overlays, drawn in this order (lines under symbols).
 const OVERLAY_DRAWERS = {
   graticule: drawGraticule,
+  'pressure-itcz': drawPressureItcz,
+  'wind-arrows': drawWindArrows,
 };
 
 // Shared placeholder until a mode's milestone provides a renderer.
@@ -85,7 +90,7 @@ export class MapView {
     const renderer = RENDERERS[mode.id] ? mode.id : 'placeholder';
     const key = `${map.sourceWidth}x${map.sourceHeight}|${renderer}|${store.version}|${draw.dataKey?.(store) ?? ''}`;
     if (store.terrain.width !== map.sourceWidth || store.terrain.height !== map.sourceHeight) return; // mid-update
-    const args = { map, terrain: store.terrain, source: store.source, coast: store.coast, theme: this.theme };
+    const args = { map, terrain: store.terrain, source: store.source, coast: store.coast, climate: store.climate, theme: this.theme };
     const dirty = mergeRects(this.dirty);
     this.dirty = [];
     this.base = this.layer(this.base, map);
@@ -136,7 +141,8 @@ export class MapView {
   // reserved: screen rects (canvas CSS px) covered by on-map controls, which
   // overlay labels avoid.
   // brush: { x, y, radius } in source px (Sculpt tool cursor), or null.
-  draw({ map, view, mode, store, overlays, selected, reserved = [], brush = null }) {
+  // planet: the planet settings (tropics/polar circles follow the tilt).
+  draw({ map, view, mode, store, overlays, selected, reserved = [], brush = null, planet = null }) {
     const { ctx, dpr, theme, cssWidth: viewW, cssHeight: viewH } = this;
     const reliefOn = Boolean(overlays['shaded-relief']);
     this.ensureBase(map, mode, store, reliefOn);
@@ -175,7 +181,15 @@ export class MapView {
       ctx.strokeRect(view.offsetX - 0.5, view.offsetY - 0.5, mapW + 1, mapH + 1);
     }
 
-    const env = { map, view, viewW, viewH, dpr, theme, reserved };
+    const renderer = RENDERERS[mode.id];
+    const env = {
+      map, view, viewW, viewH, dpr, theme, reserved, planet, climate: store.climate,
+      labels: Boolean(overlays['wind-band-labels']),
+      skipLines: Boolean(renderer?.drawScreen), // the mode already draws the belt lines
+    };
+    // A mode's own screen-space drawing (e.g. pressure belt lines), which
+    // stays crisp at any zoom.
+    if (renderer?.drawScreen) renderer.drawScreen(ctx, env);
     for (const [id, drawOverlay] of Object.entries(OVERLAY_DRAWERS)) {
       if (overlays[id]) drawOverlay(ctx, env);
     }

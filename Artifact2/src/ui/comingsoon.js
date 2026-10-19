@@ -5,7 +5,7 @@
 
 export const MILESTONES = ['1', '2a', '2b', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
 
-export const CURRENT_MILESTONE = '2b';
+export const CURRENT_MILESTONE = '3';
 
 export function milestoneIndex(milestone) {
   return MILESTONES.indexOf(String(milestone));

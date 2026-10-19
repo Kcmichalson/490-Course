@@ -8,6 +8,7 @@ import { CATEGORIES, modesInCategory, getMode } from '../render/modes.js';
 import { CATEGORY_KEYS, modeHotkeyLabel } from './shortcuts.js';
 import { getTool } from './tools.js';
 import { createBookmarks } from './bookmarks.js';
+import { createSeasonSelect } from './planetpanel.js';
 
 const el = (tag, props = {}, html = '') => {
   const e = Object.assign(document.createElement(tag), props);
@@ -16,7 +17,8 @@ const el = (tag, props = {}, html = '') => {
 };
 
 // handlers: { toolMenuItems(), onCategory(id), onMode(id), onZoomIn(), onZoomOut(),
-//             onZoomInput(percent), onGoTo(text) → bool, bookmarks: {...} }
+//             onZoomInput(percent), onGoTo(text) → bool, bookmarks: {...},
+//             onSeason(season), customDay() → day for "Custom day" }
 export function createToolbar(root, handlers) {
   // Tool dropdown
   const toolGroup = el('div', { className: 'tb-group' });
@@ -82,13 +84,12 @@ export function createToolbar(root, handlers) {
 
   // Season (M3) and playback (M11)
   const seasonGroup = el('div', { className: 'tb-group' });
-  const season = el('select', { 'aria-label': 'Season' }, '<option>Annual Mean</option>');
-  season.setAttribute('aria-label', 'Season');
-  applyComingSoon(season, 3, 'Season selector');
+  const season = createSeasonSelect({ onChange: (s) => handlers.onSeason(s), customDay: () => handlers.customDay() });
+  season.element.title = 'Season (the Planet panel has the day-of-year slider)';
   const play = el('button', { type: 'button', className: 'icon-button' }, icon('play', 16));
   play.setAttribute('aria-label', 'Play the year');
   applyComingSoon(play, 11, 'Season playback');
-  seasonGroup.append(season, play);
+  seasonGroup.append(season.element, play);
 
   // Zoom
   const zoomGroup = el('div', { className: 'tb-group' });
@@ -149,6 +150,9 @@ export function createToolbar(root, handlers) {
       }
       if (gridCategory !== state.categoryId) renderGrid(state.categoryId);
       for (const b of grid.children) b.setAttribute('aria-pressed', String(b.dataset.mode === state.modeId));
+    },
+    setSeason(s) {
+      season.set(s);
     },
     setZoom(percent) {
       if (document.activeElement === zoomInput) return;

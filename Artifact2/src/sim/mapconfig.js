@@ -8,7 +8,10 @@
 //   lonWest, lonSpan           // deg, left EDGE of column 0 / total width
 //   wraps                      // east-west wrap, only valid when lonSpan is 360
 //   simWidth                   // simulation grid width in cells
+//   radiusKm                   // planet radius (M3); every km conversion reads it
 // }
+
+import { PLANET_RADIUS_KM, PLANET_RADIUS_MIN_KM, PLANET_RADIUS_MAX_KM } from './constants.js';
 
 export const MIN_SOURCE_SIZE = 16;
 export const MAX_SOURCE_WIDTH = 8192;
@@ -30,6 +33,7 @@ export const DEFAULT_MAP = Object.freeze({
   lonSpan: 360,
   wraps: true,
   simWidth: 1024,
+  radiusKm: PLANET_RADIUS_KM,
 });
 
 const EPS = 1e-9;
@@ -80,6 +84,9 @@ export function validateMapConfig(cfg) {
     errors.push('East-west wrap needs a 360° longitude span.');
   }
 
+  if (!num(cfg.radiusKm) || cfg.radiusKm < PLANET_RADIUS_MIN_KM || cfg.radiusKm > PLANET_RADIUS_MAX_KM) {
+    errors.push(`Planet radius must be from ${PLANET_RADIUS_MIN_KM} to ${PLANET_RADIUS_MAX_KM} km.`);
+  }
   if (Number.isInteger(w) && !allowedSimWidths(w).includes(cfg.simWidth)) {
     errors.push(`Simulation width must be one of: ${allowedSimWidths(w).join(', ')}.`);
   }
@@ -94,7 +101,7 @@ export function createMapConfig(opts = {}) {
   const cfg = { ...DEFAULT_MAP, ...opts };
   cfg.sourceWidth = Math.round(Number(cfg.sourceWidth));
   cfg.sourceHeight = Math.round(Number(cfg.sourceHeight));
-  for (const k of ['latTop', 'latBottom', 'lonWest', 'lonSpan', 'simWidth']) cfg[k] = Number(cfg[k]);
+  for (const k of ['latTop', 'latBottom', 'lonWest', 'lonSpan', 'simWidth', 'radiusKm']) cfg[k] = Number(cfg[k]);
   cfg.wraps = Boolean(cfg.wraps) && isFullSpan(cfg.lonSpan);
   if (isFullSpan(cfg.lonSpan)) cfg.lonSpan = 360;
 
@@ -109,6 +116,42 @@ export function createMapConfig(opts = {}) {
   const errors = validateMapConfig(cfg);
   if (errors.length) throw new Error(errors.join(' '));
   return Object.freeze(cfg);
+}
+
+// ---- Config paths (M3) ----
+// The dialogs edit the extent fields but not the planet radius (it belongs to
+// the Planet panel), yet every config must carry one. These helpers are the
+// one place each path adds the current map's radius, both to the values a
+// dialog validates and to the config it builds. Dialog fields are
+// { latTop, latBottom, lonWest, lonSpan, wraps, simWidth } (New Map also
+// has sourceWidth, sourceHeight).
+
+// Extent-field values for a fixed pixel size (Import, Map Settings, and the
+// size-changed Reload, which reopens Import), ready to validate.
+export function extentValues(fields, size, radiusKm) {
+  return { ...fields, sourceWidth: size.width, sourceHeight: size.height, radiusKm };
+}
+
+// New Map dialog values, ready to validate.
+export function newMapValues(fields, radiusKm) {
+  return { ...fields, radiusKm };
+}
+
+// New Map: a new size and extent on the same planet.
+export function newMapConfig(values, currentMap) {
+  return createMapConfig({ ...values, radiusKm: currentMap.radiusKm });
+}
+
+// Import (and size-changed Reload): the image's size, the dialog's extent.
+export function importConfig(values, mapSize, currentMap) {
+  return createMapConfig({ ...values, sourceWidth: mapSize.width, sourceHeight: mapSize.height, radiusKm: currentMap.radiusKm });
+}
+
+// Map Settings: the current pixel size, the dialog's extent.
+export function settingsConfig(values, currentMap) {
+  return createMapConfig({
+    ...values, sourceWidth: currentMap.sourceWidth, sourceHeight: currentMap.sourceHeight, radiusKm: currentMap.radiusKm,
+  });
 }
 
 // Sim grid size: the configured width, height from the source aspect ratio.

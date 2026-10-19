@@ -2,7 +2,8 @@
 // Drawn in screen space every frame, so lines stay crisp at any zoom and
 // repeat across wrapped copies. The spacing tightens as you zoom in
 // (30° → 10° → 5° → 2° → 1°). Labels skip spots covered by on-map controls
-// (the Overlays button, the legend). Tropics and polar circles join in M3.
+// (the Overlays button, the legend). Tropics and polar circles follow the
+// planet's axial tilt (M3).
 
 import { visibleCopies } from './viewport.js';
 import { normalizeLon } from '../sim/coords.js';
@@ -28,7 +29,7 @@ function lonLabel(lon) {
   return `${Math.abs(l)}°${l > 0 ? 'E' : 'W'}`;
 }
 
-export function drawGraticule(ctx, { map, view, viewW, viewH, dpr, theme, reserved = [] }) {
+export function drawGraticule(ctx, { map, view, viewW, viewH, dpr, theme, reserved = [], planet = null }) {
   const s = view.scale;
   const mapW = map.sourceWidth * s;
   const mapH = map.sourceHeight * s;
@@ -81,6 +82,29 @@ export function drawGraticule(ctx, { map, view, viewW, viewH, dpr, theme, reserv
     }
   }
 
+  // Tropics and polar circles from the axial tilt (M3): the sun is overhead
+  // at the tropics at the solstices, and the polar circles bound polar day
+  // and night. Dashed, labeled at the right edge. None without tilt.
+  const tilt = planet?.tiltDeg ?? 0;
+  if (tilt > 0) {
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = theme.tropicLine;
+    const fmt = (v) => `${Number(v.toFixed(1))}°`;
+    for (const [lat, name] of [[tilt, 'Tropic'], [-tilt, 'Tropic'], [90 - tilt, 'Polar circle'], [tilt - 90, 'Polar circle']]) {
+      if (lat >= map.latTop || lat <= map.latBottom) continue;
+      const y = top + ((map.latTop - lat) / latRange) * mapH;
+      if (y < T - 1 || y > B + 1) continue;
+      ctx.beginPath();
+      ctx.moveTo(L, snap(y));
+      ctx.lineTo(R, snap(y));
+      ctx.stroke();
+      const text = `${name} ${fmt(Math.abs(lat))}${lat > 0 ? 'N' : 'S'}`;
+      labels.push({ text, x: R - 4 - ctx.measureText(text).width, y: y - 3, baseline: 'alphabetic', color: theme.tropicLine });
+    }
+    ctx.restore();
+  }
+
   // Labels last, with a dark halo so they read over any map mode. A label
   // under an on-map control is skipped rather than drawn beneath it.
   ctx.lineWidth = 3;
@@ -92,7 +116,7 @@ export function drawGraticule(ctx, { map, view, viewW, viewH, dpr, theme, reserv
     ctx.textBaseline = l.baseline;
     ctx.strokeStyle = theme.labelHalo;
     ctx.strokeText(l.text, l.x, l.y);
-    ctx.fillStyle = theme.graticuleLabel;
+    ctx.fillStyle = l.color ?? theme.graticuleLabel;
     ctx.fillText(l.text, l.x, l.y);
   }
   ctx.restore();

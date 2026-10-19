@@ -496,7 +496,8 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     if (kind === 'palette') await preparePalette();
     const cur = getCurrentMap();
     const lastExtent = prefill?.cfgValues ?? load('importExtent', null) ?? cur;
-    extent.set({ ...cur, ...lastExtent }, mapSize.width, mapSize.height);
+    // The radius always comes from the current map (saved extents don't carry one).
+    extent.set({ ...cur, ...lastExtent, radiusKm: cur.radiusKm }, mapSize.width, mapSize.height);
 
     r('file').textContent = `${file.name} · ${natural.width} × ${natural.height} px`;
     r('guess').textContent = describeGuess(guess);

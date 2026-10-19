@@ -19,7 +19,7 @@ const WATER = [42, 58, 76];
 let cache = { cfg: null, spacing: null };
 
 export function drawSlope(g, { map, terrain, rect = null }) {
-  if (cache.cfg !== map) cache = { cfg: map, spacing: spacingM(map, PLANET_RADIUS_KM) };
+  if (cache.cfg !== map) cache = { cfg: map, spacing: spacingM(map, map.radiusKm ?? PLANET_RADIUS_KM) };
   const { spacing } = cache;
   // A stroke changes the slope one pixel beyond its rectangle too.
   const r = rect

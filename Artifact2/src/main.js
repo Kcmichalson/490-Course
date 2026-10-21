@@ -10,7 +10,7 @@ import { createEdits, cloneEdits, writableTerrain, composeRect, addDirty, isEmpt
 import { applyDab, strokeDabs, BRUSH_IDS } from './sim/brushes.js';
 import { liveState, snapshotOf, stateEntry, strokeEntry, bitmapsOf, hasImport, withArt } from './sim/mapstate.js';
 import { createPlanet, createSeason, dayLengthText } from './sim/planet.js';
-import { createClimateCache, climateKey, thermalKey, temperatureKey } from './sim/climatecache.js';
+import { createClimateCache, climateRequestFor } from './sim/climatecache.js';
 import { simSurfaceElevation } from './sim/temperature.js';
 import { pixelTemperature, pixelMonths } from './sim/climatefield.js';
 import {
@@ -700,20 +700,10 @@ const temperatureViewShown = () => TEMPERATURE_MODES.has(state.modeId) || Boolea
 const temperatureNeeded = () => temperatureViewShown() || state.tooltipOn;
 
 // What the current settings need: { grid, planet, season, key, temp, thermalKey?, boundaryKey? }.
-// From M4b the wind itself follows the terrain (friction, mountain
-// deflection), so every climate view sends the terrain, and the
-// continentality key includes the cell elevations too (simVersion): they
-// steer the final wind the tracer follows.
+// Every climate view sends the terrain from M4b (see climateRequestFor).
 function climateRequest() {
-  const grid = climateGrid(state.map);
-  const { planet, season } = state;
-  if (!temperatureNeeded() && !windViewShown()) return { grid, planet, season, temp: false, key: climateKey(grid, planet, season) };
-  const terrainVersion = `${store.landVersion}.${store.simVersion}`;
-  const tk = thermalKey(grid, planet, terrainVersion);
-  return {
-    grid, planet, season, temp: true, thermalKey: tk, boundaryKey: tk,
-    key: temperatureKey(grid, planet, season, terrainVersion, store.simVersion),
-  };
+  const views = { wind: windViewShown(), temperature: temperatureNeeded() };
+  return climateRequestFor(climateGrid(state.map), state.planet, state.season, views, store.landVersion, store.simVersion);
 }
 
 function showClimate(result, req) {

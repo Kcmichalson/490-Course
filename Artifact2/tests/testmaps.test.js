@@ -34,6 +34,24 @@ test('every public test map keeps its guess (the GEBCO JPG stays a heightmap)', 
   }
 });
 
+// File > Load Sample Map (Session 6, demo extra) fetches a bundled map. It
+// must be relative (the site lives under /490-Course/Artifact2/), lowercase
+// with no leading underscore (GitHub Pages is case-sensitive and Jekyll skips
+// _names), and exist with exactly that casing.
+test('Load Sample Map uses a relative, lowercase path to a public test map', async () => {
+  const { readFile, readdir } = await import('node:fs/promises');
+  const src = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
+  const m = src.match(/const SAMPLE_MAP = '([^']+)'/);
+  assert.ok(m, 'SAMPLE_MAP is defined in main.js');
+  const path = m[1];
+  assert.match(path, /^\.\/test-maps\/[^/]+$/, 'relative, directly in test-maps/');
+  assert.equal(path, path.toLowerCase());
+  const name = path.split('/').pop();
+  assert.ok(!name.startsWith('_'));
+  const files = await readdir(new URL('../test-maps/', import.meta.url));
+  assert.ok(files.includes(name), `${name} exists with this exact casing`);
+});
+
 test('JPEG chroma speckle on the GEBCO heightmap stays far below the colorful threshold', () => {
   assert.ok(RECORDED['gebco_bathy_heightmap.jpg'].stats.colorfulShare < COLORFUL_SHARE / 10);
 });

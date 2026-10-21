@@ -1,2 +1,4 @@
 # Game content and other private test maps stay out of the public repo.
 test-maps/private/
+tool-log/*.jsonl
+tool-log/current-session.txt

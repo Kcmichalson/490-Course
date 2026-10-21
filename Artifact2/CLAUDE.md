@@ -110,3 +110,8 @@ the main branch at https://kcmichalson.github.io/490-Course/Artifact2/
 - Make targeted edits; don't rewrite working modules wholesale
 - If the spec seems wrong or unclear, propose a change and record the
   decision in LOG.md before implementing it
+- Every tool call is logged automatically to tool-log/ by a hook; don't
+  edit or disable it.
+- After every sub-step, confirm each tool call you made appears in
+  tool-log/ (timestamp and tool name); report any missing call before
+  continuing.

@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ]
+  }
+}

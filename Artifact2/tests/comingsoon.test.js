@@ -19,6 +19,7 @@ test('M4b is available; M5 is not yet', () => {
   assert.equal(CURRENT_MILESTONE, '4b');
   assert.ok(milestoneIndex(4) < milestoneIndex('4b') && milestoneIndex('4b') < milestoneIndex(5));
   assert.ok(isAvailable('2b'));
+  assert.ok(isAvailable(3)); // restored in Session 7 (dropped in the rushed M4b edit)
   assert.ok(isAvailable(4));
   assert.ok(isAvailable('4b'));
   assert.ok(!isAvailable(5));

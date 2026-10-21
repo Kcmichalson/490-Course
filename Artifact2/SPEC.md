@@ -604,8 +604,8 @@ Performance:
 
 ### 13.1 Layout (modeled on old desktop map editors)
 From top to bottom:
-1. **Menu bar:** File (New Map, Import, Reload map image, Save/Load Project,
-   Export), Edit (Undo, Redo, Map settings), View (overlay toggles, hover
+1. **Menu bar:** File (New Map, Import, Load Sample Map, Reload map image,
+   Save/Load Project, Export), Edit (Undo, Redo, Map settings), View (overlay toggles, hover
    tooltip, tool palette, zoom in/out, fit, go to lat/lon), Tools (Navigate,
    Sculpt, Route tool), Help (legend, keyboard shortcuts).
 2. **Toolbar:** tool dropdown (far left, shows the current tool),
@@ -619,6 +619,11 @@ From top to bottom:
    **Planet** button opens the planet panel, which slides up from this bar.
    Startup hint: "Import a map or paint land to begin."
 5. **Status bar** (very bottom): cursor lat/lon, elevation, and climate code.
+
+**Load Sample Map** (an extra I requested in Session 6 for the class demo,
+so classmates don't need to download files): opens the Import dialog with
+the bundled `test-maps/continent_map_2.png` (relative path). Importing it is
+an ordinary, undoable import; Reload asks for the file (no file handle).
 
 Large tasks (New Map, palette editor, map settings) open as dialogs. Every
 slider has a number input beside it for exact values. Menu items, tools,
@@ -758,7 +763,11 @@ declination formula, so a real orbital period would change how many
 rotations a year has and how long seasons last), and non-equirectangular maps: Mercator,
 and custom latitude control points ("this row is 36°N") for distorted maps
 such as Paradox's, whose far south stays squashed even after setting the
-latitude range.
+latitude range, and cache-busting for the live site (raised in Session 7):
+GitHub Pages caches each file for 10 minutes, so main.js and the worker
+modules can come from different deploys. That caused the class-demo issue
+(a new main.js with stale cached code: base wind over land, no
+temperature line).
 
 Small ideas raised in M2b planning (not built yet): a tooltip line for the
 surface type (land / lake / sea ice / land ice / ocean); auto-guessing

@@ -34,6 +34,24 @@ export function temperatureKey(grid, planet, season, landVersion, simVersion) {
   return `${thermalKey(grid, planet, landVersion)}|${seasonKey(season)}|sim${simVersion}`;
 }
 
+// What a climate job needs (main.js's climateRequest; pure so tests can
+// check it). From M4b the wind itself follows the terrain (friction,
+// mountain deflection), so every climate view, wind-only ones included,
+// sends the terrain, and the continentality key includes the cell
+// elevations too (simVersion): they steer the final wind the tracer follows.
+//   views = { wind, temperature }: is a wind view / anything needing
+//           temperature (a temperature mode, Climate Boundaries, the tooltip) on
+// → { grid, planet, season, temp (send the terrain), key, thermalKey?, boundaryKey? }
+export function climateRequestFor(grid, planet, season, views, landVersion, simVersion) {
+  if (!views.wind && !views.temperature) return { grid, planet, season, temp: false, key: climateKey(grid, planet, season) };
+  const terrainVersion = `${landVersion}.${simVersion}`;
+  const tk = thermalKey(grid, planet, terrainVersion);
+  return {
+    grid, planet, season, temp: true, thermalKey: tk, boundaryKey: tk,
+    key: temperatureKey(grid, planet, season, terrainVersion, simVersion),
+  };
+}
+
 const FIELDS = ['u', 'v', 'speed', 'pressure'];
 const bytesOf = (e) => FIELDS.reduce((sum, f) => sum + (e.result ? e.result[f].byteLength : e.profile[f].byteLength), 0)
   + (e.result?.temperature?.byteLength ?? 0);

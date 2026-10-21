@@ -18,6 +18,6 @@ export const drawFrost = makeClimateRenderer('frost', {
   water: WATER,
   legend: {
     items: order.map((cls) => ({ cls, label: FROST_LABELS[cls] })),
-    note: 'From monthly mean temperatures. Snow cover assumes enough precipitation (M5).',
+    note: 'From monthly mean temperatures only; precipitation isn\'t considered yet, so snow cover assumes enough snowfall.',
   },
 });

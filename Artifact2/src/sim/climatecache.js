@@ -62,7 +62,7 @@ export function climateRequestFor(grid, planet, season, views, landVersion, simV
 
 const FIELDS = ['u', 'v', 'speed', 'pressure'];
 const bytesOf = (e) => FIELDS.reduce((sum, f) => sum + (e.result ? e.result[f].byteLength : e.profile[f].byteLength), 0)
-  + (e.result?.temperature?.byteLength ?? 0) + (e.result?.precipitation?.byteLength ?? 0);
+  + (e.result?.temperature?.byteLength ?? 0) + (e.result?.precipitation?.byteLength ?? 0) + (e.result?.cloud?.byteLength ?? 0);
 
 export function createClimateCache(budget = CLIMATE_CACHE_BUDGET_BYTES) {
   const entries = new Map(); // key → { result } | { profile, season, meta, width }

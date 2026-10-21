@@ -27,8 +27,9 @@ import { CATEGORIES, getMode, modesInCategory } from './render/modes.js';
 import { OVERLAYS, defaultOverlayState } from './render/overlays.js';
 import { renderLegend } from './render/legend.js';
 import { TEMPERATURE_MODES, PRECIP_MODES } from './render/modes/index.js';
-import { precipCtx } from './render/modes/precipitation.js';
-import { pixelPrecip } from './sim/precipfield.js';
+import { precipCtx, hydroCtx } from './render/modes/precipitation.js';
+import { pixelPrecip, pixelAnnualMm, seasonalityClassAt, aridityAt } from './sim/precipfield.js';
+import { SEASONALITY_LABELS, SEASONALITY_TOO_DRY, ARIDITY_LABELS, ARIDITY_COLD } from './sim/hydrostats.js';
 import { setClimateRasterListener, climateCtx } from './render/climateraster.js';
 import { TOOLS, getTool, DEFAULT_TOOL_ID, getBrush, DEFAULT_BRUSH_ID } from './ui/tools.js';
 import { isAvailable } from './ui/comingsoon.js';
@@ -366,10 +367,36 @@ function modeReadout({ px, py }, cell) {
     const mm = pixelPrecip(ctx, px, py);
     return `Precipitation ${mm < 10 ? mm.toFixed(1) : Math.round(mm)} mm/month (${c.season.annual ? 'Annual Mean' : `day ${c.season.day}`})`;
   }
+  if (PRECIP_MODES.has(state.modeId)) return weatherModeReadout({ px, py }, cell);
   if (state.modeId !== 'slope') return '';
   const i = py * store.terrain.width + px;
   if (!isLand(store.terrain, i)) return 'Ruggedness (TRI): water';
   return `Ruggedness (TRI): ${Math.round(ruggednessAt(store.terrain, state.map.wraps, px, py)).toLocaleString('en-US')} m`;
+}
+
+const fmtMm = (mm) => (mm < 10 ? mm.toFixed(1) : Math.round(mm).toLocaleString('en-US'));
+
+// Seasonality, Aridity, and Cloud Cover readouts (SPEC 13.3 M5). The wettest
+// and driest month come from the nearest sim cell (a month can't be
+// interpolated); the index and totals are bilinear, like the mode colors.
+function weatherModeReadout({ px, py }, cell) {
+  const c = currentClimate();
+  const ctx = c ? hydroCtx(state.map, store.terrain, c) : null;
+  if (!ctx) return '';
+  if (state.modeId === 'cloud-cover') return `Cloud cover ${Math.round(100 * pixelPrecip(ctx, px, py, ctx.cloud))}%`;
+  if (!isLand(store.terrain, py * store.terrain.width + px)) return '';
+  if (state.modeId === 'aridity') {
+    const a = aridityAt(ctx, px, py);
+    const totals = `P ${fmtMm(a.p)} / PET ${fmtMm(a.pet)} mm/yr`;
+    return a.cls === ARIDITY_COLD ? `Aridity: cold (PET under 100 mm/yr) · ${totals}` : `Aridity ${a.ai.toFixed(2)} (${ARIDITY_LABELS[a.cls]}) · ${totals}`;
+  }
+  if (!cell) return '';
+  const k = cell.j * c.grid.width + cell.i;
+  const s = ctx.stats;
+  const months = `wettest ${MONTH_NAMES[s.wetMonth[k]]} ${fmtMm(s.wetMm[k])} · driest ${MONTH_NAMES[s.dryMonth[k]]} ${fmtMm(s.dryMm[k])} mm`;
+  const cls = seasonalityClassAt(ctx, px, py);
+  if (cls === SEASONALITY_TOO_DRY) return `Seasonality: too dry to tell (${fmtMm(pixelAnnualMm(ctx, px, py))} mm/yr) · ${months}`;
+  return `Seasonality ${pixelPrecip(ctx, px, py, s.seasonality).toFixed(2)} (${SEASONALITY_LABELS[cls]}) · ${months}`;
 }
 
 // Sculpt cursor: the brush footprint under the pointer, in source px.
@@ -711,8 +738,9 @@ function rememberThermal(key, value) {
   while (thermals.size > 3) thermals.delete(thermals.keys().next().value);
 }
 
-// The 12-month precipitation set (M5; main keeps only its annual mean, the
-// worker the monthly layers), by the same thermal key. Two are kept.
+// The 12-month precipitation set (M5; main keeps only its annual mean and
+// the weather modes' statistics, the worker the monthly layers), by the same
+// thermal key. Two are kept.
 const hydros = new Map();
 function rememberHydro(key, value) {
   hydros.delete(key);
@@ -747,6 +775,7 @@ function showClimate(result, req) {
   store.climate = {
     result, grid: req.grid, key: req.key, planet: req.planet, season: req.season,
     thermal: req.temp ? thermals.get(req.thermalKey) ?? null : null,
+    hydro: req.precip ? hydros.get(req.hydroKey) ?? null : null,
     version: (store.climate?.version ?? 0) + 1,
   };
   requestDraw();

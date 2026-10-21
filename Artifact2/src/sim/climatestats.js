@@ -58,8 +58,8 @@ export function curveStats(t) {
   return { warmest: t[warm], warmMonth: warm, coldest: t[cold], coldMonth: cold, mean: sum / 12 };
 }
 
-// Frost/Snow/Permafrost classes, first match wins (temperature only; snow
-// cover assumes enough precipitation, which arrives in M5).
+// Frost/Snow/Permafrost classes, first match wins (temperature only;
+// precipitation isn't considered yet, so snow cover assumes enough snowfall).
 export const FROST = Object.freeze({
   FROST_FREE: 0, OCCASIONAL: 1, FREQUENT: 2, SNOW_COVER: 3, PERMAFROST: 4, CONTINUOUS: 5, ICE_CAP: 6,
 });

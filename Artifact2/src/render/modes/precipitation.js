@@ -18,7 +18,16 @@ export function precipCtx(map, terrain, climate, layer = climate?.result?.precip
   return { map, category: terrain.category, layer, simW: climate.grid.width, simH: climate.grid.height };
 }
 
-export const drawPrecipitation = makeClimateRenderer('precipitation', {
+// Context for the other M5 weather modes (Seasonality, Aridity, Cloud
+// Cover): the 12-month set's annual mean and statistics (climate.hydro, kept
+// by main.js) and this season's cloud cover. null until they've arrived.
+export function hydroCtx(map, terrain, climate) {
+  const hydro = climate?.hydro;
+  const ctx = hydro?.stats ? precipCtx(map, terrain, climate, hydro.annual) : null;
+  return ctx && climate.result?.cloud ? { ...ctx, stats: hydro.stats, cloud: climate.result.cloud } : null;
+}
+
+export const drawPrecipitation =makeClimateRenderer('precipitation', {
   colors: PRECIP_COLORS,
   context: precipCtx,
   fill: fillPrecipClasses,

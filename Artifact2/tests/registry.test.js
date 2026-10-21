@@ -162,3 +162,14 @@ test('M5 is live: Precipitation; Köppen stays M6', async () => {
   assert.ok(PRECIP_MODES.has('precipitation'));
   assert.ok(!isAvailable(MODES.find((m) => m.id === 'koppen').milestone));
 });
+
+// M5 phase 2 (Session 9): Seasonality, Aridity, and Cloud Cover are live, each
+// with a renderer and legend, and each runs the precipitation.
+test('M5 phase 2 is live: Precipitation Seasonality, Aridity, Cloud Cover', async () => {
+  const { RENDERERS, PRECIP_MODES } = await import('../src/render/modes/index.js');
+  for (const id of ['precip-seasonality', 'aridity', 'cloud-cover']) {
+    assert.ok(isAvailable(MODES.find((m) => m.id === id).milestone), id);
+    assert.ok(RENDERERS[id]?.legend, `${id} has a renderer and legend`);
+    assert.ok(PRECIP_MODES.has(id), `${id} runs the precipitation`);
+  }
+});

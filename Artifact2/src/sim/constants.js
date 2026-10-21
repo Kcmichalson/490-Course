@@ -182,6 +182,27 @@ export const PRECIP_MAX_SWEEPS = 500;
 // The pair and self-share solves inside one cell update stop at this.
 export const PRECIP_LOCAL_TOLERANCE = 1e-6;
 
+// Mode thresholds (SPEC 13.3 M5 definitions).
+// Seasonality needs enough rain to mean anything: below this annual total
+// the index is "too dry to tell".
+export const SEASONALITY_MIN_MM_YR = 60;
+// Thornthwaite PET: above this monthly mean the standard hot-month formula
+// replaces the power law (evaporation stops rising steeply).
+export const THORNTHWAITE_HOT_C = 26.5;
+// Too cold to evaporate much: below this annual PET, aridity reads "cold".
+export const ARIDITY_COLD_PET_MM_YR = 100;
+// Clouds form as air nears saturation: none below this relative humidity,
+// full cover at the second one.
+export const CLOUD_RH_CLEAR = 0.3;
+export const CLOUD_RH_OVERCAST = 0.95;
+// Rising air (lows) builds deeper cloud than sinking air (highs): the share
+// of cover that depends on lift.
+export const CLOUD_LIFT_SHARE = 0.3;
+// Raining air is cloudy whatever its humidity after the rain-out: rain adds
+// cover 1 − exp(−P / this many mm/month) (approved Session 9, chosen on
+// GEBCO: without it rainforests read 1–3% cloud; LOG M5).
+export const CLOUD_RAIN_MM = 50;
+
 // ---- Terrain import (SPEC 2.3–2.7) ----
 
 // Silhouette land with auto-relief off: a low, flat plain, for testing pure

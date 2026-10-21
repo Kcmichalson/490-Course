@@ -16,6 +16,6 @@ export const drawGrowingSeason = makeClimateRenderer('growing-season', {
       { cls: 7, label: 'all year' }, { cls: 6, label: '300–364 days' }, { cls: 5, label: '240–300 days' }, { cls: 4, label: '180–240 days' },
       { cls: 3, label: '120–180 days' }, { cls: 2, label: '60–120 days' }, { cls: 1, label: '1–60 days' }, { cls: 0, label: 'none' },
     ],
-    note: 'Days with a mean temperature of 5 °C or more. Temperature only: rainfall (M5) may still limit growth.',
+    note: 'Days with a mean temperature of 5 °C or more. Temperature only; precipitation isn\'t considered yet, so dry regions may grow less.',
   },
 });

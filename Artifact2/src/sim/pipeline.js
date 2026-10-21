@@ -22,7 +22,8 @@
 // → { season, u, v, speed, pressure (Float32Array(width * height)), meta,
 //     months?: [{ season, profile, meta }],
 //     temperature?: Float32Array, continentality?: { s, maritime, coast, sweeps },
-//     precipitation?: Float32Array (mm/month, this season), hydro?: { months, rh, annual, sweeps } }
+//     precipitation?: Float32Array (mm/month, this season), cloud?: Float32Array (0–1, this season),
+//     hydro?: { months, rh, annual, sweeps, stats, cloud } }
 // Without terrain, Annual Mean also returns its 12 monthly wind runs as row
 // profiles (the base wind is zonal), which the main thread caches. With
 // terrain the final wind varies by cell, so those aren't returned.
@@ -33,6 +34,7 @@ import { continentality } from './continentality.js';
 import { seasonTemperature } from './temperature.js';
 import { terrainWind } from './terrainwind.js';
 import { precipitationMonths, precipitationDay } from './precipitation.js';
+import { hydroStats, cloudLayer } from './hydrostats.js';
 import { PLANET_RADIUS_KM } from './constants.js';
 
 // Step 5: friction and mountain deflection over the terrain (M4b). Without
@@ -55,13 +57,28 @@ export function temperatureSteps({ grid, planet, season, terrain, continentality
 // Step 7: precipitation on the final wind and the step-6 temperatures (s =
 // the seasonal swing from continentality). The 12 monthly runs (hydro) don't
 // depend on the season and can be reused; Annual Mean is their mean, a
-// single day is its own run.
-// → { precipitation (mm/month, this season), hydro: { months, rh, annual, sweeps } }
+// single day is its own run. The M5 weather modes' statistics (seasonality,
+// PET, wettest and driest month) and the 12-month mean cloud cover are added
+// to the set once (hydroStats, cloudLayer); a single day's cloud cover comes
+// from its own run.
+// → { precipitation (mm/month, this season), cloud (0–1, this season),
+//     hydro: { months, rh, annual, sweeps, stats, cloud } }
 export function precipitationSteps({ grid, planet, season, terrain, s, hydro: cached = null }) {
   const windFor = (day, profile) => finalWind(profile ?? windProfile(grid, planet, day), grid, terrain);
   const hydro = cached ?? precipitationMonths(grid, planet, terrain, s, windFor);
-  const precipitation = season.annual ? hydro.annual : precipitationDay(grid, planet, terrain, s, season.day, windFor).precip;
-  return { precipitation, hydro };
+  if (!hydro.stats) {
+    const temps = MONTH_MID_DAYS.map((d) => seasonTemperature(grid, planet.tiltDeg, { day: d }, terrain, s));
+    hydro.stats = hydroStats(grid, planet, hydro.months, temps);
+    const n = grid.width * grid.height;
+    hydro.cloud = new Float32Array(n);
+    MONTH_MID_DAYS.forEach((d, m) => {
+      const c = cloudLayer(grid, hydro.rh[m], windProfile(grid, planet, d).pressure, hydro.months[m]);
+      for (let k = 0; k < n; k++) hydro.cloud[k] += c[k] / 12;
+    });
+  }
+  if (season.annual) return { precipitation: hydro.annual, cloud: hydro.cloud, hydro };
+  const day = precipitationDay(grid, planet, terrain, s, season.day, windFor);
+  return { precipitation: day.precip, cloud: cloudLayer(grid, day.rh, windProfile(grid, planet, season.day).pressure, day.precip), hydro };
 }
 
 // Annual Mean of the final wind (SPEC 4.1): u, v = vector mean of the 12

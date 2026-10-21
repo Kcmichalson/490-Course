@@ -75,7 +75,11 @@ self.addEventListener('message', (e) => {
           timing.precipitationReused = Boolean(hydroReuse);
           // Copies: the worker keeps its own layers for reuse.
           result.precipitation = p.precipitation === p.hydro.annual ? p.precipitation.slice() : p.precipitation;
-          if (msg.needHydro) result.hydro = { annual: p.hydro.annual.slice(), sweeps: p.hydro.sweeps };
+          result.cloud = p.cloud === p.hydro.cloud ? p.cloud.slice() : p.cloud;
+          if (msg.needHydro) {
+            const stats = Object.fromEntries(Object.entries(p.hydro.stats).map(([k, a]) => [k, a.slice()]));
+            result.hydro = { annual: p.hydro.annual.slice(), sweeps: p.hydro.sweeps, stats };
+          }
         }
         if (lastBounds.key !== msg.boundaryKey) {
           const t0 = performance.now();
@@ -90,7 +94,11 @@ self.addEventListener('message', (e) => {
       const transfer = [result.u.buffer, result.v.buffer, result.speed.buffer, result.pressure.buffer];
       if (result.temperature) transfer.push(result.temperature.buffer);
       if (result.precipitation) transfer.push(result.precipitation.buffer);
-      if (result.hydro) transfer.push(result.hydro.annual.buffer);
+      if (result.cloud) transfer.push(result.cloud.buffer);
+      if (result.hydro) {
+        transfer.push(result.hydro.annual.buffer);
+        for (const a of Object.values(result.hydro.stats)) transfer.push(a.buffer);
+      }
       for (const m of result.months ?? []) for (const f of ['u', 'v', 'speed', 'pressure']) transfer.push(m.profile[f].buffer);
       self.postMessage({ type: 'done', id: msg.id, result }, transfer);
     } catch (err) {

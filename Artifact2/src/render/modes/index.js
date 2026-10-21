@@ -13,6 +13,9 @@ import { drawGrowingSeason } from './growingseason.js';
 import { drawFrost } from './frost.js';
 import { drawWinterSeverity } from './wintersev.js';
 import { drawPrecipitation } from './precipitation.js';
+import { drawSeasonality } from './seasonality.js';
+import { drawAridity } from './aridity.js';
+import { drawCloudCover } from './cloudcover.js';
 
 export const RENDERERS = {
   'original-art': drawOriginalArt,
@@ -27,11 +30,13 @@ export const RENDERERS = {
   frost: drawFrost,
   'winter-severity': drawWinterSeverity,
   precipitation: drawPrecipitation,
+  'precip-seasonality': drawSeasonality,
+  aridity: drawAridity,
+  'cloud-cover': drawCloudCover,
 };
 
 // Modes that need temperature results (M4).
 export const TEMPERATURE_MODES = new Set(['temperature', 'temp-range', 'growing-season', 'frost', 'winter-severity']);
 
-// Modes that need precipitation (M5; they run the temperature too). Phase 2
-// adds Seasonality, Aridity, and Cloud Cover.
-export const PRECIP_MODES = new Set(['precipitation']);
+// Modes that need precipitation (M5; they run the temperature too).
+export const PRECIP_MODES = new Set(['precipitation', 'precip-seasonality', 'aridity', 'cloud-cover']);

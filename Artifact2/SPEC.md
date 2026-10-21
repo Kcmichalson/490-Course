@@ -762,6 +762,51 @@ selected season. Daily values are linear between mid-month means.
   the year: 0, < 100, 100–500, 500–1,500, 1,500–3,000, 3,000–5,000,
   > 5,000 °C·days. Land only.
 
+Weather mode definitions (M5; approved in the M5 plan, recorded in Session
+9). All three read sim-grid layers bilinearly, like Precipitation.
+- **Precipitation Seasonality** (`precip-seasonality`): from the 12 months;
+  ignores the selected season. Walsh–Lawler index
+  SI = (1/R) Σ |P_m − R/12| (R = annual total), 0 to 1.83. Classes:
+  < 0.20 very equable · 0.20–0.40 equable, a definite wetter season ·
+  0.40–0.60 rather seasonal · 0.60–0.80 seasonal · 0.80–1.00 markedly
+  seasonal, long dry season · 1.00–1.20 most rain in ≤ 3 months · ≥ 1.20
+  extreme; plus "too dry to tell" (annual < 60 mm), pale gray. Pale green →
+  yellow → orange → red → purple. Land only (water muted). Readout:
+  "Seasonality 0.62 (seasonal) · wettest Jul 210 · driest Jan 12 mm".
+- **Aridity** (`aridity`): UNEP aridity index AI = P_yr / PET_yr.
+  Thornthwaite PET from the 12 monthly cell temperatures and the day length
+  (above 26.5 °C the standard hot-month formula; day length from planet.js,
+  scaled to the daylight fraction of the rotation period). Classes: < 0.05
+  hyper-arid · 0.05–0.20 arid · 0.20–0.50 semi-arid · 0.50–0.65 dry
+  sub-humid · 0.65–1.0 humid · 1–2 very humid · ≥ 2 extremely humid; plus
+  "cold (PET < 100 mm/yr)". Dark red-brown → orange → sand → light green →
+  green → teal → blue-green; cold pale gray-blue. Land only. Readout:
+  "Aridity 0.18 (arid) · P 420 / PET 2,300 mm/yr".
+- **Cloud Cover** (`cloud-cover`): the selected season (Annual Mean =
+  12-month mean) of C = (0.7 + 0.3 · lift) · (1 − (1 − smoothstep(0.3,
+  0.95, RH)) · exp(−P / 50 mm)), where lift = (1 − p)/2 (1 at the lows, 0
+  at the highs), RH = q/Qc after the cell's update, and P = the same run's
+  precipitation (mm/month; `CLOUD_RAIN_MM` 50). The rain term was approved
+  in Session 9: the humidity-only formula C = smoothstep(0.3, 0.95, RH) ·
+  (0.7 + 0.3 · lift) left the Amazon at 3% and the Congo at 1% on GEBCO.
+  10% bands, dark slate (clear) → white (overcast); water a bit darker.
+  Readout: "Cloud cover 64%".
+- Built in Session 9 (details in LOG M5): the statistics are computed on the
+  sim grid once per 12-month set (src/sim/hydrostats.js). Thornthwaite's
+  month length N is the year split into 12 equal months (365/12 days; there
+  are no calendar months). The readouts' wettest and driest month and their
+  mm come from the nearest sim cell (a month can't be interpolated); the
+  index, P, PET, and cloud cover are bilinear, like the colors. Readouts
+  for the extra classes: "Seasonality: too dry to tell (41 mm/yr) · …" and
+  "Aridity: cold (PET under 100 mm/yr) · P … / PET … mm/yr".
+- Known limitations (GEBCO): the subtropical ocean highs are only a little
+  clearer than the subpolar lows (25°N 140°W 70% vs 55°S 82%; the 20–35°
+  ocean band averages 68% vs 69% at 50–65°); the Sahara and Arabia turn
+  cloudy (≈ 60–70%) at the northern summer solstice, from their too-wet M5
+  summer rain (§7 known limitations); the Sahara reads semi-arid (AI ≈ 0.35), from its
+  too-wet M5 rain and a low Thornthwaite PET (M4 summer ≈ 24 °C there);
+  India reads hyper-arid without monsoons (M8).
+
 - **Shaded Relief** (toggle): light from the northwest, ×20 vertical
   exaggeration, blended with `overlay` at 60% over any mode (Original Art
   included). Land and seafloor are shaded; lakes stay flat.

@@ -39,22 +39,30 @@ export function temperatureKey(grid, planet, season, landVersion, simVersion) {
 // mountain deflection), so every climate view, wind-only ones included,
 // sends the terrain, and the continentality key includes the cell
 // elevations too (simVersion): they steer the final wind the tracer follows.
-//   views = { wind, temperature }: is a wind view / anything needing
-//           temperature (a temperature mode, Climate Boundaries, the tooltip) on
-// → { grid, planet, season, temp (send the terrain), key, thermalKey?, boundaryKey? }
+//   views = { wind, temperature, precipitation? }: is a wind view / anything
+//           needing temperature (a temperature mode, Climate Boundaries, the
+//           tooltip) / a precipitation mode (M5) on
+// → { grid, planet, season, temp (send the terrain), key, thermalKey?, boundaryKey?,
+//     precip?, hydroKey? }
+// Precipitation (M5) depends on exactly what continentality does (the 12
+// monthly final winds, temperatures, and the terrain), so its 12-month set
+// shares the thermal key; a result with precipitation gets its own key, so a
+// temperature-only result is never taken for one with rain.
 export function climateRequestFor(grid, planet, season, views, landVersion, simVersion) {
-  if (!views.wind && !views.temperature) return { grid, planet, season, temp: false, key: climateKey(grid, planet, season) };
+  const precip = Boolean(views.precipitation);
+  if (!views.wind && !views.temperature && !precip) return { grid, planet, season, temp: false, key: climateKey(grid, planet, season) };
   const terrainVersion = `${landVersion}.${simVersion}`;
   const tk = thermalKey(grid, planet, terrainVersion);
+  const key = temperatureKey(grid, planet, season, terrainVersion, simVersion);
   return {
     grid, planet, season, temp: true, thermalKey: tk, boundaryKey: tk,
-    key: temperatureKey(grid, planet, season, terrainVersion, simVersion),
+    key: precip ? `${key}|precip` : key, ...(precip ? { precip: true, hydroKey: tk } : {}),
   };
 }
 
 const FIELDS = ['u', 'v', 'speed', 'pressure'];
 const bytesOf = (e) => FIELDS.reduce((sum, f) => sum + (e.result ? e.result[f].byteLength : e.profile[f].byteLength), 0)
-  + (e.result?.temperature?.byteLength ?? 0);
+  + (e.result?.temperature?.byteLength ?? 0) + (e.result?.precipitation?.byteLength ?? 0);
 
 export function createClimateCache(budget = CLIMATE_CACHE_BUDGET_BYTES) {
   const entries = new Map(); // key → { result } | { profile, season, meta, width }
@@ -92,7 +100,7 @@ export function createClimateCache(budget = CLIMATE_CACHE_BUDGET_BYTES) {
     // Mean result's months are stored as wind profiles under their own wind
     // keys (unless already cached). Continentality is kept by the caller.
     put(grid, planet, result, key = null) {
-      const { months, continentality: _c, ...main } = result;
+      const { months, continentality: _c, hydro: _h, ...main } = result;
       for (const m of months ?? []) {
         const k = climateKey(grid, planet, m.season);
         if (!entries.has(k)) entries.set(k, { profile: m.profile, season: m.season, meta: m.meta, width: grid.width });

@@ -6,9 +6,12 @@
 // screen (or gray the first time). A brush stroke recomputes just its
 // rectangle, at once, with the new elevations.
 //
-// makeClimateRenderer(modeId, { colors, water, legend }) builds a mode
-// renderer: colors[class] = [r, g, b]; water = the muted water color for
-// land-only modes. Modes with WATER_FLAG classes draw water darker.
+// makeClimateRenderer(modeId, { colors, water, legend, context?, fill? })
+// builds a mode renderer: colors[class] = [r, g, b]; water = the muted water
+// color for land-only modes. Modes with WATER_FLAG classes draw water darker.
+// context(map, terrain, climate) and fill(mode, ctx, y0, y1, out, x0, x1)
+// replace the temperature ones for modes drawn from other layers (M5
+// precipitation).
 
 import { fillClasses, WATER, WATER_FLAG } from '../sim/climatefield.js';
 import { seasonTables, monthlyTables, rowLats } from '../sim/temperature.js';
@@ -94,7 +97,7 @@ function slice() {
   while (raster.next < H && performance.now() - t0 < SLICE_MS) {
     const y0 = raster.next;
     const y1 = Math.min(H, y0 + step);
-    fillClasses(job.mode, job.ctx, y0, y1, raster.classes);
+    job.fill(job.mode, job.ctx, y0, y1, raster.classes);
     paint(job, 0, y0, W, y1);
     raster.next = y1;
   }
@@ -118,11 +121,13 @@ function ensureRaster(mode, spec, args, key) {
     raster.key = '';
   }
   if (raster.key === key) return true;
-  const ctx = climateCtx(mode === 'temperature' ? 'season' : 'monthly', map, args.terrain, args.climate);
+  const ctx = spec.context
+    ? spec.context(map, args.terrain, args.climate)
+    : climateCtx(mode === 'temperature' ? 'season' : 'monthly', map, args.terrain, args.climate);
   if (!ctx) return false;
   clearTimeout(raster.timer);
   raster.key = key;
-  raster.job = { mode, ctx, lut: lut(spec) };
+  raster.job = { mode, ctx, lut: lut(spec), fill: spec.fill ?? fillClasses };
   raster.next = 0;
   raster.total = map.sourceHeight;
   raster.ms = 0;
@@ -149,7 +154,7 @@ export function makeClimateRenderer(mode, spec) {
     raster.job.ctx.category = args.terrain.category;
     if (rect) {
       // A brush stroke: recompute this rectangle now, with the new elevations.
-      fillClasses(mode, raster.job.ctx, r.y0, r.y1, raster.classes, r.x0, r.x1);
+      raster.job.fill(mode, raster.job.ctx, r.y0, r.y1, raster.classes, r.x0, r.x1);
       paint(raster.job, r.x0, r.y0, r.x1, r.y1);
     }
     g.drawImage(raster.canvas, r.x0, r.y0, w, h, r.x0, r.y0, w, h);

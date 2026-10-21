@@ -142,13 +142,23 @@ test('M3 is live: Wind Speed & Pressure, Wind Arrows (with band labels), Pressur
 });
 
 // M4 (Session 6): the five temperature modes and Climate Boundaries are live,
-// each mode with a renderer and legend; M5 items stay locked.
-test('M4 is live: the five temperature modes and Climate Boundaries; Precipitation stays M5', async () => {
+// each mode with a renderer and legend. Until Session 8 this also checked
+// that Precipitation stayed locked; that check moved to the M5 test below.
+test('M4 is live: the five temperature modes and Climate Boundaries', async () => {
   const { RENDERERS } = await import('../src/render/modes/index.js');
   for (const id of ['temperature', 'temp-range', 'growing-season', 'frost', 'winter-severity']) {
     assert.ok(isAvailable(MODES.find((m) => m.id === id).milestone), id);
     assert.ok(RENDERERS[id]?.legend, `${id} has a renderer and legend`);
   }
   assert.ok(isAvailable(OVERLAYS.find((o) => o.id === 'climate-boundaries').milestone));
-  assert.ok(!isAvailable(MODES.find((m) => m.id === 'precipitation').milestone));
+});
+
+// M5 (Session 8, phase 1): Precipitation is live with a renderer and legend;
+// Köppen stays M6.
+test('M5 is live: Precipitation; Köppen stays M6', async () => {
+  const { RENDERERS, PRECIP_MODES } = await import('../src/render/modes/index.js');
+  assert.ok(isAvailable(MODES.find((m) => m.id === 'precipitation').milestone));
+  assert.ok(RENDERERS.precipitation?.legend, 'precipitation has a renderer and legend');
+  assert.ok(PRECIP_MODES.has('precipitation'));
+  assert.ok(!isAvailable(MODES.find((m) => m.id === 'koppen').milestone));
 });

@@ -87,3 +87,21 @@ test('main.js builds its request through climateRequestFor and sends the terrain
   assert.match(src, /wind: windViewShown\(\)/);
   assert.match(src, /if \(req\.temp\) \{\s*const terrain = \{ category: store\.sim\.category/);
 });
+
+// M5 (Session 8): a precipitation mode asks for step 7 under its own key
+// (so a temperature-only result is never taken for one with rain); the
+// 12-month set shares the thermal key; other views are unchanged.
+test('a precipitation view adds step 7 under its own key; other views are unchanged', () => {
+  const m = blankMap();
+  const temp = climateRequestFor(m.grid, planet, season, { wind: false, temperature: true }, 1, 1);
+  const precip = climateRequestFor(m.grid, planet, season, { wind: false, temperature: true, precipitation: true }, 1, 1);
+  assert.equal(temp.precip, undefined);
+  assert.equal(precip.precip, true);
+  assert.equal(precip.temp, true);
+  assert.equal(precip.key, `${temp.key}|precip`);
+  assert.equal(precip.hydroKey, temp.thermalKey);
+  const onlyPrecip = climateRequestFor(m.grid, planet, season, { wind: false, temperature: false, precipitation: true }, 1, 1);
+  assert.equal(onlyPrecip.temp, true, 'precipitation sends the terrain');
+  const stroke = climateRequestFor(m.grid, planet, season, { wind: false, temperature: true, precipitation: true }, 1, 2);
+  assert.notEqual(stroke.hydroKey, precip.hydroKey, 'a stroke reruns the 12 months');
+});

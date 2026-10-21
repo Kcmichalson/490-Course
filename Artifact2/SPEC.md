@@ -448,8 +448,14 @@ after calibration).
 ## 7. Precipitation and rain shadows
 
 - Moisture is carried along the final wind field (semi-Lagrangian
-  advection, east-west steps scaled by 1/cos(latitude)), iterated until the
-  field changes by less than 1% or 500 steps (start).
+  advection, east-west steps scaled by 1/cos(latitude)). Solved in flow
+  order (each cell after the cells its air comes from); loops are iterated
+  until the estimated remaining error is below 1% of each cell's capacity,
+  or 500 passes. The estimate is the last change divided by (1 − the
+  contraction measured between successive passes). (Approved in Session 8,
+  after the fact; it replaces "until the field changes by less than 1% or
+  500 steps", which measured ~20% off the converged answer at 1024; see
+  M5 decisions.)
 - **Evaporation:** over open ocean, proportional to `exp(0.07 * SST)`;
   reduced over cold and upwelling water; none over sea ice.
 - **Capacity:** air can hold moisture proportional to `exp(0.07 * Tair)`;
@@ -467,6 +473,75 @@ after calibration).
   (ITCZ, subpolar lows) and ~0.3× near high-pressure boundaries (subtropical
   and polar highs), as smooth functions of latEff (start).
 - Output in mm/month, scaled by a calibration constant (see M5 checks).
+
+**M5 decisions** (recorded in LOG.md before implementing; start values in
+src/sim/constants.js):
+- Moisture q is in capacity units (air at 0 °C holds 1); capacity
+  `Qc = exp(0.07 · T)` with T = the M4 cell temperature of that month at the
+  cell surface elevation (so climbing air is colder through the lapse rate).
+- Transport uses the M4 tracer's upwind stencil (src/sim/upwind.js): one
+  north-south cell per step, wind direction only (speed and friction don't
+  change rain; deflection does), cos-latitude east-west steps, wrap, the
+  edge row past a pole, and ocean air at RH 0.8 beyond a partial map's
+  edges.
+- Solve (approved by the user in Session 8, after the fact): flow order.
+  The upwind links form a graph; its strongly connected components
+  (Tarjan) are solved in dependency order. A single cell is solved once.
+  A loop (such as a latitude ring on a wrapping map) is iterated until the
+  estimated remaining error (last change ÷ (1 − contraction between
+  successive passes)) is below 1% of capacity, or 500 passes. Two cells
+  that draw their air from each other (divergence lines under the highs)
+  are solved together (a two-cell lookahead, as in the M4 tracer). Why:
+  plain sweeps stopped at "< 1% change" were ~20% off the converged answer
+  at 1024 (mean |Δ| 22% on a synthetic July, max 417 mm/month).
+- The humidity gate on the background rain-out acts only as much as the
+  air sinks (full under the highs, none at the lows), so air that warmed
+  or dried below RH 0.3 still rains where it rises (Session 8 bug fix).
+- Per step: background rain-out `β · gate · belt · descent`, with
+  `gate = 1 − sinking · (1 − ramp(RH; 0.3 → 1))` and sinking = (1 + p)/2,
+  `β = 1 − exp(−dy / 1,950 km)` (SPEC's 2% per step at the 1024 grid), over
+  land and sea alike; orographic rain 0.3 × the moisture per 1,000 m climbed
+  (not belt-scaled); the excess above capacity rains out; 40% of land rain is
+  recycled (not on land ice); open water (ocean, lakes; not sea ice)
+  evaporates toward saturation at its temperature (e-fold 1,000 km).
+  mm/month = calibration constant × rain per km of travel.
+- Rain shadow: lee cells are lapse-warmed (capacity up, RH down), and on the
+  lee slope the background rain-out × `exp(−descent (m/km) / 5)`.
+- Pressure belts: 2× at the lows (p = −1) to 0.3× at the highs (p = +1), a
+  geometric blend of the §4.3 pressure index.
+- SST stand-in until M7: the M4 air temperature over the sea; the cold-water
+  and upwelling reductions wait for M7.
+- 12 monthly runs (mid-month days); Annual Mean = their mean; a single day
+  is its own run. Precipitation runs only while a precipitation mode is on;
+  the tooltip shows it only when already computed.
+- Calibration: the constant is set so the area-weighted global mean on the
+  GEBCO map (Annual Mean, 1024) is 82 mm/month (Earth ≈ 990 mm/yr).
+- Orographic rain (approved by the user in Session 8): scaled by the
+  humidity ramp, so lifted dry air rains little, and the climb is measured
+  on terrain smoothed over ±120 km (`OROG_SMOOTH_KM`; east-west in km at
+  each latitude). Measured cell to cell on rough ground, every bump wrung
+  out moisture: orographic rain was 42% of all land rain, desert ranges
+  rained, and interiors went dry.
+- **Known limitations of M5** (GEBCO, Annual Mean, calibrated; the
+  high-pressure factor and humidity threshold are not tuned to hide them):
+  - Sahara and Arabia read 17–25 mm/month (SPEC check: < 10). Background
+    rain-out under the subtropical high remains (belt 0.3×, and the air
+    there is often above the humidity threshold). Reaching < 10 would mean
+    tuning BELT_HIGH_FACTOR or RAIN_RH_MIN, which was declined.
+  - Amazon 123 and Congo 86 mm/month (check: ≥ 150). Moisture moves by wind
+    direction only, so it can't pile up where the trades converge at the
+    ITCZ (no moisture-flux convergence), and each step's rain-out depletes
+    the inflow. The Congo also lacks the West African monsoon (M8).
+  - Western Europe 39–45 mm/month (check: 50–100): the ocean air is too
+    cold without the Gulf Stream (M7).
+  - Eastern China and the eastern US are too dry (≈ 6 and 32 mm/month):
+    they need monsoon flow (M8) and warm-current SST (M7).
+  - Atacama, Namib, and similar coasts need cold currents and upwelling
+    (M7); India and Sahel summer rain needs monsoons (M8).
+  - Solver: in some mid-latitude loops the error estimate is optimistic
+    and the 500-pass cap is reached, leaving up to ~240 mm/month error at
+    a few summer coastal cells on a synthetic map. The GEBCO sample points
+    moved ≤ 0.1 mm under a 2× tighter stop.
 
 ## 8. Köppen classification
 

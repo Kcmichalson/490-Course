@@ -130,6 +130,58 @@ export const SNOW_COVER_C = -3;            // coldest month < −3 °C: lasting 
 export const FREQUENT_FROST_C = 3;         // coldest month < 3 °C: frequent frost
 export const OCCASIONAL_FROST_C = 12;      // coldest month < 12 °C: occasional frost
 
+// ---- Precipitation (SPEC 7, M5) ----
+// Moisture q is in capacity units: air at 0 °C holds 1.
+
+// Clausius–Clapeyron: warm air holds more water vapor, ~7% more per °C.
+export const CAPACITY_PER_C = 0.07;
+// Background rain-out: a base share of the moisture rains out as air
+// travels (continental decay over land, SPEC 7: 2% per step at the default
+// 1024 grid, whose step is ~39 km, so ~1,950 km per e-fold). Scaled by the
+// step length, so every grid size gives the same answer.
+export const RAINOUT_KM = 1950;
+// Rain needs nearly saturated air: the background rain-out ramps in from
+// this relative humidity (none below it) to full strength at saturation.
+export const RAIN_RH_MIN = 0.3;
+// Recycling: a share of the rain on land evaporates again (soil, plants),
+// so large interiors don't go bone-dry (SPEC 7: 30–50%).
+export const RECYCLE = 0.4;
+// Evaporation over open water: sea air approaches saturation at the water's
+// temperature within ~1,000 km of travel (about a day).
+export const EVAP_KM = 1000;
+// Orographic rain: air forced up a slope loses this share of its moisture
+// per 1,000 m climbed (on top of the cooling-driven capacity drop), scaled
+// by the humidity ramp (lifted dry air rains little; approved Session 8).
+export const OROG_PER_KM = 0.3;
+// The climb is measured on terrain smoothed over ±this many km (a box,
+// east-west in km with cos latitude), so the small bumps of rough ground
+// don't each wring out moisture: air rides over them, and only broad
+// mountain slopes force real ascent (approved Session 8; LOG M5).
+export const OROG_SMOOTH_KM = 120;
+// Rain shadow: on a descending slope sinking air warms and dries, so the
+// background rain-out falls off with the descent gradient (e-fold 5 m/km).
+export const DESCENT_M_PER_KM = 5;
+// Pressure belts: rising air at the lows (ITCZ, subpolar lows) rains ~2×,
+// sinking air at the highs (subtropical, polar) ~0.3× (SPEC 7).
+export const BELT_LOW_FACTOR = 2;
+export const BELT_HIGH_FACTOR = 0.3;
+// Off the map of a partial map: open ocean air at this relative humidity.
+export const RH_EDGE = 0.8;
+// Scale from moisture rained out per km of travel to mm/month (calibration):
+// set so the area-weighted global mean on the GEBCO Earth map (Annual Mean,
+// 1024) is 82 mm/month, Earth's ~990 mm/yr (LOG M5: 100,000 → 95,630 at
+// first; 96,294 after the approved orographic changes, mean 81.435 → 82).
+export const PRECIP_CAL = 96294;
+// Numerical, not physics (SPEC 7, approved Session 8): a loop of cells
+// (e.g. a latitude ring) stops when its estimated remaining error, the last
+// change ÷ (1 − the contraction between successive passes), is below this
+// share of each cell's capacity, or after 500 passes. (A "< 1% change per
+// pass" stop measured ~20% off the converged answer at 1024; LOG M5.)
+export const PRECIP_TOLERANCE = 0.01;
+export const PRECIP_MAX_SWEEPS = 500;
+// The pair and self-share solves inside one cell update stop at this.
+export const PRECIP_LOCAL_TOLERANCE = 1e-6;
+
 // ---- Terrain import (SPEC 2.3–2.7) ----
 
 // Silhouette land with auto-relief off: a low, flat plain, for testing pure

@@ -7,19 +7,22 @@
 //               { type: 'climate', id, grid, planet, season }  (M3 wind)
 //                 + M4 temperature: terrain { category, elevation } (sim
 //                 cells), thermalKey, boundaryKey, needContinentality
+//                 + M5 precipitation: precip, hydroKey, needHydro
 // Messages out: { type: 'pong', id }
 //               { type: 'done', id, result } | { type: 'error', id, message }
 
 import { buildTerrain } from './sim/importpipeline.js';
 import { signedCoastDistanceKm } from './sim/distance.js';
 import { PLANET_RADIUS_KM } from './sim/constants.js';
-import { runClimate } from './sim/pipeline.js';
+import { runClimate, precipitationSteps } from './sim/pipeline.js';
 import { climateBoundaries } from './sim/boundaries.js';
 
-// The last continentality (the slow part of temperature) and boundary lines,
-// by key, so season changes reuse them.
+// The last continentality (the slow part of temperature), boundary lines,
+// and 12-month precipitation (M5; the monthly layers stay here, M6 Köppen
+// will read them), by key, so season changes reuse them.
 let lastThermal = { key: null, value: null };
 let lastBounds = { key: null, value: null };
+let lastHydro = { key: null, value: null };
 
 self.addEventListener('message', (e) => {
   const msg = e.data;
@@ -55,10 +58,25 @@ self.addEventListener('message', (e) => {
       const terrain = msg.terrain ?? null;
       const reuse = terrain && lastThermal.key === msg.thermalKey ? lastThermal.value : null;
       const result = runClimate({ grid: msg.grid, planet: msg.planet, season: msg.season, terrain, continentality: reuse });
-      const timing = { continentality: null, boundaries: null };
+      const timing = { continentality: null, boundaries: null, precipitation: null };
       if (terrain) {
         timing.continentality = reuse ? 'cached' : Math.round(performance.now() - started);
         lastThermal = { key: msg.thermalKey, value: result.continentality };
+        if (msg.precip) {
+          // Step 7 (M5): the 12 monthly runs are reused by key; a single day
+          // is one more run, Annual Mean their mean.
+          const t0 = performance.now();
+          const hydroReuse = lastHydro.key === msg.hydroKey ? lastHydro.value : null;
+          const p = precipitationSteps({
+            grid: msg.grid, planet: msg.planet, season: result.season, terrain, s: result.continentality.s, hydro: hydroReuse,
+          });
+          lastHydro = { key: msg.hydroKey, value: p.hydro };
+          timing.precipitation = hydroReuse && result.season.annual ? 'cached' : Math.round(performance.now() - t0);
+          timing.precipitationReused = Boolean(hydroReuse);
+          // Copies: the worker keeps its own layers for reuse.
+          result.precipitation = p.precipitation === p.hydro.annual ? p.precipitation.slice() : p.precipitation;
+          if (msg.needHydro) result.hydro = { annual: p.hydro.annual.slice(), sweeps: p.hydro.sweeps };
+        }
         if (lastBounds.key !== msg.boundaryKey) {
           const t0 = performance.now();
           lastBounds = { key: msg.boundaryKey, value: climateBoundaries(msg.grid, msg.planet.tiltDeg, terrain, result.continentality.s) };
@@ -71,6 +89,8 @@ self.addEventListener('message', (e) => {
       result.timing = timing;
       const transfer = [result.u.buffer, result.v.buffer, result.speed.buffer, result.pressure.buffer];
       if (result.temperature) transfer.push(result.temperature.buffer);
+      if (result.precipitation) transfer.push(result.precipitation.buffer);
+      if (result.hydro) transfer.push(result.hydro.annual.buffer);
       for (const m of result.months ?? []) for (const f of ['u', 'v', 'speed', 'pressure']) transfer.push(m.profile[f].buffer);
       self.postMessage({ type: 'done', id: msg.id, result }, transfer);
     } catch (err) {

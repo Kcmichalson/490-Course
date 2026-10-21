@@ -13,16 +13,17 @@ test('milestones are ordered 1, 2a, 2b, 3 … 11', () => {
   assert.equal(milestoneIndex('2b-1'), -1, 'the M2b phase id is removed');
 });
 
-// Moved with the milestone (Session 6): M4b (terrain wind, moved out of M8)
-// is now current, M5 not yet.
-test('M4b is available; M5 is not yet', () => {
-  assert.equal(CURRENT_MILESTONE, '4b');
+// Moved with the milestone (Session 6: M4b current; Session 8: M5 current,
+// M6 not yet).
+test('M5 is available; M6 is not yet', () => {
+  assert.equal(CURRENT_MILESTONE, '5');
   assert.ok(milestoneIndex(4) < milestoneIndex('4b') && milestoneIndex('4b') < milestoneIndex(5));
   assert.ok(isAvailable('2b'));
   assert.ok(isAvailable(3)); // restored in Session 7 (dropped in the rushed M4b edit)
   assert.ok(isAvailable(4));
   assert.ok(isAvailable('4b'));
-  assert.ok(!isAvailable(5));
+  assert.ok(isAvailable(5));
+  assert.ok(!isAvailable(6));
 });
 
 test('labels read M2a / M2b / M9', () => {

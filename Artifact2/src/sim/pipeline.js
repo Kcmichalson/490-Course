@@ -7,9 +7,9 @@
 //   4. Temperature, pass 1                        (feeds monsoons, M8; skipped until then)
 //   5. Final wind: friction, mountain deflection  ← M4b; monsoons join in M8
 //   6. Temperature, pass 2                        ← M4 (on the final wind from M4b)
-//   7. Precipitation                              (M5)
+//   7. Precipitation                              ← M5 (on the final wind and step 6)
 //
-// runClimate({ grid, planet, season, terrain?, continentality? })
+// runClimate({ grid, planet, season, terrain?, continentality?, precipitation?, hydro? })
 //   grid    = { width, height, latTop, latBottom, lonSpan?, wraps?, radiusKm? }
 //   planet  = see planet.js; season = { annual: true } | { day }
 //   terrain = { category, elevation } on the sim grid (cell surface
@@ -17,9 +17,12 @@
 //             wind runs (zonal, as in M3)
 //   continentality = a previous result for the same terrain and planet
 //             (the slow part; it doesn't depend on the season), reused as is
+//   precipitation = true to run step 7 (needs terrain); hydro = a previous
+//             12-month precipitation result for the same terrain and planet
 // → { season, u, v, speed, pressure (Float32Array(width * height)), meta,
 //     months?: [{ season, profile, meta }],
-//     temperature?: Float32Array, continentality?: { s, maritime, coast, sweeps } }
+//     temperature?: Float32Array, continentality?: { s, maritime, coast, sweeps },
+//     precipitation?: Float32Array (mm/month, this season), hydro?: { months, rh, annual, sweeps } }
 // Without terrain, Annual Mean also returns its 12 monthly wind runs as row
 // profiles (the base wind is zonal), which the main thread caches. With
 // terrain the final wind varies by cell, so those aren't returned.
@@ -29,6 +32,7 @@ import { createSeason, MONTH_MID_DAYS } from './planet.js';
 import { continentality } from './continentality.js';
 import { seasonTemperature } from './temperature.js';
 import { terrainWind } from './terrainwind.js';
+import { precipitationMonths, precipitationDay } from './precipitation.js';
 import { PLANET_RADIUS_KM } from './constants.js';
 
 // Step 5: friction and mountain deflection over the terrain (M4b). Without
@@ -48,6 +52,18 @@ export function temperatureSteps({ grid, planet, season, terrain, continentality
   return { temperature: seasonTemperature(grid, planet.tiltDeg, season, terrain, c.s), continentality: c };
 }
 
+// Step 7: precipitation on the final wind and the step-6 temperatures (s =
+// the seasonal swing from continentality). The 12 monthly runs (hydro) don't
+// depend on the season and can be reused; Annual Mean is their mean, a
+// single day is its own run.
+// → { precipitation (mm/month, this season), hydro: { months, rh, annual, sweeps } }
+export function precipitationSteps({ grid, planet, season, terrain, s, hydro: cached = null }) {
+  const windFor = (day, profile) => finalWind(profile ?? windProfile(grid, planet, day), grid, terrain);
+  const hydro = cached ?? precipitationMonths(grid, planet, terrain, s, windFor);
+  const precipitation = season.annual ? hydro.annual : precipitationDay(grid, planet, terrain, s, season.day, windFor).precip;
+  return { precipitation, hydro };
+}
+
 // Annual Mean of the final wind (SPEC 4.1): u, v = vector mean of the 12
 // monthly final winds, speed = mean of their speeds, pressure = mean index.
 function annualFinal(grid, planet, terrain) {
@@ -61,7 +77,9 @@ function annualFinal(grid, planet, terrain) {
   return out;
 }
 
-export function runClimate({ grid, planet, season, terrain = null, continentality: cached = null }) {
+export function runClimate({
+  grid, planet, season, terrain = null, continentality: cached = null, precipitation = false, hydro = null,
+}) {
   const s = createSeason(season);
   let out;
   if (s.annual) {
@@ -82,6 +100,9 @@ export function runClimate({ grid, planet, season, terrain = null, continentalit
     out = { season: s, ...base, ...(terrain ? finalWind(profile, grid, terrain) : {}), meta: seasonMeta(planet, s) };
   }
   if (terrain) Object.assign(out, temperatureSteps({ grid, planet, season: s, terrain, continentality: cached }));
+  if (terrain && precipitation) {
+    Object.assign(out, precipitationSteps({ grid, planet, season: s, terrain, s: out.continentality.s, hydro }));
+  }
   return out;
 }
 

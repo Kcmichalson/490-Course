@@ -26,8 +26,7 @@ import {
 } from './constants.js';
 import { isOceanCategory } from './terrain.js';
 import { distanceToFeatureKm } from './distance.js';
-
-const DEG = Math.PI / 180;
+import { cellKm, upwindStencil } from './upwind.js';
 
 // Sim grid as a config for the km helpers in distance.js.
 export function simCfg(grid) {
@@ -35,18 +34,6 @@ export function simCfg(grid) {
     sourceWidth: grid.width, sourceHeight: grid.height, latTop: grid.latTop, latBottom: grid.latBottom,
     lonSpan: grid.lonSpan ?? 360, wraps: grid.wraps ?? true,
   };
-}
-
-function cellKm(grid, radiusKm) {
-  const degToKm = DEG * radiusKm;
-  const dy = ((grid.latTop - grid.latBottom) / grid.height) * degToKm;
-  const dxEq = ((grid.lonSpan ?? 360) / grid.width) * degToKm;
-  const dx = new Float64Array(grid.height);
-  for (let j = 0; j < grid.height; j++) {
-    const lat = grid.latTop - ((j + 0.5) / grid.height) * (grid.latTop - grid.latBottom);
-    dx[j] = Math.max(1e-6, dxEq * Math.cos(lat * DEG));
-  }
-  return { dy, dx };
 }
 
 // One month's maritime tracer. wind = { u, v }: row profiles (length H) or
@@ -57,84 +44,26 @@ function cellKm(grid, radiusKm) {
 export function maritimeTracer(grid, ocean, wind, radiusKm, { start = null, tolerance = TRACER_TOLERANCE } = {}) {
   const W = grid.width;
   const H = grid.height;
-  const wraps = grid.wraps ?? true;
-  const { dy, dx } = cellKm(grid, radiusKm);
+  const { dy } = cellKm(grid, radiusKm);
   const decay = Math.exp(-dy / MARITIME_DECAY_KM);
-  const poleTop = grid.latTop >= 90;
-  const poleBottom = grid.latBottom <= -90;
-  const rowWind = wind.u.length === H;
   const m = new Float32Array(W * H);
   for (let k = 0; k < m.length; k++) m[k] = ocean[k] ? 1 : start ? start[k] : 0;
 
-  // Index of an integer cell with the edge rules (wrap, pole), or −1 when it
-  // lies off a partial map (open ocean, M = 1).
-  const at = (i, j) => {
-    if (j < 0) { if (!poleTop) return -1; j = 0; }
-    else if (j >= H) { if (!poleBottom) return -1; j = H - 1; }
-    if (i < 0 || i >= W) {
-      if (!wraps) return -1;
-      i = ((i % W) + W) % W;
-    }
-    return j * W + i;
-  };
-
-  // Upwind offsets (cells) per row or per cell.
-  const offX = new Float32Array(rowWind ? H : W * H);
-  const offY = new Float32Array(rowWind ? H : W * H);
-  for (let k = 0; k < offX.length; k++) {
-    const j = rowWind ? k : Math.floor(k / W);
-    const u = wind.u[k];
-    const v = wind.v[k];
-    const mag = Math.hypot(u, v);
-    if (mag < 1e-9) continue; // no direction: the cell only decays its own value
-    offX[k] = (-u / mag) * (dy / dx[j]); // upwind = opposite the wind; east is +x
-    offY[k] = v / mag; // screen y points down: air blowing north came from +y
-  }
-
-  // The upwind stencil of every land cell, built once (it doesn't change
-  // between sweeps): 4 bilinear corners and weights. An upwind point less than
-  // a cell away lands partly on the cell itself; that share is solved exactly
+  // The upwind stencil of every land cell (upwind.js), built once (it doesn't
+  // change between sweeps). An upwind point less than a cell away lands
+  // partly on the cell itself; that share is solved exactly
   // (m = (decay·Σ w·m + offMap) / (1 − decay·wSelf)). Off-map corners are
-  // open ocean, a constant.
-  let L = 0;
-  for (let k = 0; k < W * H; k++) if (!ocean[k]) L++;
-  const cell = new Int32Array(L);
-  const rowStart = new Int32Array(H + 1);
-  const corners = new Int32Array(4 * L);
+  // open ocean (M = 1), a constant.
+  const st = upwindStencil(grid, wind, radiusKm, (k) => !ocean[k]);
+  const { L, cell, rowStart, corners } = st;
   const weights = new Float32Array(4 * L);
   const constant = new Float32Array(L);
   const scale = new Float32Array(L);
-  let p = 0;
-  for (let j = 0; j < H; j++) {
-    rowStart[j] = p;
-    for (let i = 0; i < W; i++) {
-      const k = j * W + i;
-      if (ocean[k]) continue;
-      const o = rowWind ? j : k;
-      const x = i + offX[o];
-      const y = j + offY[o];
-      const x0 = Math.floor(x);
-      const y0 = Math.floor(y);
-      const fx = x - x0;
-      const fy = y - y0;
-      const ws = [(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy];
-      const cs = [at(x0, y0), at(x0 + 1, y0), at(x0, y0 + 1), at(x0 + 1, y0 + 1)];
-      let self = 0;
-      let off = 0;
-      for (let q = 0; q < 4; q++) {
-        let c = cs[q];
-        let w = ws[q];
-        if (c === k) { self += w; w = 0; c = k; } else if (c < 0) { off += w; w = 0; c = k; }
-        corners[4 * p + q] = c;
-        weights[4 * p + q] = decay * w;
-      }
-      cell[p] = k;
-      constant[p] = decay * off;
-      scale[p] = 1 / (1 - decay * self);
-      p++;
-    }
+  for (let r = 0; r < 4 * L; r++) weights[r] = decay * st.weights[r];
+  for (let p = 0; p < L; p++) {
+    constant[p] = decay * st.off[p];
+    scale[p] = 1 / (1 - decay * st.self[p]);
   }
-  rowStart[H] = p;
 
   // Cells under a pressure high draw their air from each other (each one's
   // upwind point lies on the other), which plain sweeps resolve only slowly.

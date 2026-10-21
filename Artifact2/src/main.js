@@ -26,7 +26,9 @@ import { MapView } from './render/mapview.js';
 import { CATEGORIES, getMode, modesInCategory } from './render/modes.js';
 import { OVERLAYS, defaultOverlayState } from './render/overlays.js';
 import { renderLegend } from './render/legend.js';
-import { TEMPERATURE_MODES } from './render/modes/index.js';
+import { TEMPERATURE_MODES, PRECIP_MODES } from './render/modes/index.js';
+import { precipCtx } from './render/modes/precipitation.js';
+import { pixelPrecip } from './sim/precipfield.js';
 import { setClimateRasterListener, climateCtx } from './render/climateraster.js';
 import { TOOLS, getTool, DEFAULT_TOOL_ID, getBrush, DEFAULT_BRUSH_ID } from './ui/tools.js';
 import { isAvailable } from './ui/comingsoon.js';
@@ -270,7 +272,9 @@ function updateHover() {
   inspector.show(hover.x, hover.y, {
     latLon: text,
     elevation: formatMeters(meters),
-    lines: [dayLengthText(ll.lat, state.planet, state.season), temperatureReadout(px), windReadout(src), modeReadout(px, cell)],
+    lines: [
+      dayLengthText(ll.lat, state.planet, state.season), temperatureReadout(px), precipitationReadout(px), windReadout(src), modeReadout(px, cell),
+    ],
     ...px,
     ...cell,
   });
@@ -295,6 +299,19 @@ function temperatureReadout(px) {
   if (!ctx) return '';
   const st = curveStats(pixelMonths(ctx, px.px, px.py));
   return `Summer ${fmtC(st.warmest)} (${MONTH_NAMES[st.warmMonth]}) · Winter ${fmtC(st.coldest)} (${MONTH_NAMES[st.coldMonth]})`;
+}
+
+// "Precipitation 1,234 mm/yr" (SPEC 13.5): the 12 monthly means summed at
+// this pixel. Shown only when the 12-month set for the current terrain and
+// planet is already computed (a precipitation mode ran it); the tooltip
+// never starts a precipitation run itself (Session 8, A8).
+function precipitationReadout(px) {
+  const c = store.climate;
+  const req = climateRequest();
+  const hydro = req.thermalKey ? hydros.get(req.thermalKey) : null;
+  const ctx = hydro && c ? precipCtx(state.map, store.terrain, c, hydro.annual) : null;
+  if (!ctx) return '';
+  return `Precipitation ${Math.round(12 * pixelPrecip(ctx, px.px, px.py)).toLocaleString('en-US')} mm/yr`;
 }
 
 // The temperature modes' own readouts.
@@ -342,6 +359,13 @@ function modeReadout({ px, py }, cell) {
     return `Pressure: ${p >= 0 ? 'high' : 'low'} (${p >= 0 ? '+' : '−'}${Math.abs(p).toFixed(2)})`;
   }
   if (TEMPERATURE_MODES.has(state.modeId)) return temperatureModeReadout({ px, py });
+  if (state.modeId === 'precipitation') {
+    const c = currentClimate();
+    const ctx = c ? precipCtx(state.map, store.terrain, c) : null;
+    if (!ctx) return '';
+    const mm = pixelPrecip(ctx, px, py);
+    return `Precipitation ${mm < 10 ? mm.toFixed(1) : Math.round(mm)} mm/month (${c.season.annual ? 'Annual Mean' : `day ${c.season.day}`})`;
+  }
   if (state.modeId !== 'slope') return '';
   const i = py * store.terrain.width + px;
   if (!isLand(store.terrain, i)) return 'Ruggedness (TRI): water';
@@ -687,6 +711,15 @@ function rememberThermal(key, value) {
   while (thermals.size > 3) thermals.delete(thermals.keys().next().value);
 }
 
+// The 12-month precipitation set (M5; main keeps only its annual mean, the
+// worker the monthly layers), by the same thermal key. Two are kept.
+const hydros = new Map();
+function rememberHydro(key, value) {
+  hydros.delete(key);
+  hydros.set(key, value);
+  while (hydros.size > 2) hydros.delete(hydros.keys().next().value);
+}
+
 // The sim grid the climate runs on, with its km size (radius, span, wrap).
 function climateGrid(map) {
   return {
@@ -697,12 +730,16 @@ const climateGridKey = (g) => `${g.width}x${g.height}|${g.latTop}|${g.latBottom}
 
 const windViewShown = () => state.modeId === 'wind-pressure' || Boolean(state.overlays['wind-arrows'] || state.overlays['pressure-itcz']);
 const temperatureViewShown = () => TEMPERATURE_MODES.has(state.modeId) || Boolean(state.overlays['climate-boundaries']);
-const temperatureNeeded = () => temperatureViewShown() || state.tooltipOn;
+// Precipitation (M5) runs only while a precipitation mode is shown; it needs
+// the temperature, so that runs with it.
+const precipViewShown = () => PRECIP_MODES.has(state.modeId);
+const temperatureNeeded = () => temperatureViewShown() || state.tooltipOn || precipViewShown();
 
-// What the current settings need: { grid, planet, season, key, temp, thermalKey?, boundaryKey? }.
-// Every climate view sends the terrain from M4b (see climateRequestFor).
+// What the current settings need: { grid, planet, season, key, temp, thermalKey?,
+// boundaryKey?, precip?, hydroKey? }. Every climate view sends the terrain
+// from M4b (see climateRequestFor).
 function climateRequest() {
-  const views = { wind: windViewShown(), temperature: temperatureNeeded() };
+  const views = { wind: windViewShown(), temperature: temperatureNeeded(), precipitation: precipViewShown() };
   return climateRequestFor(climateGrid(state.map), state.planet, state.season, views, store.landVersion, store.simVersion);
 }
 
@@ -716,10 +753,15 @@ function showClimate(result, req) {
   updateHover();
 }
 
-function simText(result, temp) {
-  if (!temp) return `Sim: wind ${result.ms} ms`;
+const simWhat = (req) => (req.precip ? 'wind + temperature + precipitation' : req.temp ? 'wind + temperature' : 'wind');
+
+function simText(result, req) {
+  if (!req.temp) return `Sim: wind ${result.ms} ms`;
   const c = result.timing?.continentality;
-  return `Sim: wind + temperature ${Math.round(result.ms)} ms (continentality ${c === 'cached' ? 'reused' : `${c} ms`})`;
+  const p = result.timing?.precipitation;
+  const precip = !req.precip ? '' : p === 'cached' ? ', precipitation reused'
+    : `, precipitation ${p} ms${result.timing.precipitationReused ? ' (12 months reused, this day solved)' : ''}`;
+  return `Sim: ${simWhat(req)} ${Math.round(result.ms)} ms (continentality ${c === 'cached' ? 'reused' : `${c} ms`}${precip})`;
 }
 
 function ensureClimate() {
@@ -727,14 +769,14 @@ function ensureClimate() {
   const req = climateRequest();
   if (store.climate?.key === req.key) return;
   const cached = climateCache.get(req.key);
-  if (cached && (!req.temp || thermals.has(req.thermalKey))) {
-    statusbar.setSim(req.temp ? 'Sim: wind + temperature (cached)' : 'Sim: wind (cached)');
+  if (cached && (!req.temp || thermals.has(req.thermalKey)) && (!req.precip || hydros.has(req.hydroKey))) {
+    statusbar.setSim(`Sim: ${simWhat(req)} (cached)`);
     showClimate(cached, req);
     return;
   }
   if (climateJob.busy) return; // the running job asks again when it ends
   climateJob.busy = true;
-  statusbar.setSim(req.temp ? 'Sim: computing wind + temperature…' : 'Sim: computing wind…');
+  statusbar.setSim(`Sim: computing ${simWhat(req)}…`);
   const msg = { grid: req.grid, planet: { ...req.planet }, season: { ...req.season } };
   const transfer = [];
   if (req.temp) {
@@ -742,13 +784,15 @@ function ensureClimate() {
     Object.assign(msg, {
       terrain, thermalKey: req.thermalKey, boundaryKey: req.boundaryKey, needContinentality: !thermals.has(req.thermalKey),
     });
+    if (req.precip) Object.assign(msg, { precip: true, hydroKey: req.hydroKey, needHydro: !hydros.has(req.hydroKey) });
     transfer.push(terrain.category.buffer, terrain.elevation.buffer);
   }
   worker.request('climate', msg, transfer)
     .then((result) => {
       if (result.continentality) rememberThermal(req.thermalKey, result.continentality);
+      if (result.hydro) rememberHydro(req.hydroKey, result.hydro);
       const main = climateCache.put(req.grid, req.planet, result, req.key);
-      statusbar.setSim(simText(result, req.temp));
+      statusbar.setSim(simText(result, req));
       if (climateRequest().key === req.key) showClimate(main, req);
     })
     .catch((err) => {

@@ -1,0 +1,9 @@
+# Tool-call logs (commands and paths would be public on GitHub Pages)
+tool-log/*.jsonl
+
+# Runtime battlefield snapshots and history
+snapshots/
+
+# Python bytecode
+__pycache__/
+*.pyc

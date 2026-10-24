@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "bridge",
+      "runtimeExecutable": "py",
+      "runtimeArgs": ["-m", "bridge"],
+      "port": 8765
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git *)",
+      "Bash(git.exe *)",
+      "PowerShell(git *)",
+      "PowerShell(git.exe *)",
+
+      "Bash(curl *)",
+      "Bash(curl.exe *)",
+      "Bash(wget *)",
+      "Bash(wget.exe *)",
+      "PowerShell(curl *)",
+      "PowerShell(curl.exe *)",
+      "PowerShell(wget *)",
+      "PowerShell(wget.exe *)",
+      "PowerShell(Invoke-WebRequest *)",
+      "PowerShell(iwr *)",
+      "PowerShell(Invoke-RestMethod *)",
+      "PowerShell(irm *)",
+
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npm add *)",
+      "Bash(npm ci *)",
+      "Bash(npx *)",
+      "PowerShell(npm install *)",
+      "PowerShell(npm i *)",
+      "PowerShell(npm add *)",
+      "PowerShell(npm ci *)",
+      "PowerShell(npx *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(py -m pip install *)",
+      "Bash(python -m pip install *)",
+      "Bash(python3 -m pip install *)",
+      "PowerShell(pip install *)",
+      "PowerShell(pip3 install *)",
+      "PowerShell(py -m pip install *)",
+      "PowerShell(python -m pip install *)",
+      "PowerShell(python3 -m pip install *)",
+      "Bash(pipx install *)",
+      "PowerShell(pipx install *)",
+      "Bash(winget install *)",
+      "PowerShell(winget install *)",
+
+      "Edit(/.claude/settings.json)",
+      "Edit(/.claude/settings.local.json)",
+      "Edit(/.claude/hooks/**)",
+      "Edit(/.gitignore)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/tool-log/*.jsonl)",
+
+      "Edit(//c/Users/Kc/Documents/TCSS490-AI-Course/*.*)",
+      "Edit(//c/Users/Kc/.claude/**)",
+      "Edit(~/.claude/**)",
+
+      "Edit(//c/Users/Kc/Documents/My Games/Tabletop Simulator/**)",
+      "Edit(//c/Users/Kc/AppData/Roaming/Claude/**)",
+
+      "Read(~/.ssh/**)",
+      "Read(//c/Users/Kc/.ssh/**)",
+      "Edit(~/.ssh/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"", "timeout": 10 }]
+      }
+    ]
+  }
+}

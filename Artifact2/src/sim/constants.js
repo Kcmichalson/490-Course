@@ -80,14 +80,36 @@ export const DEFLECT_REDIRECT = 0.7;
 // ---- Temperature (SPEC 6, M4) ----
 
 // Solar constant (W/m²): sunlight at the top of the atmosphere at Earth's
-// distance. With the SPEC declination and 12 mid-month days it gives
-// Tq ≈ 26.3 °C at the equator and −25.0 °C at the poles (LOG M4).
+// distance.
 export const SOLAR_CONSTANT = 1361;
 
 // Radiative temperature Tq = A·Q + B (°C from daily-mean insolation): a
-// linear fit standing in for the greenhouse effect and heat transport.
+// linear stand-in for the greenhouse effect (local radiative balance, no
+// heat transport). The offset was −61.7 in M4 (equator 26.3 °C, poles
+// −25.0 °C, global mean 10.4 °C); Climate inputs (Session 10) raised it so
+// that, with the transport below, the equator stays 26.3 °C and 45° reads
+// 10 °C (global mean ≈ 14 °C, Earth's ≈ 14–15).
 export const TQ_SLOPE = 0.212;
-export const TQ_OFFSET = -61.7;
+export const TQ_OFFSET = -56.8;
+
+// ---- Heat transport and ice-albedo (SPEC 6, Climate inputs) ----
+// Annual means only (heattransport.js); the seasonal swing is unchanged.
+// Poleward heat transport (Budyko): winds and currents carry heat from the
+// tropics toward the poles, pulling each latitude's annual mean toward the
+// global mean: T = T̄ + k·(T_rad − T̄). k = 1 is no transport; 0.711 is
+// γ = (1/k − 1)/TQ_SLOPE ≈ 1.92 W/m² per °C (fitted: 45° at 10 °C).
+export const HEAT_TRANSPORT_K = 0.711;
+// Ice-albedo: snow and ice reflect sunlight, so frozen ground absorbs this
+// share less of its insolation (fitted: the north pole row ≈ −18 °C).
+export const ICE_ALBEDO_SHARE = 0.34;
+// The ice share ramps in linearly over ICE_RAMP_C centered on ICE_LINE_C
+// (annual mean): none at 0 °C, full at −20 °C, like seasonal snow and sea
+// ice covering the ground for part of the year. A ramp of only a few
+// degrees left a sharp step at the ice edge and a jump with tilt (LOG).
+export const ICE_LINE_C = -10;
+export const ICE_RAMP_C = 20;
+// Equal-area latitude cells of the 1-D transport solve (numerical).
+export const HEAT_TRANSPORT_CELLS = 360;
 
 // Seasonal swing: how much of the radiative seasonal cycle a surface
 // feels. Water's heat capacity damps it (ocean); deep interiors feel half.

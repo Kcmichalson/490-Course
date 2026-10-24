@@ -244,8 +244,10 @@ become +1 m, and mask-ocean pixels above it get generated depth (2.7).
 - Islands smaller than a cell disappear from the simulation but stay
   visible in renders; their pixels take values from the nearest land cell.
 - Upscaling for display: bilinear for continuous layers, nearest/majority
-  for categorical layers (Köppen), then clipped to the full-resolution
-  coastline.
+  for categorical layers, then clipped to the full-resolution
+  coastline. Köppen (M6a decision, §8) is not upscaled as a category: each
+  source pixel is classified from its own temperatures and the rainfall
+  statistics, interpolated from land sim cells only.
 
 ## 3. Planet parameters (global sliders)
 
@@ -577,6 +579,36 @@ Additions:
 - Colors follow the widely used standard Köppen–Geiger color scheme, with a
   legend.
 
+**M6a decisions** (approved in Session 10; recorded in LOG.md before
+implementing):
+- Each source pixel is classified, land only (ocean, sea ice, and lakes
+  are drawn muted). Its 12 monthly temperatures are its own (own elevation
+  and category, as in the M4 modes and the tooltip). The rainfall
+  statistics come from the sim grid, **interpolated from land cells only**:
+  bilinear over the land corners, re-weighted, with the nearest land cell
+  as the fallback when no corner is land. This keeps ocean statistics out
+  of coastal pixels.
+- The rainfall statistics are computed per sim cell in the worker with the
+  M5 weather statistics: annual total, summer-half share, driest month,
+  driest and wettest summer month, driest and wettest winter month. The
+  summer half is Apr–Sep for a row latitude ≥ 0 and Oct–Mar below it, with
+  the 12 mid-month model months as the months.
+- Order: painted land ice → EF; then H (toggle on and the pixel above
+  2,500 m); then rules 1–4 above. No As: a tropical climate failing Af and
+  Am is Aw. For D, the third letter is a, then b, then d if coldest
+  < −38 °C, else c.
+- Second letter: s is checked before w, as listed in rule 4. Rule 4 doesn't
+  say which wins when both hold (raised as an ambiguity in Session 10); the
+  listed order is followed.
+- The C/D boundary (0 °C default, −3 °C) and the Highland override (on,
+  2,500 m) are set in the Köppen legend and saved in `fcm:koppen`. Changing
+  them redraws without rerunning the simulation.
+- Köppen ignores the selected season. Like the M5 weather modes, it runs the
+  12-month precipitation only while its mode is shown; the tooltip line and
+  the status bar code appear once that set exists, and never start a run.
+- Palette: Beck et al. (2018) colors for the 30 Köppen–Geiger classes; H is
+  brown (139, 90, 60).
+
 ## 9. Tides
 
 - **Open-ocean tidal range:** 1.0 m × lunar pull strength (start).
@@ -700,6 +732,22 @@ so classmates don't need to download files): opens the Import dialog with
 the bundled `test-maps/continent_map_2.png` (relative path). Importing it is
 an ordinary, undoable import; Reload asks for the file (no file handle).
 
+**Load Earth Map** (an extra I requested in Session 10, under Load Sample
+Map): fetches `test-maps/gebco_bathy_heightmap.jpg` and its land/sea mask
+`test-maps/gebco_bathy_BW_heightmap.png` (relative paths; ≈ 0.85 MB + 0.18
+MB, fetched only on click) and opens the Import dialog prefilled: Heightmap,
+Sea level Auto off at 128, Max height 5,000 m, the mask, the full-globe
+extent with wrap on, Sim width 1024, the rest at defaults. I click Import.
+Importing it also resets every Planet panel setting to Earth (radius
+6,371 km, rotation 24 h, prograde, tilt 23.5°, lunar pull 1, Season Annual
+Mean), saved like any planet change. The import and the reset are one undo
+step: one Ctrl+Z restores the previous map and planet settings. Cancel
+changes nothing. Load Sample Map and other imports never reset the planet.
+Reload behaves as after Load Sample Map (asks for the file; a fetched mask
+is kept on a same-size reload). Known behavior: hand-made planet changes
+still aren't undoable, so undoing or redoing a Load Earth Map sets the
+planet settings stored in that step, overwriting any made in between.
+
 Large tasks (New Map, palette editor, map settings) open as dialogs. Every
 slider has a number input beside it for exact values. Menu items, tools,
 modes, and toggles that don't exist yet are shown disabled with
@@ -725,11 +773,11 @@ Each mode's exact colors and formula are defined when its milestone is planned.
 
 | Category | Mode (milestone) |
 |---|---|
-| Terrain | Original Art (M2): the imported image, so overlays sit on the user's own map · Physical (M2): bathymetry blues, land greens → browns → white · Elevation (M2): grayscale · Slope & Ruggedness (M2) · Distance from Coast (M2) · Art Check (M6): hand-drawn vs. simulated |
-| Climate | Köppen (M6, with legend) · Biomes (M6): natural, painterly colors for desert, grassland, forest, rainforest, tundra, ice; exportable as base art · Temperature (M4): blue → red, current season · Temperature Range (M4) · Growing Season (M4) · Frost/Snow/Permafrost (M4) · Winter Severity (M4) |
+| Terrain | Original Art (M2): the imported image, so overlays sit on the user's own map · Physical (M2): bathymetry blues, land greens → browns → white · Elevation (M2): grayscale · Slope & Ruggedness (M2) · Distance from Coast (M2) · Art Check (M6b): hand-drawn vs. simulated |
+| Climate | Köppen (M6a, with legend) · Biomes (M6b): natural, painterly colors for desert, grassland, forest, rainforest, tundra, ice; exportable as base art · Temperature (M4): blue → red, current season · Temperature Range (M4) · Growing Season (M4) · Frost/Snow/Permafrost (M4) · Winter Severity (M4) |
 | Weather | Precipitation (M5): tan → dark blue · Precipitation Seasonality (M5) · Aridity (M5) · Cloud Cover (M5) · Wind Speed & Pressure (M3): calm zones, pressure belts, later monsoon highs/lows · Air Masses (M8) |
 | Ocean | Sea Surface Temperature (M7) · Water Bodies (M9) · Tidal Range (M9): micro/meso/macro coast colors, intertidal band · Marine Productivity (M7) · Sailing Time (M10) |
-| Life | Vegetation Density (M6) · Agricultural Potential (M6) · Travel Difficulty (M8) · Natural Hazards (M8) · Wildfire Risk (M6) |
+| Life | Vegetation Density (M6b) · Agricultural Potential (M6b) · Travel Difficulty (M8) · Natural Hazards (M8) · Wildfire Risk (M6b) |
 
 Terrain mode definitions (M2b):
 - **Slope & Ruggedness:** slope in degrees from elevation differences over
@@ -807,6 +855,16 @@ Weather mode definitions (M5; approved in the M5 plan, recorded in Session
   too-wet M5 rain and a low Thornthwaite PET (M4 summer ≈ 24 °C there);
   India reads hyper-arid without monsoons (M8).
 
+Climate mode definition (M6a; approved in Session 10):
+- **Köppen** (`koppen`): the Köppen–Geiger class of each land pixel by
+  section 8 and its M6a decisions; ignores the selected season. 31 classes
+  in the Beck et al. (2018) colors (H brown); water muted. The legend groups
+  the classes in four columns (A and B, C, D, E and H) and holds the C/D
+  boundary and Highland settings. Readouts: the tooltip's "Köppen Cfb
+  (temperate oceanic)" line and the status bar's "Climate: Cfb" in any mode
+  once the 12-month set exists; in Köppen mode also "Warmest … · coldest …
+  · P … mm/yr (dry below …)" (the B threshold).
+
 - **Shaded Relief** (toggle): light from the northwest, ×20 vertical
   exaggeration, blended with `overlay` at 60% over any mode (Original Art
   included). Land and seafloor are shaded; lakes stay flat.
@@ -839,9 +897,9 @@ together.
   coldest month at the pixel's elevation), annual precipitation,
   wind direction and speed, current type, tidal range, Köppen code, day
   length (M3), and a real-world climate analog from a small built-in table
-  of real cities (M6).
+  of real cities (M6b).
 - **Click a tile** (without dragging) in Navigate: the context bar shows a
-  monthly temperature and precipitation chart (M6).
+  monthly temperature and precipitation chart (M6b).
 - **Season selector** (M3) with a **play button** that animates the year (M11).
 - **Navigation:** zoom at cursor and pan (needed for 5000+ px maps),
   fit-to-screen, zoom percentage, Go to lat/lon, Bookmarks.
@@ -988,11 +1046,17 @@ Modes: Precipitation, Precipitation Seasonality, Aridity, Cloud Cover.
   (not imported): the western continent is dry west of its mountain spine
   in the northern tropics, with a wet east coast.
 
-**M6 — Köppen and biomes**
-Modes: Köppen, Biomes, Vegetation Density, Agricultural Potential, Wildfire
-Risk, Art Check. Click-a-tile climate chart, real-world climate analog.
+**M6 — Köppen and biomes** (split in Session 10 into M6a and M6b)
+
+**M6a — Köppen**
+Mode: Köppen (section 8), with its legend and settings; the Köppen code in
+the tooltip and the status bar.
 - Earth broadly matches a real Köppen map: Af Amazon, BWh Sahara,
   Cfb Western Europe, Csa Mediterranean, Dfc Canada/Siberia, ET Arctic coasts.
+
+**M6b — Biomes and life modes**
+Modes: Biomes, Vegetation Density, Agricultural Potential, Wildfire Risk,
+Art Check. Click-a-tile climate chart, real-world climate analog.
 
 **M7 — Ocean currents and upwelling**
 Modes: Sea Surface Temperature, Marine Productivity. Toggles: Ocean

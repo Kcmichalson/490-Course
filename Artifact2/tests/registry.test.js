@@ -108,15 +108,16 @@ test('sea caves are not in the registries; Sculpt and Undo are live; Tool Palett
 
 // Until Session 4 this checked that M2b phase 2 was still locked; M2b is
 // now finished, so the same items must be live.
-test('M2b is complete: Slope, Distance from Coast, Shaded Relief, and Art Image are live; Art Check stays M6', async () => {
+// Session 10: Art Check moved from M6 to M6b (M6 split).
+test('M2b is complete: Slope, Distance from Coast, Shaded Relief, and Art Image are live; Art Check stays M6b', async () => {
   const { RENDERERS } = await import('../src/render/modes/index.js');
   for (const id of ['slope', 'coast-distance']) {
     assert.ok(isAvailable(MODES.find((m) => m.id === id).milestone), id);
     assert.ok(RENDERERS[id], `${id} has a renderer`);
   }
   assert.ok(isAvailable(OVERLAYS.find((o) => o.id === 'shaded-relief').milestone));
-  assert.equal(MODES.find((m) => m.id === 'art-check').milestone, 6);
-  assert.ok(!isAvailable(6));
+  assert.equal(MODES.find((m) => m.id === 'art-check').milestone, '6b');
+  assert.ok(!isAvailable('6b'));
   const { readFile } = await import('node:fs/promises');
   const main = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
   assert.match(main, /label: 'Art Image…', milestone: '2b'/);
@@ -153,14 +154,30 @@ test('M4 is live: the five temperature modes and Climate Boundaries', async () =
   assert.ok(isAvailable(OVERLAYS.find((o) => o.id === 'climate-boundaries').milestone));
 });
 
-// M5 (Session 8, phase 1): Precipitation is live with a renderer and legend;
-// Köppen stays M6.
-test('M5 is live: Precipitation; Köppen stays M6', async () => {
+// M5 (Session 8, phase 1): Precipitation is live with a renderer and legend.
+// Until Session 10 this also checked that Köppen stayed locked; that check
+// moved to the M6a test below, which now expects it live.
+test('M5 is live: Precipitation', async () => {
   const { RENDERERS, PRECIP_MODES } = await import('../src/render/modes/index.js');
   assert.ok(isAvailable(MODES.find((m) => m.id === 'precipitation').milestone));
   assert.ok(RENDERERS.precipitation?.legend, 'precipitation has a renderer and legend');
   assert.ok(PRECIP_MODES.has('precipitation'));
-  assert.ok(!isAvailable(MODES.find((m) => m.id === 'koppen').milestone));
+});
+
+// M6a (Session 10): Köppen is live with a renderer, a legend with its
+// settings, and runs the precipitation; the rest of M6 waits for M6b.
+test('M6a is live: Köppen; Biomes, Vegetation, Agriculture, Wildfire, Art Check stay M6b', async () => {
+  const { RENDERERS, PRECIP_MODES } = await import('../src/render/modes/index.js');
+  const koppen = MODES.find((m) => m.id === 'koppen');
+  assert.equal(koppen.milestone, '6a');
+  assert.ok(isAvailable(koppen.milestone));
+  assert.ok(RENDERERS.koppen?.legend?.columns && RENDERERS.koppen.legend.controls, 'Köppen has a renderer, legend columns, and controls');
+  assert.ok(PRECIP_MODES.has('koppen'));
+  for (const id of ['biomes', 'vegetation', 'agriculture', 'wildfire', 'art-check']) {
+    const m = MODES.find((x) => x.id === id);
+    assert.equal(m.milestone, '6b', id);
+    assert.ok(!isAvailable(m.milestone), id);
+  }
 });
 
 // M5 phase 2 (Session 9): Seasonality, Aridity, and Cloud Cover are live, each

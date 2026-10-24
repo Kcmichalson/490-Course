@@ -44,7 +44,7 @@ export function createContextBar(root, { planetPanel, planetClose, onClearSelect
       return;
     }
     const text = document.createElement('span');
-    text.textContent = `Selected ${selection.latLon} · sim cell ${selection.i}, ${selection.j} · monthly climate chart arrives in M6`;
+    text.textContent = `Selected ${selection.latLon} · sim cell ${selection.i}, ${selection.j} · monthly climate chart arrives in M6b`;
     const clear = document.createElement('button');
     clear.type = 'button';
     clear.className = 'icon-button';

@@ -20,10 +20,10 @@ export const MODES = [
   { id: 'elevation', label: 'Elevation', category: 'terrain', milestone: '2a', blurb: 'Grayscale elevation.' },
   { id: 'slope', label: 'Slope & Ruggedness', category: 'terrain', milestone: '2b', blurb: 'How steep and broken the land is.' },
   { id: 'coast-distance', label: 'Distance from Coast', category: 'terrain', milestone: '2b', blurb: 'Distance to the nearest coastline in km.' },
-  { id: 'art-check', label: 'Art Check', category: 'terrain', milestone: 6, blurb: 'Where the hand-drawn map disagrees with the simulation.' },
+  { id: 'art-check', label: 'Art Check', category: 'terrain', milestone: '6b', blurb: 'Where the hand-drawn map disagrees with the simulation.' },
   // Climate
-  { id: 'koppen', label: 'Köppen', category: 'climate', milestone: 6, blurb: 'Köppen–Geiger climate classes with legend.' },
-  { id: 'biomes', label: 'Biomes', category: 'climate', milestone: 6, blurb: 'Natural, painterly biome colors; exportable as base art.' },
+  { id: 'koppen', label: 'Köppen', category: 'climate', milestone: '6a', blurb: 'Köppen–Geiger climate classes with legend.' },
+  { id: 'biomes', label: 'Biomes', category: 'climate', milestone: '6b', blurb: 'Natural, painterly biome colors; exportable as base art.' },
   { id: 'temperature', label: 'Temperature', category: 'climate', milestone: 4, blurb: 'Surface temperature, blue → red, current season.' },
   { id: 'temp-range', label: 'Temperature Range', category: 'climate', milestone: 4, blurb: 'Warmest minus coldest month.' },
   { id: 'growing-season', label: 'Growing Season', category: 'climate', milestone: 4, blurb: 'Length of the growing season.' },
@@ -43,11 +43,11 @@ export const MODES = [
   { id: 'marine-productivity', label: 'Marine Productivity', category: 'ocean', milestone: 7, blurb: 'Rich fishing waters: upwelling, shelves, cold water.' },
   { id: 'sailing-time', label: 'Sailing Time', category: 'ocean', milestone: 10, blurb: 'Travel time from a clicked port to every ocean cell.' },
   // Life
-  { id: 'vegetation', label: 'Vegetation Density', category: 'life', milestone: 6, blurb: 'How thickly the land is vegetated.' },
-  { id: 'agriculture', label: 'Agricultural Potential', category: 'life', milestone: 6, blurb: 'How well the land could be farmed.' },
+  { id: 'vegetation', label: 'Vegetation Density', category: 'life', milestone: '6b', blurb: 'How thickly the land is vegetated.' },
+  { id: 'agriculture', label: 'Agricultural Potential', category: 'life', milestone: '6b', blurb: 'How well the land could be farmed.' },
   { id: 'travel-difficulty', label: 'Travel Difficulty', category: 'life', milestone: 8, blurb: 'How hard the land is to cross on foot.' },
   { id: 'hazards', label: 'Natural Hazards', category: 'life', milestone: 8, blurb: 'Storms, floods, and other climate hazards.' },
-  { id: 'wildfire', label: 'Wildfire Risk', category: 'life', milestone: 6, blurb: 'Where dry seasons and fuel make fires likely.' },
+  { id: 'wildfire', label: 'Wildfire Risk', category: 'life', milestone: '6b', blurb: 'Where dry seasons and fuel make fires likely.' },
 ].map((m) => ({ ...m, icon: m.id }));
 
 export const DEFAULT_MODE_ID = 'physical';

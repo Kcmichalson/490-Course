@@ -18,8 +18,9 @@ import { runClimate, precipitationSteps } from './sim/pipeline.js';
 import { climateBoundaries } from './sim/boundaries.js';
 
 // The last continentality (the slow part of temperature), boundary lines,
-// and 12-month precipitation (M5; the monthly layers stay here, M6 Köppen
-// will read them), by key, so season changes reuse them.
+// and 12-month precipitation (M5; the monthly layers stay here, and Köppen,
+// M6a, gets their summer/winter statistics and the nearest-land index with
+// the other stats), by key, so season changes reuse them.
 let lastThermal = { key: null, value: null };
 let lastBounds = { key: null, value: null };
 let lastHydro = { key: null, value: null };

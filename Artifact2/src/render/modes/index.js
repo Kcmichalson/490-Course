@@ -16,6 +16,7 @@ import { drawPrecipitation } from './precipitation.js';
 import { drawSeasonality } from './seasonality.js';
 import { drawAridity } from './aridity.js';
 import { drawCloudCover } from './cloudcover.js';
+import { drawKoppen } from './koppen.js';
 
 export const RENDERERS = {
   'original-art': drawOriginalArt,
@@ -33,10 +34,12 @@ export const RENDERERS = {
   'precip-seasonality': drawSeasonality,
   aridity: drawAridity,
   'cloud-cover': drawCloudCover,
+  koppen: drawKoppen,
 };
 
 // Modes that need temperature results (M4).
 export const TEMPERATURE_MODES = new Set(['temperature', 'temp-range', 'growing-season', 'frost', 'winter-severity']);
 
-// Modes that need precipitation (M5; they run the temperature too).
-export const PRECIP_MODES = new Set(['precipitation', 'precip-seasonality', 'aridity', 'cloud-cover']);
+// Modes that need precipitation (M5, and Köppen from M6a; they run the
+// temperature too).
+export const PRECIP_MODES = new Set(['precipitation', 'precip-seasonality', 'aridity', 'cloud-cover', 'koppen']);

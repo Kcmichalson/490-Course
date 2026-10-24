@@ -5,8 +5,9 @@ Wired in .claude/settings.json for PreToolUse ("requested"), PostToolUse
 mode only). A "requested" line with no later line for the same tool_use_id
 means the call never ran (denied in a permission dialog or blocked).
 
-Reads the hook's JSON on stdin. Writes tool-log/session-N.jsonl, where N
-comes from tool-log/current-session.txt. Never logs file contents
+Reads the hook's JSON on stdin. Writes tool-log/YYYY-MM-DD.jsonl (local
+date). A SessionStart hook writes a "session_start" line at the start of
+each session. Never logs file contents
 (Write/Edit bodies) or tool output. Truncates every field to 500
 characters. Standard library only. Always exits 0, so it never blocks a call.
 """
@@ -22,6 +23,7 @@ STATUS = {
     "PostToolUse": "ok",
     "PostToolUseFailure": "failed",
     "PermissionDenied": "denied",
+    "SessionStart": "session_start",
 }
 FILE_TOOLS = {"Read", "Write", "Edit", "NotebookEdit"}
 # Input keys that carry file contents or edit bodies: never logged.
@@ -51,11 +53,6 @@ def main():
     root = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
     log_dir = os.path.join(root, "tool-log")
     os.makedirs(log_dir, exist_ok=True)
-    try:
-        with open(os.path.join(log_dir, "current-session.txt"), encoding="utf-8") as f:
-            n = f.read().strip() or "unknown"
-    except OSError:
-        n = "unknown"
     event = data.get("hook_event_name", "")
     tool = data.get("tool_name", "")
     line = {
@@ -70,7 +67,12 @@ def main():
         line["error"] = cut(data.get("error", ""))
     if event == "PermissionDenied":
         line["reason"] = cut(data.get("reason", ""))
-    with open(os.path.join(log_dir, f"session-{n}.jsonl"), "a", encoding="utf-8") as f:
+    if event == "PermissionDenied":
+        line["reason"] = cut(data.get("reason", ""))
+    if event == "SessionStart":
+        line["source"] = data.get("source", "")  # startup, resume, clear, compact
+    day = datetime.now().astimezone().strftime("%Y-%m-%d")  # local date
+    with open(os.path.join(log_dir, f"{day}.jsonl"), "a", encoding="utf-8") as f:
         f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
 

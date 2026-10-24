@@ -203,6 +203,14 @@ export const CLOUD_LIFT_SHARE = 0.3;
 // GEBCO: without it rainforests read 1–3% cloud; LOG M5).
 export const CLOUD_RAIN_MM = 50;
 
+// ---- Köppen (SPEC 8, M6a) ----
+// Highland override: mountain climates change over short distances, so land
+// above this height gets its own class, H (start; the toggle defaults on).
+export const KOPPEN_HIGHLAND_M = 2500;
+// C/D boundary: the coldest month's mean that separates temperate from
+// continental winters (0 °C default; −3 °C is the other common choice).
+export const KOPPEN_CD_BOUNDARY_C = 0;
+
 // ---- Terrain import (SPEC 2.3–2.7) ----
 
 // Silhouette land with auto-relief off: a low, flat plain, for testing pure

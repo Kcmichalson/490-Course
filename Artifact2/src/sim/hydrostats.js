@@ -12,6 +12,7 @@ import {
 } from './constants.js';
 import { rowLats } from './temperature.js';
 import { declination, dayLength, MONTH_MID_DAYS } from './planet.js';
+import { halfStats } from './koppen.js';
 
 // Days in a month: the year split into 12 equal months (the model's months
 // are the 12 mid-month runs; there are no calendar month lengths).
@@ -93,21 +94,29 @@ export const isColdForAridity = (petMmYr) => petMmYr < ARIDITY_COLD_PET_MM_YR;
 // From the 12 monthly precipitation layers (mm/month) and the 12 monthly cell
 // temperatures (°C), on the sim grid:
 // → { seasonality (SI), pet (mm/yr), wetMonth, dryMonth (Uint8, 0 = Jan),
-//     wetMm, dryMm (mm/month) }
+//     wetMm, dryMm (mm/month),
+//     Köppen's summer/winter split (M6a; the summer half by the row's
+//     hemisphere): summerShare (of the annual total), summerDryMm,
+//     summerWetMm, winterDryMm, winterWetMm (mm/month) }
 export function hydroStats(grid, planet, months, temps) {
   const W = grid.width;
   const H = grid.height;
   const n = W * H;
   const hours = monthlyDayHours(grid, planet);
+  const lats = rowLats(grid.latTop, grid.latBottom, H);
   const out = {
     seasonality: new Float32Array(n), pet: new Float32Array(n),
     wetMonth: new Uint8Array(n), dryMonth: new Uint8Array(n), wetMm: new Float32Array(n), dryMm: new Float32Array(n),
+    summerShare: new Float32Array(n), summerDryMm: new Float32Array(n), summerWetMm: new Float32Array(n),
+    winterDryMm: new Float32Array(n), winterWetMm: new Float32Array(n),
   };
   const p = new Float64Array(12);
   const t = new Float64Array(12);
   const l = new Float64Array(12);
+  const half = {};
   for (let j = 0; j < H; j++) {
     for (let m = 0; m < 12; m++) l[m] = hours[m][j];
+    const north = lats[j] >= 0;
     for (let i = 0, k = j * W; i < W; i++, k++) {
       let wet = 0;
       let dry = 0;
@@ -123,6 +132,12 @@ export function hydroStats(grid, planet, months, temps) {
       out.dryMonth[k] = dry;
       out.wetMm[k] = p[wet];
       out.dryMm[k] = p[dry];
+      halfStats(p, north, half);
+      out.summerShare[k] = half.summerShare;
+      out.summerDryMm[k] = half.summerDry;
+      out.summerWetMm[k] = half.summerWet;
+      out.winterDryMm[k] = half.winterDry;
+      out.winterWetMm[k] = half.winterWet;
     }
   }
   return out;

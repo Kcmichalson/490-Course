@@ -11,7 +11,9 @@
 // color for land-only modes. Modes with WATER_FLAG classes draw water darker.
 // context(map, terrain, climate) and fill(mode, ctx, y0, y1, out, x0, x1)
 // replace the temperature ones for modes drawn from other layers (M5
-// precipitation).
+// precipitation). key() (optional) names the mode's own settings, so
+// changing them redraws the raster (M6a Köppen). The legend may use
+// columns: [{ title, items: [{ cls, label }] }] instead of items.
 
 import { fillClasses, WATER, WATER_FLAG } from '../sim/climatefield.js';
 import { seasonTables, monthlyTables, rowLats } from '../sim/temperature.js';
@@ -142,7 +144,7 @@ export function makeClimateRenderer(mode, spec) {
     const w = r.x1 - r.x0;
     const h = r.y1 - r.y0;
     if (w <= 0 || h <= 0) return;
-    const key = `${mode}|${climate?.version ?? 0}|${map.sourceWidth}x${map.sourceHeight}|${args.version}`;
+    const key = `${mode}|${climate?.version ?? 0}|${map.sourceWidth}x${map.sourceHeight}|${args.version}|${spec.key?.() ?? ''}`;
     if (!ensureRaster(mode, spec, args, key)) {
       g.fillStyle = `rgb(${PENDING.join(', ')})`;
       g.fillRect(r.x0, r.y0, w, h);
@@ -162,11 +164,13 @@ export function makeClimateRenderer(mode, spec) {
   draw.partial = true;
   // The base layer rebuilds when a new climate result arrives and as the
   // raster's rows come in.
-  draw.dataKey = (store) => `clim${store.climate?.version ?? 0}|r${raster.version}`;
+  draw.dataKey = (store) => `clim${store.climate?.version ?? 0}|r${raster.version}|${spec.key?.() ?? ''}`;
   const rgb = (c) => `rgb(${c.map(Math.round).join(', ')})`;
+  const swatches = (items) => items.map(({ cls, label }) => ({ color: rgb(spec.colors[cls]), label }));
   draw.legend = {
     ...spec.legend,
-    items: spec.legend.items.map(({ cls, label }) => ({ color: rgb(spec.colors[cls]), label })),
+    ...(spec.legend.items && { items: swatches(spec.legend.items) }),
+    ...(spec.legend.columns && { columns: spec.legend.columns.map((c) => ({ ...c, items: swatches(c.items) })) }),
   };
   return draw;
 }

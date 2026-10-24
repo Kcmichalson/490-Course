@@ -1,7 +1,8 @@
 // Legend panel for the current map mode. Until a mode's milestone lands it
 // says when the mode arrives and that the open-ocean placeholder is shown.
 // Renderers may describe their colors with a `legend`:
-//   { items: [{ color, label }], columns?: [{ title, items }], note? }
+//   { items: [{ color, label }], columns?: [{ title, items }], note?,
+//     controls?: () => Element (the mode's own settings, M6a Köppen) }
 
 import { icon } from '../ui/icons.js';
 import { isAvailable, milestoneLabel } from '../ui/comingsoon.js';
@@ -61,6 +62,7 @@ function renderModeLegend(el, mode) {
   }
   const legend = RENDERERS[mode.id]?.legend;
   if (!legend) return;
+  if (legend.controls) el.append(legend.controls());
   if (legend.items) el.append(swatchList(legend.items));
   if (legend.columns) {
     const cols = document.createElement('div');

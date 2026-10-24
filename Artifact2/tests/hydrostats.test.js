@@ -63,6 +63,20 @@ test('hydroStats per cell: seasonality, wettest and driest month, PET', () => {
   assert.equal(st.pet[1], 0, 'frozen all year');
 });
 
+// M6a (Session 10): Köppen's summer/winter split, by each row's hemisphere.
+test('hydroStats per cell: Köppen summer and winter halves, north and south rows', () => {
+  const grid = { width: 1, height: 2, latTop: 10, latBottom: -10 };
+  const months = Array.from({ length: 12 }, (_, m) => Float32Array.from([m + 1, m + 1])); // Jan 1 … Dec 12 mm
+  const temps = Array.from({ length: 12 }, () => Float32Array.from([20, 20]));
+  const st = hydroStats(grid, createPlanet(), months, temps);
+  // North (row 0): summer Apr–Sep = 4…9 mm (39 of 78).
+  near(st.summerShare[0], 0.5, 1e-6);
+  assert.deepEqual([st.summerDryMm[0], st.summerWetMm[0], st.winterDryMm[0], st.winterWetMm[0]], [4, 9, 1, 12]);
+  // South (row 1): summer Oct–Mar = 10, 11, 12, 1, 2, 3 mm.
+  near(st.summerShare[1], 0.5, 1e-6);
+  assert.deepEqual([st.summerDryMm[1], st.summerWetMm[1], st.winterDryMm[1], st.winterWetMm[1]], [1, 12, 4, 9]);
+});
+
 test('cloud cover: none in dry air, overcast in saturated rising air, less under the highs', () => {
   assert.equal(cloudCover(0.2, -1), 0);
   near(cloudCover(1, -1), 1, 1e-12);

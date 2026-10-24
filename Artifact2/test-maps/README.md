@@ -17,6 +17,14 @@ Sample inputs used for milestone verification (SPEC.md section 17).
 | `make-palette-map.js` | Generates `palette_map_1.png` (no dependencies). `--width`/`--height`/`--out` make other sizes, e.g. a 5632×2048 copy for timing. |
 | `private/` | Git-ignored. |
 
+**File-name casing.** New files here use lowercase names (CLAUDE.md).
+`gebco_bathy_BW_heightmap.png` is the one documented exception, kept by
+decision in Session 10: a case-only rename on Windows may not register in
+git, and GitHub Pages is case-sensitive, so a rename could break the live
+site. Code must use its exact casing (File > Load Earth Map does);
+tests/earthmap.test.js names it as the exception and still checks that it
+exists with that exact casing.
+
 
 ## Credit
 

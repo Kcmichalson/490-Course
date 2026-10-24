@@ -3,9 +3,9 @@
 // use numbers (3) or strings ('2a'). Bump CURRENT_MILESTONE when a milestone
 // is finished.
 
-export const MILESTONES = ['1', '2a', '2b', '3', '4', '4b', '5', '6', '7', '8', '9', '10', '11'];
+export const MILESTONES = ['1', '2a', '2b', '3', '4', '4b', '5', '6a', '6b', '7', '8', '9', '10', '11'];
 
-export const CURRENT_MILESTONE = '5';
+export const CURRENT_MILESTONE = '6a';
 
 export function milestoneIndex(milestone) {
   return MILESTONES.indexOf(String(milestone));

@@ -1,5 +1,5 @@
-// Status bar: cursor lat/lon, elevation (M2a), climate code (M6), map info,
-// the simulation progress, and the simulation worker's status.
+// Status bar: cursor lat/lon, elevation (M2a), climate code (Köppen, M6a),
+// map info, the simulation progress, and the simulation worker's status.
 
 import { simGridSize } from '../sim/mapconfig.js';
 
@@ -12,7 +12,7 @@ export function createStatusBar(root) {
   root.innerHTML = `
     <span class="sb-cursor">—</span>
     <span class="sb-elev" title="Elevation arrives in M2a">Elevation: —</span>
-    <span class="sb-climate" title="Climate code arrives in M6">Climate: —</span>
+    <span class="sb-climate" title="Köppen code, once a precipitation or Köppen mode has run for this map">Climate: —</span>
     <span class="sb-spacer"></span>
     <span class="sb-map"></span>
     <span class="sb-sim" hidden></span>
@@ -23,6 +23,7 @@ export function createStatusBar(root) {
   const simStatus = root.querySelector('.sb-sim');
   const elev = root.querySelector('.sb-elev');
   elev.removeAttribute('title');
+  const climate = root.querySelector('.sb-climate');
 
   return {
     // text: formatted lat/lon, or null when the cursor is off the map/canvas
@@ -32,6 +33,10 @@ export function createStatusBar(root) {
     // meters, or null when the cursor is off the map
     setElevation(meters) {
       elev.textContent = `Elevation: ${meters == null ? '—' : formatMeters(meters)}`;
+    },
+    // Köppen code, or null when there is none (off map, water, not computed)
+    setClimate(code) {
+      climate.textContent = `Climate: ${code ?? '—'}`;
     },
     setMap(map) {
       const sim = simGridSize(map);

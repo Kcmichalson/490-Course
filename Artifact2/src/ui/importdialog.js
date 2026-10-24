@@ -408,21 +408,22 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     canvas.getContext('2d').putImageData(new ImageData(rgba, w, h), 0, 0);
   }
 
+  // A land/sea mask for the current job, decoded for the preview (Add mask
+  // image… and a prefilled mask, Load Earth Map).
+  async function maskOf({ file, handle = null }) {
+    const natural = await imageSize(file);
+    const { width, height } = job.mapSize;
+    const preview = await decodeImage(file, job.previewSize.width, job.previewSize.height, 'pixelated');
+    const mask = { file, handle, natural, resized: natural.width !== width || natural.height !== height, previewRgba: readPixels(preview) };
+    preview.close();
+    return mask;
+  }
+
   async function pickMask() {
     const picked = await pickImageFile();
     if (!picked || !job) return;
     try {
-      const natural = await imageSize(picked.file);
-      const { width, height } = job.mapSize;
-      const preview = await decodeImage(picked.file, job.previewSize.width, job.previewSize.height, 'pixelated');
-      job.mask = {
-        file: picked.file,
-        handle: picked.handle,
-        natural,
-        resized: natural.width !== width || natural.height !== height,
-        previewRgba: readPixels(preview),
-      };
-      preview.close();
+      job.mask = await maskOf(picked);
       syncControls();
       schedulePreview();
     } catch (err) {
@@ -451,6 +452,7 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
         mask: kind === 'heightmap' && job.mask ? { file: job.mask.file, handle: job.mask.handle } : null,
         art: job.art ? { file: job.art.file, handle: job.art.handle, natural: job.art.natural } : null,
         keepEdits: canKeepEdits() && r('keep').checked,
+        planetReset: job.planetReset,
       });
       save('importExtent', { latTop: cfgValues.latTop, latBottom: cfgValues.latBottom, lonWest: cfgValues.lonWest, lonSpan: cfgValues.lonSpan, wraps: cfgValues.wraps, simWidth: cfgValues.simWidth });
       save('importSettings', settings);
@@ -466,7 +468,10 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     }
   }
 
-  // Opens the dialog for a file. prefill: { kind, storedSettings, cfgValues } (Reload with a new size).
+  // Opens the dialog for a file. prefill: { kind, storedSettings, cfgValues }
+  // (Reload with a new size), plus for Load Earth Map: mask ({ file }),
+  // radiusKm (the extent's planet), and planetReset (the import also resets
+  // the planet to Earth).
   async function open({ file, handle = null, prefill = null }) {
     const natural = await imageSize(file);
     const mapSize = fitWithinMax(natural.width, natural.height);
@@ -480,7 +485,9 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     job = {
       file, handle, natural, mapSize, previewSize, previewRgba, guess, levels, mask: null,
       art: prefill?.art ? { ...prefill.art } : null, paletteRgba: null, paletteReadyForEditor: false,
+      planetReset: Boolean(prefill?.planetReset),
     };
+    if (prefill?.mask) job.mask = await maskOf(prefill.mask);
 
     const stored = load('importSettings', null);
     settings = structuredClone({ ...DEFAULT_SETTINGS, ...(prefill?.storedSettings ?? {}) });
@@ -494,7 +501,8 @@ export function createImportDialog(dialog, { worker, getCurrentMap, getEditCount
     kind = prefill?.kind ?? guess.kind;
     if (kind === 'palette' && !isAvailable('2b')) kind = 'heightmap';
     if (kind === 'palette') await preparePalette();
-    const cur = getCurrentMap();
+    // Load Earth Map's prefill brings Earth's radius in place of the current one.
+    const cur = prefill?.radiusKm ? { ...getCurrentMap(), radiusKm: prefill.radiusKm } : getCurrentMap();
     const lastExtent = prefill?.cfgValues ?? load('importExtent', null) ?? cur;
     // The radius always comes from the current map (saved extents don't carry one).
     extent.set({ ...cur, ...lastExtent, radiusKm: cur.radiusKm }, mapSize.width, mapSize.height);

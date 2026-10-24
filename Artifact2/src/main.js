@@ -30,6 +30,9 @@ import { TEMPERATURE_MODES, PRECIP_MODES } from './render/modes/index.js';
 import { precipCtx, hydroCtx } from './render/modes/precipitation.js';
 import { pixelPrecip, pixelAnnualMm, seasonalityClassAt, aridityAt } from './sim/precipfield.js';
 import { SEASONALITY_LABELS, SEASONALITY_TOO_DRY, ARIDITY_LABELS, ARIDITY_COLD } from './sim/hydrostats.js';
+import { koppenCtx, setKoppenSettings, onKoppenSettings } from './render/modes/koppen.js';
+import { koppenAt } from './sim/koppenfield.js';
+import { KOPPEN_CODES, KOPPEN_NAMES } from './sim/koppen.js';
 import { setClimateRasterListener, climateCtx } from './render/climateraster.js';
 import { TOOLS, getTool, DEFAULT_TOOL_ID, getBrush, DEFAULT_BRUSH_ID } from './ui/tools.js';
 import { isAvailable } from './ui/comingsoon.js';
@@ -48,7 +51,8 @@ import { attachNavigation } from './ui/navigation.js';
 import { load, save } from './io/storage.js';
 import { createWorkerClient } from './io/workerclient.js';
 import { pickImageFile, imageSize, fitWithinMax, decodeImage, readPixels } from './io/imagefile.js';
-import { createImportDialog, artAspectNotice } from './ui/importdialog.js';
+import { createImportDialog, artAspectNotice, DEFAULT_SETTINGS } from './ui/importdialog.js';
+import { EARTH_MAP, EARTH_PLANET, earthPrefill } from './io/earthmap.js';
 import { createMapSettingsDialog } from './ui/mapsettingsdialog.js';
 import { formatMeters } from './ui/statusbar.js';
 import { createHistory } from './ui/history.js';
@@ -248,6 +252,7 @@ function updateHover() {
   if (!hover) {
     statusbar.setCursor(null);
     statusbar.setElevation(null);
+    statusbar.setClimate(null);
     inspector.hide();
     return;
   }
@@ -256,6 +261,7 @@ function updateHover() {
   if (!ll) {
     statusbar.setCursor(null, true);
     statusbar.setElevation(null);
+    statusbar.setClimate(null);
     inspector.hide();
     return;
   }
@@ -263,8 +269,10 @@ function updateHover() {
   if (state.toolId === 'sculpt') sculptPanel.setKm(brushKmText(ll.lat));
   const px = sourcePixel(state.map, src.x, src.y);
   const meters = store.terrain.elevation[px.py * store.terrain.width + px.px];
+  const kp = koppenAtPixel(px);
   statusbar.setCursor(text);
   statusbar.setElevation(meters);
+  statusbar.setClimate(kp ? KOPPEN_CODES[kp.cls] : null);
   if (!state.tooltipOn || hover.dragging) {
     inspector.hide();
     return;
@@ -274,7 +282,8 @@ function updateHover() {
     latLon: text,
     elevation: formatMeters(meters),
     lines: [
-      dayLengthText(ll.lat, state.planet, state.season), temperatureReadout(px), precipitationReadout(px), windReadout(src), modeReadout(px, cell),
+      dayLengthText(ll.lat, state.planet, state.season), temperatureReadout(px), precipitationReadout(px), koppenReadout(kp), windReadout(src),
+      modeReadout(px, cell, kp),
     ],
     ...px,
     ...cell,
@@ -315,6 +324,32 @@ function precipitationReadout(px) {
   return `Precipitation ${Math.round(12 * pixelPrecip(ctx, px.px, px.py)).toLocaleString('en-US')} mm/yr`;
 }
 
+// Köppen at a pixel (SPEC 8, M6a): { cls, warmest, coldest, mat, precip,
+// pth }, or null on water or while the 12-month precipitation set for the
+// current terrain and planet hasn't been computed (a precipitation or Köppen
+// mode runs it; the tooltip and status bar never start a run, as A8).
+function koppenAtPixel(px) {
+  const c = store.climate;
+  if (!c?.thermal || !isLand(store.terrain, px.py * store.terrain.width + px.px)) return null;
+  const req = climateRequest();
+  const hydro = req.thermalKey ? hydros.get(req.thermalKey) : null;
+  const ctx = hydro ? koppenCtx(state.map, store.terrain, { ...c, hydro }) : null;
+  return ctx ? koppenAt(ctx, px.px, px.py) : null;
+}
+
+// "Köppen Cfb (temperate oceanic)" (SPEC 13.5).
+function koppenReadout(kp) {
+  if (!kp) return '';
+  const code = KOPPEN_CODES[kp.cls];
+  return `Köppen ${code} (${KOPPEN_NAMES[code]})`;
+}
+
+// Köppen mode: what decided the class.
+function koppenModeReadout(kp) {
+  if (!kp) return '';
+  return `Warmest ${fmtC(kp.warmest)} · coldest ${fmtC(kp.coldest)} · P ${fmtMm(kp.precip.annual)} mm/yr (dry below ${fmtMm(Math.max(0, kp.pth))})`;
+}
+
 // The temperature modes' own readouts.
 function temperatureModeReadout({ px, py }) {
   const c = store.climate;
@@ -352,7 +387,8 @@ function windReadout(src) {
 }
 
 // An extra tooltip line for the current mode, or ''.
-function modeReadout({ px, py }, cell) {
+function modeReadout({ px, py }, cell, kp) {
+  if (state.modeId === 'koppen') return koppenModeReadout(kp);
   if (state.modeId === 'wind-pressure') {
     const c = currentClimate();
     if (!c || !cell) return '';
@@ -521,6 +557,16 @@ function applySnapshot(snap, { keepView = false } = {}) {
   const sameSize = live.map.sourceWidth === state.map.sourceWidth && live.map.sourceHeight === state.map.sourceHeight;
   pendingSim.clear();
   state.map = live.map;
+  // Load Earth Map's entry also carries the planet settings (one undo step
+  // with the map); other snapshots leave the planet alone.
+  if (snap.planet) {
+    state.planet = createPlanet(snap.planet.planet);
+    state.season = createSeason(snap.planet.season);
+    state.tiltPreview = null;
+    planetPanel?.setPlanet(state.planet);
+    planetPanel?.setSeason(state.season);
+    toolbar?.setSeason(state.season);
+  }
   Object.assign(store, {
     base: live.base, baseSim: live.baseSim, edits: live.edits, terrain: live.terrain, sim: live.sim, source: live.source,
   });
@@ -542,8 +588,14 @@ function applySnapshot(snap, { keepView = false } = {}) {
 }
 
 // A wholesale change (New Map, Import, Reload, Map settings), undoable.
+// opts.planet ({ planet, season }; Load Earth Map) makes the planet settings
+// part of the same undo step: before keeps the current ones.
 function commitState(label, after, opts = {}) {
   const before = snapshotOf(currentState());
+  if (opts.planet) {
+    before.planet = { planet: state.planet, season: state.season };
+    after = { ...after, planet: { planet: opts.planet.planet, season: opts.planet.season } };
+  }
   applySnapshot(after, opts);
   history.push(stateEntry(label, before, after, (snap) => applySnapshot(snap, { keepView: true })));
 }
@@ -834,6 +886,16 @@ function ensureClimate() {
     });
 }
 
+// Köppen settings (SPEC 8: the C/D boundary and the Highland override),
+// set in the Köppen legend. They change the classes only, not the sim: a
+// change redraws the raster and the readouts.
+setKoppenSettings(load('koppen', {}), false);
+onKoppenSettings((s) => {
+  save('koppen', s);
+  requestDraw();
+  updateHover();
+});
+
 // The chunked temperature raster reports its rows as they arrive.
 setClimateRasterListener(({ done, ms, mode }) => {
   requestDraw();
@@ -959,7 +1021,11 @@ async function importMap(payload) {
   if (!worker) throw new Error('The simulation worker is not running.');
   if (busy) throw new Error('Another map update is still running.');
   const mapSize = fitWithinMax(payload.natural.width, payload.natural.height);
-  const cfg = importConfig(payload.cfgValues, mapSize, state.map);
+  // Load Earth Map: the import is built on Earth's radius, and the planet
+  // settings reset with it (one undo step).
+  const earth = Boolean(payload.planetReset);
+  let cfg = importConfig(payload.cfgValues, mapSize, state.map);
+  if (earth) cfg = createMapConfig({ ...cfg, radiusKm: EARTH_PLANET.radiusKm });
   const source = {
     kind: payload.kind,
     file: payload.file,
@@ -978,7 +1044,7 @@ async function importMap(payload) {
   commitState(`Import ${payload.file.name}`, {
     map: cfg, source: built.source, base: built.base, baseSim: built.baseSim,
     edits: keep ? cloneEdits(store.edits) : createEdits(cfg.sourceWidth, cfg.sourceHeight),
-  });
+  }, earth ? { planet: EARTH_PLANET } : {});
   let note = '';
   if (keep) note = ' Brush edits kept.';
   else if (hadEdits) {
@@ -989,6 +1055,7 @@ async function importMap(payload) {
   const artNote = artAspectNotice(built.source.art, cfg.sourceWidth, cfg.sourceHeight);
   if (artNote) note += ` ${artNote}`;
   note = unmatchedNote(built.info) + note;
+  if (earth) note += ' Planet reset to Earth (Ctrl+Z restores the previous map and planet).';
   contextbar.flash(`Imported ${payload.file.name} (${cfg.sourceWidth} × ${cfg.sourceHeight}) in ${(built.ms / 1000).toFixed(1)} s.${note}`, note ? 8000 : 4000);
 }
 
@@ -1093,10 +1160,26 @@ async function setArtImage() {
 // handle, Reload falls back to the file picker.
 const SAMPLE_MAP = './test-maps/continent_map_2.png';
 async function loadSampleMap() {
-  const res = await fetch(SAMPLE_MAP);
-  if (!res.ok) throw new Error(`${SAMPLE_MAP} (${res.status})`);
+  await importDialog.open({ file: await fetchTestMap(SAMPLE_MAP) });
+}
+
+// A bundled test map as a File (named like the file, no handle).
+async function fetchTestMap(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`${path} (${res.status})`);
   const blob = await res.blob();
-  await importDialog.open({ file: new File([blob], 'continent_map_2.png', { type: blob.type || 'image/png' }) });
+  const name = path.split('/').pop();
+  return new File([blob], name, { type: blob.type || (name.endsWith('.jpg') ? 'image/jpeg' : 'image/png') });
+}
+
+// File > Load Earth Map (your Session 10 extra): the GEBCO heightmap and its
+// land/sea mask, fetched like Load Sample Map, in the import dialog
+// prefilled with the M6a checklist settings. Only the import itself (Import,
+// importMap) resets the planet to Earth, as one undo step with the map;
+// Cancel changes nothing.
+async function loadEarthMap() {
+  const [image, mask] = await Promise.all([fetchTestMap(EARTH_MAP.image), fetchTestMap(EARTH_MAP.mask)]);
+  await importDialog.open({ file: image, prefill: { ...earthPrefill(DEFAULT_SETTINGS.heightmap), mask: { file: mask } } });
 }
 
 function removeArtImage() {
@@ -1203,6 +1286,7 @@ createMenuBar($('menubar'), [
       { separator: true },
       { label: 'Import Map Image…', milestone: '2a', action: () => importDialog.openFromPicker().catch((err) => contextbar.flash(err.message, 8000)) },
       { label: 'Load Sample Map', milestone: '2a', action: () => loadSampleMap().catch((err) => contextbar.flash(`Sample map failed: ${err.message}`, 8000)) },
+      { label: 'Load Earth Map', milestone: '2a', action: () => loadEarthMap().catch((err) => contextbar.flash(`Earth map failed: ${err.message}`, 8000)) },
       { label: 'Reload Map Image', shortcut: 'Ctrl+Shift+R', milestone: '2a', action: reloadMap },
       { label: 'Art Image…', milestone: '2b', action: () => setArtImage().catch((err) => contextbar.flash(`Art image failed: ${err.message}`, 8000)) },
       { label: 'Remove Art Image', milestone: '2b', disabled: !store.source?.art, action: removeArtImage },

@@ -115,3 +115,4 @@ the main branch at https://kcmichalson.github.io/490-Course/Artifact2/
 - After every sub-step, confirm each tool call you made appears in
   tool-log/ (timestamp and tool name); report any missing call before
   continuing.
+- One purpose per command: don’t append extra commands (especially git) to a check

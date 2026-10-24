@@ -35,6 +35,7 @@ import { seasonTemperature } from './temperature.js';
 import { terrainWind } from './terrainwind.js';
 import { precipitationMonths, precipitationDay } from './precipitation.js';
 import { hydroStats, cloudLayer } from './hydrostats.js';
+import { nearestLandCells } from './koppen.js';
 import { PLANET_RADIUS_KM } from './constants.js';
 
 // Step 5: friction and mountain deflection over the terrain (M4b). Without
@@ -69,6 +70,8 @@ export function precipitationSteps({ grid, planet, season, terrain, s, hydro: ca
   if (!hydro.stats) {
     const temps = MONTH_MID_DAYS.map((d) => seasonTemperature(grid, planet.tiltDeg, { day: d }, terrain, s));
     hydro.stats = hydroStats(grid, planet, hydro.months, temps);
+    // Köppen (M6a) reads rainfall from land cells only.
+    hydro.stats.nearestLand = nearestLandCells(grid, terrain.category);
     const n = grid.width * grid.height;
     hydro.cloud = new Float32Array(n);
     MONTH_MID_DAYS.forEach((d, m) => {

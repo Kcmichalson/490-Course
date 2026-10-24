@@ -7,6 +7,8 @@
 //   base     terrain from the import pipeline; never mutated
 //   baseSim  the sim grid of base; never mutated
 //   edits    the brush edits layer (a private copy in snapshots)
+//   planet   optional { planet, season }: only Load Earth Map's entry
+//            carries it, so undo restores the planet settings with the map
 // A live state adds terrain (base + edits) and sim (baseSim + edited cells).
 
 import { cloneEdits, composeAll, editedRects, isEmptyEdits, tileBytes, restoreTile } from './edits.js';

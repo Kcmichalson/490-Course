@@ -17,8 +17,8 @@ and record in LOG.md.
 
 ```
 TTS (we move minis as normal)
-  → Lua exporter: tagged objects' names, GUIDs, positions, rotations,
-    tags, descriptions, plus the table's Grids settings
+  → Lua exporter: marked objects' (see §2) names, GUIDs, positions,
+    rotations, bounds, descriptions, plus the table's Grids settings
   → HTTP POST to the Python bridge on 127.0.0.1
   → bridge converts to hex coordinates, computes distances and footprints,
     stores the latest snapshot and a history
@@ -31,12 +31,18 @@ cloud hosting.
 
 ## 2. TTS side
 
-- **Tags:** `Unit` (mechs, NPCs, deployables), `Terrain` (cover and
-  obstacles), `Hazard`, `Objective`. Untagged objects are ignored.
-- **Description stats:** key:value pairs in an object's description, e.g.
-  `Size: 2, HP: 8/10, Heat: 3/6, Structure: 4, Conditions: Impaired`.
-  Parse what's present; missing keys are fine; unknown keys are kept and
-  passed through. Exact syntax (separators, multi-line) **(decide, M2)**.
+- **Tracking marker (replaces TTS tags, Session 1):** an object is tracked
+  only if the first line of its description is `AIT: Unit` (mechs, NPCs,
+  deployables), `AIT: Terrain` (cover and obstacles), `AIT: Hazard`, or
+  `AIT: Objective`, case-insensitive. Anything without it is ignored. This
+  lets us mark or re-mark objects mid-game by editing the description. The
+  Lua exporter sends objects whose description starts with `ait:`; the
+  bridge parses the marker and warns about unknown kinds.
+- **Description stats:** key:value pairs after the marker line, e.g.
+  `Side: Player`, `Size: 2`, `HP: 8/10, Heat: 3/6, Structure: 4,
+  Conditions: Impaired`. Parse what's present; missing keys are fine;
+  unknown keys are kept and passed through. M1 uses a provisional syntax
+  (LOG.md, Session 1 Decisions); final syntax **(decide, M2)**.
 - **Export triggers:** an in-game "Snapshot" button (on demand) and a slow
   repeating timer. Interval: 5 s, start **(decide, M2)**.
 - **Offline bridge:** fail quietly; at most one chat notice until it
@@ -57,26 +63,34 @@ cloud hosting.
   - `GET /snapshot.json`: latest processed snapshot
   - `GET /report`: plain-text GM report (section 4)
   - `GET /health`: bridge status and time of the last TTS payload
-- **Storage:** latest snapshot in snapshots/latest.json; history as
-  timestamped files (or one JSONL) in snapshots/ **(decide, M1)**. History
-  only records snapshots that differ from the previous one.
+- **Storage (decided M1):** latest snapshot in snapshots/latest.json;
+  history in one append-only snapshots/history.jsonl. History only records
+  snapshots whose board differs from the previous one (ignoring time,
+  `seq`, and raw world position/rotation).
 - **Hex math:** axial (q, r) internally; world → hex using the Grids
-  settings; hex distance; footprints by LANCER Size. Footprint shapes and
-  how they orient with token rotation: **ask me, don't guess (M1)**.
+  settings; hex distance; footprints by LANCER Size: Size ½ and 1 = 1 hex,
+  Size 2 = 3, Size 3 = 7, Size 4 = 12 (rows of 3, 4, 3, 2), rotated in 60°
+  steps with the mini (shapes in LOG.md, Session 1 Decisions).
   Distances between units are measured between their nearest occupied
-  hexes **(confirm rule, M1)**.
-- Snapshots carry a `schema` version.
+  hexes, adjacent = 1 (confirmed Session 1).
+- Snapshots carry a `schema` version and a `seq` number; payloads carry a
+  separate `payload_version`.
 
 ## 4. GM report
 
 Plain text written for an AI GM to read, compact enough to paste into a
 chat:
 - Header: snapshot time, schema version, grid orientation
-- Units: name, hex label, size, HP/Heat/Structure, conditions, side (if
-  known **(decide, M1)**: tag, description key, or name convention)
+- Units: name, hex label, size, HP/Heat/Structure, conditions, side
+  (description key `Side:`, decided M1; missing = `unknown`)
 - Terrain and hazards: name and occupied hexes
-- Objective: hexes and which units are inside
-- Distance table between opposing units
+- Objective: hexes, and which units are inside. A unit is inside if any of
+  its occupied hexes is in the objective (confirmed Session 1). The
+  objective's area is the hexes whose centers lie inside the XZ bounds of
+  the tile marking it (decided Session 1; matches the rulebook's
+  rectangular zones).
+- Distance table between opposing units (different sides; `unknown`
+  opposes everyone)
 - Format is fixed by a golden-file test (tests/fixtures/).
 
 ## 5. Out of scope for v1
@@ -104,9 +118,11 @@ payloads and golden report.
   bridge
 
 **M2 — TTS exporter**
-Lua exporter with tags, description stats, Grids, Snapshot button, timer,
-offline handling, and the bundling decision.
-- In-game: tagged objects appear in /snapshot.json; untagged don't
+Lua exporter with the `AIT:` marker filter, description stats, Grids,
+Snapshot button, timer, offline handling, and the bundling decision.
+- In-game: marked objects appear in /snapshot.json; unmarked don't, and
+  editing a description to add or remove the marker takes effect on the
+  next export
 - In-game: moving a mini one hex changes its hex by exactly one
 - In-game: stopping the bridge produces at most one chat notice; restarting
   it resumes exports without reloading the save
@@ -132,4 +148,7 @@ and per-round activation tracking **(decide scope)**.
 
 **Later — tactical intelligence** (plan separately)
 Line of sight and cover from terrain footprints and heights; reaction
-triggers (e.g., a move entering Overwatch range); action accounting.
+triggers (e.g., a move entering Overwatch range); action accounting;
+sitrep Objectives (escort/extract objects of Size ½–2 with HP that work by
+adjacency, rulebook Sitreps pp. 266–273), kept separate from `AIT:
+Objective` zones.

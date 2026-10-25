@@ -1,0 +1,35 @@
+{
+  "payload_version": 1,
+  "exporter": "lancer-bridge-lua/0.1",
+  "grid": {"type": 3, "sizeX": 2.0, "sizeY": 2.0, "offsetX": 1.0, "offsetY": 1.0, "offsetZ": -0.5},
+  "objects": [
+    {
+      "guid": "aa0101", "name": "Scout",
+      "description": "AIT: Unit\nSide: Player\nSize: 1\nHP: 7/7, Heat: 1/5, Structure: 4",
+      "position": {"x": -2.464102, "y": 1.1, "z": -0.5},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": -2.464102, "y": 1.1, "z": -0.5}, "size": {"x": 1.6, "y": 2.0, "z": 1.6}}
+    },
+    {
+      "guid": "bb0101", "name": "Hunter",
+      "description": "AIT: Unit\nSide: NPC\nSize: 2\nHP: 12/12, Structure: 2",
+      "position": {"x": 5.618802, "y": 1.1, "z": 1.5},
+      "rotation": {"x": 0.0, "y": 60.0, "z": 0.0},
+      "bounds": {"center": {"x": 5.618802, "y": 1.1, "z": 1.5}, "size": {"x": 3.4, "y": 2.5, "z": 3.4}}
+    },
+    {
+      "guid": "cc0101", "name": "Pillar",
+      "description": "AIT: Terrain\nCover: Hard",
+      "position": {"x": 1.0, "y": 1.0, "z": -0.5},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": 1.0, "y": 1.0, "z": -0.5}, "size": {"x": 1.0, "y": 3.0, "z": 1.0}}
+    },
+    {
+      "guid": "ee0101", "name": "Beacon",
+      "description": "AIT: Objective",
+      "position": {"x": 4.464102, "y": 1.0, "z": 1.5},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": 4.464102, "y": 1.0, "z": 1.5}, "size": {"x": 1.0, "y": 0.1, "z": 1.0}}
+    }
+  ]
+}

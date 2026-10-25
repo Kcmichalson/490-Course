@@ -1,0 +1,325 @@
+{
+  "distances": [
+    {
+      "a": "aa0002",
+      "b": "bb0001",
+      "hexes": 3
+    },
+    {
+      "a": "aa0002",
+      "b": "bb0002",
+      "hexes": 4
+    },
+    {
+      "a": "aa0001",
+      "b": "bb0001",
+      "hexes": 5
+    },
+    {
+      "a": "aa0001",
+      "b": "bb0002",
+      "hexes": 7
+    }
+  ],
+  "grid": {
+    "offset": {
+      "x": 0.0,
+      "y": 1.0,
+      "z": 0.0
+    },
+    "orientation": "pointy",
+    "size": {
+      "x": 2.0,
+      "y": 2.0
+    },
+    "tts_type": 2
+  },
+  "hazards": [
+    {
+      "extra": {
+        "effect": "2 burn on entry"
+      },
+      "guid": "dd0001",
+      "hexes": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "name": "Reactor leak",
+      "notes": []
+    }
+  ],
+  "objectives": [
+    {
+      "extra": {},
+      "guid": "ee0001",
+      "hexes": [
+        [
+          4,
+          -1
+        ],
+        [
+          5,
+          -1
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          5,
+          0
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "name": "Uplink",
+      "notes": [],
+      "units_in_zone": [
+        {
+          "guid": "aa0002",
+          "hexes_inside": 1,
+          "hexes_total": 3
+        }
+      ]
+    }
+  ],
+  "received_at": "2026-10-24T22:15:03Z",
+  "schema": 1,
+  "seq": 1,
+  "terrain": [
+    {
+      "extra": {
+        "cover": "Soft"
+      },
+      "guid": "cc0002",
+      "hexes": [
+        [
+          -1,
+          1
+        ]
+      ],
+      "name": "Crates",
+      "notes": []
+    },
+    {
+      "extra": {
+        "cover": "Hard"
+      },
+      "guid": "cc0001",
+      "hexes": [
+        [
+          1,
+          -2
+        ],
+        [
+          2,
+          -2
+        ],
+        [
+          3,
+          -2
+        ]
+      ],
+      "name": "Rock wall",
+      "notes": []
+    }
+  ],
+  "units": [
+    {
+      "extra": {},
+      "guid": "aa0002",
+      "hexes": [
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "name": "Ironclad",
+      "notes": [],
+      "rotation_steps": 0,
+      "rotation_y": 359.0,
+      "side": "player",
+      "size": 2,
+      "stats": {
+        "conditions": [
+          "Impaired"
+        ],
+        "heat": {
+          "current": 3,
+          "max": 8
+        },
+        "hp": {
+          "current": 8,
+          "max": 12
+        },
+        "structure": {
+          "current": 4,
+          "max": null
+        }
+      },
+      "world": {
+        "x": 5.0,
+        "y": 1.1,
+        "z": 0.57735
+      }
+    },
+    {
+      "extra": {},
+      "guid": "aa0001",
+      "hexes": [
+        [
+          0,
+          0
+        ]
+      ],
+      "name": "Vanguard",
+      "notes": [],
+      "rotation_steps": 0,
+      "rotation_y": 180.0,
+      "side": "player",
+      "size": 1,
+      "stats": {
+        "conditions": [],
+        "heat": {
+          "current": 0,
+          "max": 6
+        },
+        "hp": {
+          "current": 10,
+          "max": 10
+        },
+        "structure": {
+          "current": 4,
+          "max": null
+        }
+      },
+      "world": {
+        "x": 0.05,
+        "y": 1.1,
+        "z": -0.04
+      }
+    },
+    {
+      "extra": {
+        "tier": "1"
+      },
+      "guid": "bb0001",
+      "hexes": [
+        [
+          5,
+          -3
+        ]
+      ],
+      "name": "Assault-1",
+      "notes": [],
+      "rotation_steps": 0,
+      "rotation_y": 90.0,
+      "side": "npc",
+      "size": 1,
+      "stats": {
+        "conditions": [],
+        "hp": {
+          "current": 6,
+          "max": 8
+        },
+        "structure": {
+          "current": 1,
+          "max": null
+        }
+      },
+      "world": {
+        "x": 7.12,
+        "y": 1.1,
+        "z": -5.15
+      }
+    },
+    {
+      "extra": {},
+      "guid": "bb0002",
+      "hexes": [
+        [
+          6,
+          1
+        ],
+        [
+          7,
+          1
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          6,
+          2
+        ],
+        [
+          7,
+          2
+        ],
+        [
+          5,
+          3
+        ],
+        [
+          6,
+          3
+        ]
+      ],
+      "name": "Demolisher",
+      "notes": [],
+      "rotation_steps": 0,
+      "rotation_y": 12.0,
+      "side": "npc",
+      "size": 3,
+      "stats": {
+        "conditions": [
+          "Shredded",
+          "Slowed"
+        ],
+        "heat": {
+          "current": 2,
+          "max": 6
+        },
+        "hp": {
+          "current": 18,
+          "max": 18
+        },
+        "structure": {
+          "current": 2,
+          "max": null
+        }
+      },
+      "world": {
+        "x": 14.0,
+        "y": 1.1,
+        "z": 3.464102
+      }
+    }
+  ],
+  "warnings": []
+}

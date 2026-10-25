@@ -1,0 +1,70 @@
+{
+  "payload_version": 1,
+  "exporter": "lancer-bridge-lua/0.1",
+  "grid": {"type": 2, "sizeX": 2.0, "sizeY": 2.0, "offsetX": 0.0, "offsetY": 1.0, "offsetZ": 0.0},
+  "objects": [
+    {
+      "guid": "aa0001", "name": "Vanguard",
+      "description": "AIT: Unit\nSide: Player\nSize: 1\nHP: 10/10, Heat: 0/6, Structure: 4, Conditions: none",
+      "position": {"x": 0.05, "y": 1.1, "z": -0.04},
+      "rotation": {"x": 0.0, "y": 180.0, "z": 0.0},
+      "bounds": {"center": {"x": 0.05, "y": 1.1, "z": -0.04}, "size": {"x": 1.6, "y": 2.0, "z": 1.6}}
+    },
+    {
+      "guid": "aa0002", "name": "Ironclad",
+      "description": "AIT: Unit\nSide: Player\nSize: 2\nHP: 8/12, Heat: 3/8, Structure: 4, Conditions: Impaired",
+      "position": {"x": 5.0, "y": 1.1, "z": 0.57735},
+      "rotation": {"x": 0.0, "y": 359.0, "z": 0.0},
+      "bounds": {"center": {"x": 5.0, "y": 1.1, "z": 0.57735}, "size": {"x": 3.4, "y": 2.5, "z": 3.4}}
+    },
+    {
+      "guid": "bb0001", "name": "Assault-1",
+      "description": "AIT: unit\nSide: NPC\nSize: 1\nHP: 6/8, Structure: 1, Tier: 1",
+      "position": {"x": 7.12, "y": 1.1, "z": -5.15},
+      "rotation": {"x": 0.0, "y": 90.0, "z": 0.0},
+      "bounds": {"center": {"x": 7.12, "y": 1.1, "z": -5.15}, "size": {"x": 1.6, "y": 2.0, "z": 1.6}}
+    },
+    {
+      "guid": "bb0002", "name": "Demolisher",
+      "description": "ait: UNIT\nSide: npc\nSize: 3\nHP: 18/18, Heat: 2/6\nStructure: 2\nConditions: Shredded, Slowed",
+      "position": {"x": 14.0, "y": 1.1, "z": 3.464102},
+      "rotation": {"x": 0.0, "y": 12.0, "z": 0.0},
+      "bounds": {"center": {"x": 14.0, "y": 1.1, "z": 3.464102}, "size": {"x": 5.5, "y": 3.0, "z": 5.5}}
+    },
+    {
+      "guid": "cc0001", "name": "Rock wall",
+      "description": "AIT: Terrain\nCover: Hard",
+      "position": {"x": 2.0, "y": 1.0, "z": -3.464102},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": 2.0, "y": 1.0, "z": -3.464102}, "size": {"x": 5.0, "y": 2.0, "z": 1.0}}
+    },
+    {
+      "guid": "cc0002", "name": "Crates",
+      "description": "AIT: Terrain\nCover: Soft",
+      "position": {"x": -1.0, "y": 1.0, "z": 1.732051},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": -1.0, "y": 1.0, "z": 1.732051}, "size": {"x": 1.2, "y": 1.0, "z": 1.2}}
+    },
+    {
+      "guid": "dd0001", "name": "Reactor leak",
+      "description": "AIT: Hazard\nEffect: 2 burn on entry",
+      "position": {"x": 3.0, "y": 1.0, "z": 3.464102},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": 3.0, "y": 1.0, "z": 3.464102}, "size": {"x": 3.0, "y": 0.2, "z": 1.0}}
+    },
+    {
+      "guid": "ee0001", "name": "Uplink",
+      "description": "AIT: Objective",
+      "position": {"x": 8.0, "y": 1.0, "z": 0.0},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": 8.0, "y": 1.0, "z": 0.0}, "size": {"x": 5.0, "y": 0.1, "z": 4.4}}
+    },
+    {
+      "guid": "ff0001", "name": "Table lamp",
+      "description": "Just decoration",
+      "position": {"x": -20.0, "y": 1.0, "z": 9.0},
+      "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+      "bounds": {"center": {"x": -20.0, "y": 1.0, "z": 9.0}, "size": {"x": 1.0, "y": 3.0, "z": 1.0}}
+    }
+  ]
+}

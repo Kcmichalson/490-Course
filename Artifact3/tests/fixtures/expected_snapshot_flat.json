@@ -1,0 +1,142 @@
+{
+  "distances": [
+    {
+      "a": "aa0101",
+      "b": "bb0101",
+      "hexes": 4
+    }
+  ],
+  "grid": {
+    "offset": {
+      "x": 1.0,
+      "y": 1.0,
+      "z": -0.5
+    },
+    "orientation": "flat",
+    "size": {
+      "x": 2.0,
+      "y": 2.0
+    },
+    "tts_type": 3
+  },
+  "hazards": [],
+  "objectives": [
+    {
+      "extra": {},
+      "guid": "ee0101",
+      "hexes": [
+        [
+          2,
+          0
+        ]
+      ],
+      "name": "Beacon",
+      "notes": [],
+      "units_in_zone": [
+        {
+          "guid": "bb0101",
+          "hexes_inside": 1,
+          "hexes_total": 3
+        }
+      ]
+    }
+  ],
+  "received_at": "2026-10-24T22:15:03Z",
+  "schema": 1,
+  "seq": 1,
+  "terrain": [
+    {
+      "extra": {
+        "cover": "Hard"
+      },
+      "guid": "cc0101",
+      "hexes": [
+        [
+          0,
+          0
+        ]
+      ],
+      "name": "Pillar",
+      "notes": []
+    }
+  ],
+  "units": [
+    {
+      "extra": {},
+      "guid": "aa0101",
+      "hexes": [
+        [
+          -2,
+          1
+        ]
+      ],
+      "name": "Scout",
+      "notes": [],
+      "rotation_steps": 0,
+      "rotation_y": 0.0,
+      "side": "player",
+      "size": 1,
+      "stats": {
+        "conditions": [],
+        "heat": {
+          "current": 1,
+          "max": 5
+        },
+        "hp": {
+          "current": 7,
+          "max": 7
+        },
+        "structure": {
+          "current": 4,
+          "max": null
+        }
+      },
+      "world": {
+        "x": -2.464102,
+        "y": 1.1,
+        "z": -0.5
+      }
+    },
+    {
+      "extra": {},
+      "guid": "bb0101",
+      "hexes": [
+        [
+          3,
+          -1
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ]
+      ],
+      "name": "Hunter",
+      "notes": [],
+      "rotation_steps": 1,
+      "rotation_y": 60.0,
+      "side": "npc",
+      "size": 2,
+      "stats": {
+        "conditions": [],
+        "hp": {
+          "current": 12,
+          "max": 12
+        },
+        "structure": {
+          "current": 2,
+          "max": null
+        }
+      },
+      "world": {
+        "x": 5.618802,
+        "y": 1.1,
+        "z": 1.5
+      }
+    }
+  ],
+  "warnings": []
+}

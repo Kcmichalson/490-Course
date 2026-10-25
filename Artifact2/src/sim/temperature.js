@@ -1,7 +1,9 @@
 // Temperature (SPEC 6, pipeline steps 4 and 6). Pure functions.
 //
 // T(cell, day) = TqAnn + s·(Tq(lat, δ(day − lag)) − TqAnn) + lapse·elev + ice
-//   Tq     radiative temperature from daily-mean insolation
+//   Tq     radiative temperature from daily-mean insolation, plus the
+//          latitude's annual heat-transport and ice-albedo change
+//          (heattransport.js; the same every day, so only TqAnn moves)
 //   TqAnn  mean of Tq over the 12 mid-month days (unlagged)
 //   s      seasonal swing, 0.15 (ocean) … 0.5 (deep interior), from the
 //          continentality tracer (continentality.js)
@@ -14,9 +16,10 @@
 // uses each source pixel's own elevation (mountains show full detail).
 
 import {
-  SOLAR_CONSTANT, TQ_SLOPE, TQ_OFFSET, LAG_LAND_DAYS, LAG_OCEAN_DAYS, LAPSE_C_PER_M, LAND_ICE_C, YEAR_DAYS,
+  SOLAR_CONSTANT, TQ_SLOPE, TQ_OFFSET, LAG_LAND_DAYS, LAG_OCEAN_DAYS, LAPSE_C_PER_M, LAND_ICE_C, YEAR_DAYS, HEAT_TRANSPORT_CELLS,
 } from './constants.js';
 import { declination, MONTH_MID_DAYS } from './planet.js';
+import { equalAreaLats, transportProfile } from './heattransport.js';
 import { CATEGORY, isLandCategory } from './terrain.js';
 
 const DEG = Math.PI / 180;
@@ -40,13 +43,43 @@ export const radiativeTemp = (q) => TQ_SLOPE * q + TQ_OFFSET;
 // Tq at a latitude on a day of the year (day may run past 0–364; it wraps).
 export const tqAt = (lat, day, tiltDeg) => radiativeTemp(dailyInsolation(lat, declination(((day % YEAR_DAYS) + YEAR_DAYS) % YEAR_DAYS, tiltDeg)));
 
-// Mean Tq over a set of days, each shifted back by `lag` days, per latitude.
+// Annual mean insolation at a latitude (W/m²): the 12 mid-month days.
+const annualInsolation = (lat, tiltDeg) => MONTH_MID_DAYS.reduce((s, d) => s + dailyInsolation(lat, declination(d, tiltDeg)), 0) / MONTH_MID_DAYS.length;
+
+// Heat transport and ice-albedo (heattransport.js; Climate inputs): each
+// equal-area cell's annual mean for a tilt. Computed once per tilt (a few
+// ms) and kept.
+const transportMemo = new Map();
+function transportTemps(tiltDeg) {
+  let hit = transportMemo.get(tiltDeg);
+  if (hit) return hit;
+  const insol = equalAreaLats(HEAT_TRANSPORT_CELLS).map((lat) => annualInsolation(lat, tiltDeg));
+  hit = transportProfile(insol.map(radiativeTemp), insol).temperature;
+  transportMemo.set(tiltDeg, hit);
+  while (transportMemo.size > 8) transportMemo.delete(transportMemo.keys().next().value);
+  return hit;
+}
+
+// The annual-mean change at a latitude (°C): the model's annual mean there
+// (linear in x = sin(latitude) between cells) minus the radiative one.
+export function transportOffset(lat, tiltDeg) {
+  const t = transportTemps(tiltDeg);
+  const n = t.length;
+  const f = ((Math.sin(Math.max(-90, Math.min(90, lat)) * DEG) + 1) * n) / 2 - 0.5;
+  const i = Math.max(0, Math.min(n - 2, Math.floor(f)));
+  const w = Math.min(1, Math.max(0, f - i));
+  return t[i] + (t[i + 1] - t[i]) * w - radiativeTemp(annualInsolation(lat, tiltDeg));
+}
+
+// Mean Tq over a set of days, each shifted back by `lag` days, per latitude,
+// plus the latitude's heat-transport change (the same every day, so it
+// moves the annual mean and leaves the seasonal swing as it was).
 export function tqTable(lats, tiltDeg, days, lag = 0) {
   const out = new Float32Array(lats.length);
   for (let j = 0; j < lats.length; j++) {
     let sum = 0;
     for (const d of days) sum += tqAt(lats[j], d - lag, tiltDeg);
-    out[j] = sum / days.length;
+    out[j] = sum / days.length + transportOffset(lats[j], tiltDeg);
   }
   return out;
 }

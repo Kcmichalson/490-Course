@@ -411,8 +411,11 @@ after calibration).
 - **Insolation:** daily-mean top-of-atmosphere insolation Q from latitude and
   solar declination (standard formula with sunrise hour angle
   `cos h0 = −tanφ tanδ`, clamped for polar day/night).
-- **Radiative temperature:** `Tq = 0.212 * Q − 61.7` (start; calibrated so an
-  Earth-like annual mean gives ~27 °C at the equator and ~−25 °C at the poles).
+- **Radiative temperature:** `Tq = 0.212 * Q − 56.8` (M4 used −61.7,
+  calibrated to ~27 °C at the equator and ~−25 °C at the poles). Since
+  Climate inputs (Session 10), heat transport and ice-albedo set each
+  latitude's annual mean (see "Heat transport and ice-albedo" below):
+  ~26 °C at the equator, ~10 °C at 45°, ~−18 °C at the poles.
 - **Seasonal swing:** `T = Tannual + s * (Tq(season) − Tannual)`, with
   s = 0.5 for deep interiors and 0.15 for ocean (start).
 - **Seasonal lag:** land uses the declination from 15 days earlier,
@@ -446,6 +449,44 @@ after calibration).
   display and tooltip use each pixel's own elevation and category.
 - Until M7, ocean cells use the same model (air over the sea, s = 0.15),
   not SST, and the ocean-current term is off.
+
+**Heat transport and ice-albedo** (Climate inputs, between M6a and M6b;
+approved by me in Session 10). The radiative rule alone is a local balance:
+it matched only its two calibration points and ran 6–12 °C too cold from
+30° to 70°, which broke the Köppen map (LOG). Each latitude's annual mean
+now comes from a 1-D model on equal-area cells (src/sim/heattransport.js):
+- Poleward heat transport (Budyko relaxation): T = T̄ + k·(T_rad − ice − T̄),
+  where T̄ is the global mean. Winds and currents pull every latitude toward
+  the global mean without changing it. `HEAT_TRANSPORT_K` = 0.711 (γ ≈ 1.92
+  W/m² per °C).
+- Ice-albedo: frozen ground reflects sunlight, absorbing
+  `ICE_ALBEDO_SHARE` = 0.34 less of its annual insolation. The ice share
+  ramps linearly from none at 0 °C to full at −20 °C annual mean
+  (`ICE_LINE_C` −10, `ICE_RAMP_C` 20), like seasonal snow and sea ice.
+  The approval first asked for a ramp of a few degrees; the measurements
+  revised it. A 10 °C ramp kept 70° at −15.6 °C (vs −15.4 with the sharp
+  step) and jumped between tilts 25° and 30° (pole −16.9 → −2.9 °C), so
+  the approved ramp is 20 °C wide (partial seasonal ice from 0 to
+  −20 °C annual mean), continuous in 1° tilt steps (LOG).
+- The profile depends only on the tilt: radius, rotation, spin, and lunar
+  pull don't change it (tested). Rotation still changes temperatures
+  through the continentality swing.
+- `TQ_OFFSET` −61.7 → −56.8 (the old rule's global mean was 10.4 °C;
+  now ≈ 14 °C, Earth's ≈ 14–15).
+- Solved once per tilt, by damped iteration from the radiative profile.
+  The change (model − radiative) is added to every Tq term, so annual
+  means move and the seasonal swing is unchanged.
+- Earth, annual zonal means: equator 26.3, 30° 18.8, 45° 10.0, 60° −1.4,
+  70° −13.1, pole rows −18.0 °C. Tilt 0°: pole −33 °C; tilt 45°: nearly
+  flat, 11–20 °C. Smooth in 1° tilt steps.
+- **Known limitations:**
+  - Rotation doesn't affect heat transport. Faster rotation should narrow
+    the Hadley cells and weaken poleward transport, but there is no
+    simple, established rule for it, so annual temperatures don't change
+    with rotation.
+  - Hot-desert annual means run 5–8 °C cool (In Salah, Phoenix): dry, clear
+    ground runs hotter than its latitude, and the model has no term for
+    it. Deferred.
 
 ## 7. Precipitation and rain shadows
 
@@ -538,6 +579,13 @@ src/sim/constants.js):
     cold without the Gulf Stream (M7).
   - Eastern China and the eastern US are too dry (≈ 6 and 32 mm/month):
     they need monsoon flow (M8) and warm-current SST (M7).
+  - **Summer drought over land at about 30–40° (recorded in Session 10,
+    Climate inputs; kept for M8 by my decision, milestone order
+    unchanged):** Kansas City and Atlanta get 0–2 mm/month in May–Aug,
+    with July RH ≈ 0.3. No ocean moisture reaches these interiors in
+    summer, because the thermal-low (monsoon) winds of §4.4 arrive in M8.
+    In Köppen that shows as Ds/BW interiors and Cs in the SE US instead of
+    Dfa/Cfa.
   - Atacama, Namib, and similar coasts need cold currents and upwelling
     (M7); India and Sahel summer rain needs monsoons (M8).
   - Solver: in some mid-latitude loops the error estimate is optimistic
@@ -1027,6 +1075,8 @@ Mode: Wind Speed & Pressure.
 Modes: Temperature, Temperature Range, Growing Season, Frost/Snow/Permafrost,
 Winter Severity. Toggle: Climate Boundaries.
 - Earth annual mean: ~25–28 °C at the equator, below −15 °C near the poles.
+- Earth annual zonal means at mid-latitudes (added in Session 10, Climate
+  inputs, approved by me): ≈ 20 °C at 30° and ≈ 10 °C at 45°.
 - Interior Siberia/Canada winters far colder than coasts at the same latitude.
 - Mountains are colder than surrounding lowlands.
 

@@ -70,6 +70,20 @@ before/after Köppen table for the four symptoms; SPEC known limitations; a
 by-eye checklist (Earth defaults, Köppen defaults, Load Earth Map, Go-to
 points, expected codes).
 
+## Status and next session (end of Session 10)
+- Done: Phase A (diagnosis) and Phase B (Budyko heat transport +
+  ice-albedo with a 20 °C ramp; `PRECIP_CAL` 86,192). By-eye check PASS
+  (short version).
+- C1 (the monsoon wind term) is recorded for M8 as a known limitation; the
+  milestone order is unchanged.
+- Next session:
+  - Phoenix's rain split by term and month on the new temperatures (it
+    rose from 1,335 to 1,432 mm/yr, against the Phase A prediction).
+  - Measure C2 (convergence-scaled rain; recycling 0.5 as a separate
+    variant), one round, proposal only.
+  - Retime the full 12-month job (27–28 s last time vs 7.7 s before); if
+    it's still slow, find out why.
+
 ## Rules
 No constant or method change without approval; fix code, not
 expectations; Edit tool or Python only; no git; one purpose per command;

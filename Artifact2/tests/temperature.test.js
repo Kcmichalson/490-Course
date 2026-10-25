@@ -22,11 +22,14 @@ test('insolation: equator at the equinox = S0/π, polar night = 0, summer pole a
   close(eq, 397.3, 0.5, 'equator on day 172');
 });
 
-test('Tq calibration (SPEC 6): ~26.3 °C at the equator and −25.0 °C at the poles in Annual Mean', () => {
+// Session 10 (Climate inputs, approved): with heat transport and ice-albedo
+// the pole rows moved from −25.0 to ≈ −18 °C (Earth's Arctic ≈ −18); the
+// equator stays 26.3 °C.
+test('Tq calibration (SPEC 6): ~26.3 °C at the equator and −18.0 °C at the poles in Annual Mean', () => {
   const [eq, pole, south] = tqTable([0.18, 89.82, -89.82], 23.5, MONTH_MID_DAYS);
   close(eq, 26.3, 0.1, 'equator');
-  close(pole, -25.0, 0.1, 'north pole row');
-  close(south, -25.0, 0.1, 'south pole row');
+  close(pole, -18.0, 0.1, 'north pole row');
+  close(south, -18.0, 0.1, 'south pole row');
   assert.ok(eq >= 25 && eq <= 28, 'SPEC M4 check: 25–28 °C');
   assert.ok(pole < -15, 'SPEC M4 check: below −15 °C');
 });

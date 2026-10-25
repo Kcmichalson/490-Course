@@ -192,8 +192,9 @@ export const RH_EDGE = 0.8;
 // Scale from moisture rained out per km of travel to mm/month (calibration):
 // set so the area-weighted global mean on the GEBCO Earth map (Annual Mean,
 // 1024) is 82 mm/month, Earth's ~990 mm/yr (LOG M5: 100,000 → 95,630 at
-// first; 96,294 after the approved orographic changes, mean 81.435 → 82).
-export const PRECIP_CAL = 96294;
+// first; 96,294 after the approved orographic changes, mean 81.435 → 82;
+// 86,192 after Climate inputs' heat transport, mean 91.611 → 82).
+export const PRECIP_CAL = 86192;
 // Numerical, not physics (SPEC 7, approved Session 8): a loop of cells
 // (e.g. a latitude ring) stops when its estimated remaining error, the last
 // change ÷ (1 − the contraction between successive passes), is below this

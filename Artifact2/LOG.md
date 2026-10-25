@@ -4011,6 +4011,320 @@ recalibrated, which is Phase D):
 Then, as planned: the A3 rain breakdown rerun on the app code (your
 condition 4), then Phase C.
 
+**Phase B approved (Session 10 Prompt 11):** Budyko + ice-albedo, no
+rotation term, desert warmth deferred. Conditions: a gradual ice
+transition (70° before/after); a 0–45° tilt sweep with no jumps; SPEC
+known limitations (rotation, deserts); SPEC §6 and §17 updated; only the
+calibration test's pole rows may change. Then implement, run the suite,
+recalibrate `PRECIP_CAL`, rerun A3 and the Köppen table, and stop with
+the Phase C proposal.
+
+**Condition 1, revised by the measurements (your choice, Prompt 12):**
+- A ramp of a few degrees doesn't soften the ice edge: the ice-albedo
+  feedback sharpens it itself.
+- 70°N, Earth tilt, refitted each time:
+
+  | Ramp | 70° (°C) |
+  |---|---|
+  | Sharp tanh step | −15.4 |
+  | 6 °C | −15.6 |
+  | 10 °C | −15.6 |
+  | 15 °C | −12.7 |
+  | 20 °C | −13.1 |
+  | Earth ≈ | −10 |
+
+- A 10 °C ramp also jumps between tilts 25° and 30° (pole −16.9 → −2.9 °C,
+  and the ice disappears): the small-ice-cap instability of Budyko-type
+  models.
+- In 1° steps, ramps of 20, 25, and 30 °C were all continuous. The 20 °C
+  ramp fits 60–70° best (25 °C: 60° −4.1; 30 °C: 60° −5.7).
+- **Approved: a 20 °C ramp, partial seasonal ice from 0 to −20 °C annual
+  mean.** Recorded in SPEC §6.
+
+**1° tilt sweep, 20 °C ramp** (the implemented code; annual means, °C, at
+the equator / 30° / 45° / 60° / 70° / the pole row):
+
+| Tilt | Values | Tilt | Values |
+|---|---|---|---|
+| 0 | 29.0 / 20.2 / 9.8 / −8.3 / −21.6 / −33.1 | 23 | 26.4 / 18.8 / 10.0 / −1.8 / −13.7 / −18.6 |
+| 1 | 29.0 / 20.2 / 9.8 / −8.2 / −21.6 / −33.1 | 24 | 26.2 / 18.7 / 10.0 / −1.1 / −12.4 / −17.2 |
+| 2 | 29.0 / 20.2 / 9.8 / −8.2 / −21.6 / −32.9 | 25 | 26.0 / 18.6 / 10.1 / −0.3 / −11.0 / −15.8 |
+| 3 | 28.9 / 20.2 / 9.8 / −8.2 / −21.5 / −32.7 | 26 | 25.8 / 18.5 / 10.1 / 0.3 / −9.5 / −14.2 |
+| 4 | 28.9 / 20.2 / 9.8 / −8.1 / −21.5 / −32.4 | 27 | 25.6 / 18.4 / 10.2 / 0.7 / −7.9 / −12.5 |
+| 5 | 28.8 / 20.2 / 9.8 / −8.0 / −21.4 / −31.9 | 28 | 25.4 / 18.3 / 10.3 / 1.1 / −6.2 / −10.7 |
+| 6 | 28.8 / 20.1 / 9.9 / −7.9 / −21.3 / −31.2 | 29 | 25.1 / 18.2 / 10.3 / 1.5 / −4.3 / −8.8 |
+| 7 | 28.7 / 20.1 / 9.9 / −7.8 / −21.2 / −30.6 | 30 | 24.9 / 18.1 / 10.4 / 2.0 / −2.4 / −6.7 |
+| 8 | 28.7 / 20.0 / 9.9 / −7.6 / −21.1 / −29.9 | 31 | 24.6 / 18.0 / 10.5 / 2.6 / −0.3 / −4.5 |
+| 9 | 28.6 / 20.0 / 9.9 / −7.5 / −21.0 / −29.2 | 32 | 24.4 / 17.8 / 10.6 / 3.1 / 0.7 / −2.1 |
+| 10 | 28.5 / 19.9 / 9.9 / −7.3 / −20.8 / −28.5 | 33 | 24.1 / 17.7 / 10.6 / 3.7 / 1.6 / 0.1 |
+| 11 | 28.4 / 19.9 / 9.9 / −7.0 / −20.7 / −27.8 | 34 | 23.7 / 17.5 / 10.7 / 4.3 / 2.4 / 1.1 |
+| 12 | 28.3 / 19.8 / 9.9 / −6.8 / −20.5 / −27.1 | 35 | 23.4 / 17.4 / 10.7 / 4.9 / 3.2 / 2.1 |
+| 13 | 28.1 / 19.7 / 9.9 / −6.5 / −20.3 / −26.4 | 36 | 23.1 / 17.2 / 10.8 / 5.5 / 4.1 / 3.1 |
+| 14 | 28.0 / 19.7 / 9.9 / −6.2 / −20.0 / −25.6 | 37 | 22.7 / 17.0 / 10.9 / 6.2 / 4.9 / 4.1 |
+| 15 | 27.9 / 19.6 / 9.9 / −5.9 / −19.7 / −24.9 | 38 | 22.4 / 16.8 / 11.0 / 6.9 / 5.8 / 5.0 |
+| 16 | 27.7 / 19.5 / 9.9 / −5.6 / −19.3 / −24.2 | 39 | 22.0 / 16.6 / 11.1 / 7.5 / 6.6 / 6.0 |
+| 17 | 27.5 / 19.4 / 9.9 / −5.2 / −18.7 / −23.5 | 40 | 21.6 / 16.5 / 11.2 / 8.2 / 7.4 / 6.9 |
+| 18 | 27.4 / 19.3 / 9.9 / −4.7 / −18.2 / −22.8 | 41 | 21.3 / 16.3 / 11.3 / 8.8 / 8.3 / 7.8 |
+| 19 | 27.2 / 19.2 / 9.9 / −4.3 / −17.5 / −22.1 | 42 | 20.9 / 16.1 / 11.4 / 9.5 / 9.1 / 8.8 |
+| 20 | 27.0 / 19.1 / 9.9 / −3.7 / −16.7 / −21.4 | 43 | 20.5 / 15.9 / 11.6 / 10.1 / 9.9 / 9.7 |
+| 21 | 26.8 / 19.0 / 9.9 / −3.2 / −15.8 / −20.6 | 44 | 20.1 / 15.7 / 11.7 / 10.7 / 10.7 / 10.6 |
+| 22 | 26.6 / 18.9 / 10.0 / −2.5 / −14.8 / −19.9 | 45 | 19.7 / 15.5 / 11.9 / 11.4 / 11.5 / 11.5 |
+
+- The largest change between neighboring tilts is 2.37 °C (the pole,
+  31° → 32°).
+- The pole warms steadily with tilt; no jumps.
+- The ice cap shrinks smoothly and disappears near tilt 29°, where the
+  pole crosses 0 °C a few degrees later.
+
+**Built**
+- src/sim/heattransport.js (new, pure): `equalAreaLats`, `iceShare` (the
+  linear ramp), and `transportProfile` (Budyko relaxation + ice-albedo,
+  damped iteration from the radiative profile; 360 equal-area cells).
+- src/sim/temperature.js:
+  - The equal-area profile is computed once per tilt and kept (4 ms on
+    first use).
+  - `transportOffset(lat, tilt)` is the model's annual mean
+    (interpolated) minus the exact radiative mean at that latitude.
+  - `tqTable` adds it, so every consumer follows: the sim, the display
+    modes, Climate Boundaries, PET, Köppen.
+  - Building the 25 monthly tables for 2,700 source rows takes 73 ms
+    (memoized by climateraster.js as before).
+  - A slip of mine, fixed before any test: my first version added a
+    polar cell's average change to the exact radiative value at 89.82°.
+    At tilt 0° that read −39.7 °C instead of −33.1; it now interpolates
+    the model's temperature.
+- src/sim/constants.js:
+  - `TQ_OFFSET` −61.7 → −56.8.
+  - New: `HEAT_TRANSPORT_K` 0.711, `ICE_ALBEDO_SHARE` 0.34,
+    `ICE_LINE_C` −10, `ICE_RAMP_C` 20, `HEAT_TRANSPORT_CELLS` 360.
+  - `PRECIP_CAL` 96,294 → **86,192**.
+- Earth with the rounded constants: equator 26.3, 30° 18.8, 45° 10.0,
+  60° −1.4, 65° −8.8, 70° −13.1, 75° −15.5, 80° −17.0, pole rows
+  −17.9 / −18.0 °C.
+- Planet settings (your Prompt 13): the profile depends only on the tilt.
+  `transportOffset` and `tqTable` receive nothing else, and the constants
+  are fixed. Rotation still changes temperatures through the
+  continentality swing, which is separate. A test confirms it (below).
+- SPEC:
+  - §6: the method, the constants, the ramp revision, and the known
+    limitations (rotation doesn't affect heat transport; hot-desert annual
+    means run 5–8 °C cool).
+  - §17 M4: the mid-latitude targets (≈ 20 °C at 30°, ≈ 10 °C at 45°).
+
+**Tests:** 255/255 (249 before this step; 6 new).
+- Changed, as allowed: tests/temperature.test.js "Tq calibration": the
+  pole rows −25.0 → −18.0 (±0.1); the equator still 26.3. No other
+  expectation changed.
+- New: tests/heattransport.test.js (6):
+  - the Earth targets
+  - transport conserves the global mean (and k = 1 is no transport)
+  - the ice ramp
+  - the tilt sweep 0–45° in 1° steps: no step ≥ 3 °C, the pole warming
+  - the seasonal swing unchanged
+  - your request: radius, rotation 8 h and 72 h, retrograde spin, and
+    lunar pull 3 leave temperatures identical with the swing held fixed;
+    tilt changes them
+
+**Recalibration** (GEBCO, Annual Mean, 1024, the app's worker):
+- With the new temperatures the global mean was 91.611 mm/month, so
+  `PRECIP_CAL` = 96,294 × 82 / 91.611 = 86,192.
+- Confirmed in the app's worker: **82.00**.
+- Those whole jobs took 27.2 s and 28.4 s, but continentality alone took
+  6–10 s against 2.7 s earlier, and it doesn't use temperature. So this
+  machine was slow then. The fair comparison is the same-code
+  measurement in Phase B: +0.2 s.
+
+**A3 rerun on the new temperatures** (the app's code, plus the in-memory
+term split; its 12-month mean equals the worker's to 0.00006 mm/month).
+Temperatures: Jan / Jul / annual mean, °C. Terms: background / orographic
+/ capacity excess, as shares of the year's rain.
+
+| Point | T (was) | Rain mm/yr (was; ≈ real) | Monthly Jan → Dec | Terms | RH Jan / Jul |
+|---|---|---|---|---|---|
+| Paris | −0.5 / 15.2 / 7.2 (−0.5 annual) | 733 (533; ≈ 640) | 55 54 53 50 51 34 59 72 84 84 75 62 | 99 / 1 / 0% | 0.81 / 0.82 |
+| Moscow | −15.7 / 21.9 / 2.0 | 545 (387; ≈ 700) | 16 … 78 (Jul) … 16 | 100% bg | 0.56 / 0.36 |
+| Yakutsk | −23.3 / 17.3 / −5.0 | 127 (96; ≈ 240) | 6 … 20 (Jun) … 7 | 100% bg | 0.44 / 0.07 |
+| Kansas City | −4.9 / 29.4 / 12.6 | **82** (86; ≈ 1,000) | 17 6 7 2 0 0 0 1 4 7 12 24 | 100% bg | 0.86 / **0.28** |
+| Atlanta | 5.6 / 24.9 / 15.7 | 807 (857; ≈ 1,270) | 137 148 85 2 0 1 1 0 9 142 146 137 | 28 / 25 / **47%** (was 57%) | 1.00 / **0.31** |
+| Phoenix | 7.3 / 23.4 / 15.8 | **1,432** (1,335; ≈ 200) | 204 186 182 0 0 0 0 0 205 244 206 204 | 17 / **79** / 4% | 1.00 / 0.22 |
+| In Salah | 6.6 / 29.2 / 18.9 | 65 (51; ≈ 17) | 0 … 25 (Jun) … 3 | 97 / 3 / 0% | 0.30 / 0.35 |
+| Alice Springs | 28.3 / 6.8 / 18.8 | 144 (112; ≈ 280) | 31 … 0 (Apr–May) … 45 | 96 / 4 / 0% | 0.25 / 0.35 |
+| Manaus | 26.0 / 23.5 / 26.2 | 1,382 (1,475; ≈ 2,300) | 165 162 122 118 55 **19** 26 81 103 172 188 170 | 100% bg | 0.43 / **0.17** |
+| Kisangani | 22.7 / 23.1 / 24.4 | 1,006 (1,062; ≈ 1,800) | **53** 60 65 137 104 83 83 109 106 88 63 56 | 100% bg | 0.27 / 0.37 |
+| Petrolina | 25.4 / 21.2 / 24.0 | **1,860** (1,973; ≈ 450) | 198 233 209 139 93 73 69 88 145 206 199 207 | 99% bg | 0.38 / 0.77 |
+| Mombasa | 26.2 / 25.0 / 26.1 | **3,615** (3,979; ≈ 1,050) | 317 … 228 (Jul) … 343 | 76 / 24 / 0% | 0.59 / 0.71 |
+
+What changed:
+- Northern rain rose with the warmer air (Paris +38%, Moscow +41%), and
+  winter capacity excess fell (Atlanta 57% → 47%).
+- Unchanged, and now the main problems:
+  - **Summer drought at 30–40°N on land** (Kansas City, Atlanta: 0–2 mm in
+    May–Aug, July RH ≈ 0.3).
+  - **Phoenix's winter orographic rain** (1,432 mm/yr, 79% orographic, at
+    RH 1.00 in January).
+  - **The coastal/interior split in the tropics** (Petrolina 1,860 and
+    Mombasa 3,615 vs Manaus's driest month 19 mm and Kisangani's 53).
+
+**Köppen table after Phase B** (the app's code; defaults C/D 0 °C,
+Highland on). Before = M6a's table:
+
+| Point | M6a | Now | Earth | Why it differs now |
+|---|---|---|---|---|
+| Paris | ET | **Dfb** (coldest −0.5) | Cfb | needs ~+1 °C of winter: M7 Gulf Stream |
+| London | ET | **Dfb** | Cfb | as Paris |
+| Moscow | Dfc | **Dfb** | Dfb | pass |
+| Yakutsk | (ET) | **Dfc** | Dfd | swing too small (coldest −23 vs ≈ −39) |
+| Canada 55N 100W | Dfc | Dfb | Dfc | warm month 20.6 °C: 4 months ≥ 10 °C |
+| Siberia 62N 120E | ET | BSk | Dfc | warmer, but rain too low for that heat (139 mm) |
+| Arctic coast 72N 80E | EF | EF (warmest −4.1) | ET | polar summers still too cold |
+| Greenland | EF | EF | EF | pass |
+| In Salah | BWk | **BWh** | BWh | pass |
+| Alice Springs | (BWk) | **BWh** | BWh | pass |
+| Arabia | BWh | BWh | BWh | pass |
+| Rome | Cfc | Cfb | Csa | summers not dry (driest 41 mm) |
+| Seville | Csb | Csb | Csa | warmest 20.3 °C, just under the 22 °C a |
+| Athens | Cwb | Cwb | Csa | rain falls in the wrong half |
+| Atlanta | (Cs) | Csa | Cfa | summer drought (rain) |
+| Kansas City | (Ds/BSk) | BWk | Dfa/Cfa | summer drought (rain) |
+| Phoenix | (Cs) | Csa | BWh | winter orographic rain (rain) |
+| Montana | Dsc | BSk | BSk/Dfb | pass-ish |
+| Manaus | Aw | Aw | Am/Af | interior short of rain |
+| Kisangani | (Aw) | Aw (driest 52) | Af | as Manaus |
+| Petrolina | (Af) | Af | BSh | coastal over-rain |
+| Mombasa | (Af) | Af | Aw | coastal over-rain (and M7/M8) |
+| Borneo | Af | Af | Af | pass |
+| Tibet | H | H | H | pass |
+
+Your four symptoms after Phase B:
+
+| Symptom | After Phase B |
+|---|---|
+| Cold north (ET) | **Fixed for the interiors** (Moscow Dfb, Yakutsk Dfc). NW Europe is D, short of Cfb by about 1 °C of winter warmth (M7) |
+| Hot deserts BWk | **Fixed** (BWh at In Salah and Alice Springs; Arabia stays BWh) |
+| Dry-summer interiors (Ds), SE US Cs | **Not fixed**: a rain problem (summer drought) |
+| Coastal Af, interior Aw | **Not fixed**: a rain problem (front-loaded rain-out) |
+
+**Phase C proposal** (based on these new numbers; nothing measured or
+built yet). The remaining errors are all rain, with three separate
+causes:
+
+1. **Summer drought at 30–40° over land** (the US, also E China and India).
+   - Kansas City's July air has RH 0.28: no moisture arrives at all, so no
+     rain rule can produce rain there.
+   - The real supply is ocean air drawn inland in summer: hot continents
+     form thermal lows (the monsoon effect), and the subtropical highs
+     carry it on their western sides.
+   - SPEC already has this as §4.4 "Land-sea thermal effects (monsoons)",
+     planned for M8 (pipeline steps 4–5).
+   - **Option C1 (recommended to measure first): bring that M8 wind term
+     forward.** Steps: a temperature pass on the base wind, the
+     land-minus-ocean pressure anomaly smoothed over ~1,000 km, and a wind
+     component down the gradient, turned 45° by Coriolis.
+   - It's physical, works on any planet, and is already specified. It
+     would also start fixing India, the Sahel, and E China.
+   - Pulling part of M8 forward is a milestone reorder: your decision,
+     recorded in LOG.
+   - Cost: an extra temperature pass and continentality run (≈ +3–5 s per
+     job, to be measured).
+2. **Coastal over-rain, interior under-rain in the tropics** (Manaus,
+   Kisangani vs Petrolina, Mombasa).
+   - M5's recorded transport limitation: moisture moves by wind direction
+     only, so it can't pile up where the trades converge, and each step's
+     rain-out drains the inflow near the coast.
+   - **Option C2 (measure second):** scale the background rain-out by the
+     final wind's convergence instead of the fixed latitude belt factor.
+     Rising air where winds converge rains more; air spreading out under
+     the highs rains less.
+   - This is an M5 method change (§7), measured against the M5 checks.
+   - A cheaper constant-only alternative, `RECYCLE` 0.4 → 0.5 (the top of
+     SPEC's 30–50% range), could be measured alongside.
+3. **Phoenix's winter rain:** saturated winter air climbing the
+   Mogollon Rim. The real Pacific off California is cold (California
+   Current, upwelling), so the air carries far less moisture. That's M7
+   (SST and cold currents).
+   - **Option C3: record it as an M7 limitation**; no change now.
+
+**Your decision on the proposal (Session 10 Prompt 14): not C1.** The
+summer-drought interiors are recorded as a known limitation for M8, in
+SPEC §7's M5 limitations; the milestone order is unchanged. Next round,
+after your commit:
+- Phoenix's rain split by term and month on the new temperatures. My
+  Phase A explanation (cold-air capacity excess) predicted a drop with
+  warming, but Phoenix rose from 1,335 to 1,432 mm/yr, so it needs
+  explaining before it's attributed to M7.
+- C2 measured (convergence-scaled rain; recycling 0.5 as a separate
+  variant), one round, proposal only.
+- The full job timed again (27–28 s this round vs 7.7 s before), and the
+  cause found if it's still slow.
+
+**Phase B by-eye check** (your browser, ~1280 px wide; results go here).
+Hover with View > Hover Tooltip on. The tooltip shows "Summer … · Winter …"
+(the warmest and coldest month at the pixel) and "Köppen …"; the ranges
+are within ±3 px.
+0. The server is running (`py serve.py`, port 8000). Open
+   http://127.0.0.1:8000 and refresh (F5).
+1. Open Planet (context bar) and confirm Earth defaults: radius 6371,
+   rotation 24, tilt 23.5, prograde.
+2. Climate (2), then Q (Köppen). In the legend, confirm the Köppen
+   defaults: C/D boundary "0 °C (coldest month)", Highland ticked.
+3. File > Load Earth Map → Import. Season: Annual Mean.
+4. Still in Köppen: the map fills in. Compared with M6a: northern Europe
+   and Russia are D (blue), not ET gray; the Sahara and Australia's
+   interior are BWh (red), not BWk pink.
+5. Go to each point and hover it:
+   - 55.8N 37.6E (Moscow): Dfb (Dfa just south of it); Summer 21.9
+     (21.4–22.2), Winter −15.7 (−16.1 to −15.5)
+   - 62N 129.7E (Yakutsk): Dfc; Summer 17.3 (16.6–17.7), Winter −23.3
+     (−23.9 to −22.9)
+   - 27.2N 2.5E (In Salah): BWh; Summer 29.2 (28.8–29.6), Winter 6.6
+     (6.2–6.9)
+   - 23.7S 133.9E (Alice Springs): BWh; Summer 28.3 (27.7–28.7), Winter 6.8
+     (6.3–7.1)
+   - 48.9N 2.3E (Paris): Dfb (Earth Cfb; M7); Summer 15.2 (14.8–15.8),
+     Winter −0.5 (−0.7 to −0.4)
+   - 1N 114E (Borneo): Af; Summer 23.5 (22.8–24.7), Winter 21.8 (21.1–23.0)
+   - 75N 40W (Greenland): EF; Summer −9.3, Winter −39.2
+6. Climate (2), then E (Temperature), Annual Mean: the equator is warm
+   orange, and the mid-latitude bands (around 45°) are noticeably warmer
+   than before. No gray or blank bands, and no stripe or step along a
+   latitude line near 60–75° (the ice edge is gradual).
+7. Planet: drag Axial tilt to 0, release; then to 45, release; then back
+   to 23.5. The Temperature map changes smoothly each time, with no
+   sudden jump. Restore 23.5 before closing.
+8. Visual pass at ~1280 px: the legend and tooltip aren't clipped.
+
+**Your by-eye results (Session 10 Prompt 16; a short version, by your
+choice): PASS.**
+- Earth defaults confirmed.
+- The Köppen map shows Europe and Russia as D, and the Sahara and
+  Australia as BWh.
+- Paris: Dfb, 15.1 / −0.5 °C (expected 15.2, range 14.8–15.8, and −0.5).
+- Tilt 0 → 45 → 23.5: smooth.
+- The rest of the Go-to table and steps 6 and 8 weren't run.
+
+**Next session (Climate inputs, Phase C):**
+- Phoenix's rain split by term and month on the new temperatures. It rose
+  from 1,335 to 1,432 mm/yr, against my Phase A prediction (the cold-air
+  capacity excess should have dropped with warming), so it needs
+  explaining before any attribution to M7.
+- Measure C2 (convergence-scaled background rain; recycling 0.5 as a
+  separate variant), one round, proposal only. Report Manaus, Kisangani,
+  Petrolina, Mombasa, the M5 rain-shadow pairs, and the Köppen table; stop
+  for your approval.
+- Retime the full 12-month job: 27–28 s last time vs 7.7 s before. If it's
+  still slow, find out why.
+- C1 (the monsoon wind term) is recorded for M8 as a known limitation; the
+  milestone order is unchanged.
+
+Recommended order (before your decision):
+- Measure C1 alone (the summer supply), then C2 on top of it, one round
+  each.
+- For each: Köppen at the 24 points, rain at the 12, the M5 SPEC checks,
+  timings.
+- Your approval before anything is applied.
+- Alternatively, record 1–3 as limitations and go on to M6b, leaving them
+  to M7/M8 as SPEC planned.
+
 ---
 
 ## 2026-10-24 — Session 10 prompt log (checks, M6a)
@@ -4170,6 +4484,74 @@ condition 4), then Phase C.
   - With no model, the in-memory copies equal the app's tables.
   - The Node and browser profiles agree: pole −18.0 vs −18.4 from the row-center interpolation.
   - Nothing in src/ or tests/ changed.
+
+### Prompt 11
+* **User Prompt:**  
+  > *[Approved: Budyko + ice-albedo, no rotation term, desert warmth deferred. Conditions: (1) replace the sharp ice step with a gradual transition (reflectance ramping in over a few degrees around −10 °C); show 70° before and after. (2) Sweep tilt 0–45° in 5° steps; temperatures change smoothly, no jumps in the ice edge. (3) Record in SPEC as known limitations: rotation doesn't affect heat transport, and desert annual means run 5–8 °C cool. (4) Update SPEC §6 with the method and constants and §17 with the mid-latitude targets, as approved now. (5) Only the "Tq calibration" pole rows may change; any other test change comes back first. Then implement, run the full suite, recalibrate PRECIP_CAL to 82.00, rerun the A3 rain breakdown and the Köppen table on the new temperatures. Stop with the Phase C proposal based on those new numbers.]*
+* **What the AI Provided:**  
+  - Measured ramp widths (sharp, 6, 10, 15, 20, 25, 30 °C) and found conditions 1 and 2 in conflict.
+  - Asked you (Prompt 12).
+  - Then implemented, tested, recalibrated, reran A3 and the Köppen table, and wrote the Phase C proposal.
+* **Root Cause Discovered:**  
+  - Ice-albedo feedback sharpens a narrow ramp into a step, and makes small ice caps jump with tilt.
+  - A slip of mine: my first version added a polar cell's average change to the exact radiative value (tilt 0° pole −39.7 °C instead of −33.1). Fixed before any test.
+* **How It Was Verified:**  
+  - Tests 255/255, with only the allowed pole-row change.
+  - The 1° tilt sweep from the implemented code.
+  - `PRECIP_CAL` confirmed at 82.00 in the app's worker.
+  - The in-memory rain split equals the worker's to 0.00006 mm/month.
+
+### Prompt 12 (answer to my question)
+* **User Prompt:**  
+  > *Which ice ramp? → "20 °C ramp (Recommended)"*
+* **What the AI Provided:**  
+  Implemented the 20 °C ramp (partial ice from 0 to −20 °C annual mean).
+
+### Prompt 13 (sent while Claude was working)
+* **User Prompt:**  
+  > *[Record in SPEC §6 and LOG that condition 1 was revised by the measurements (a few-degree ramp jumps between tilts 25° and 30°, so the approved ramp is 20 °C wide, for partial seasonal ice from 0 to −20 °C annual mean). Put the 1° tilt sweep for the 20 °C ramp in LOG. Confirm that the heat-transport profile depends on no planet setting besides tilt, and add a test that changing radius, rotation, spin, or lunar pull doesn't change it.]*
+* **What the AI Provided:**  
+  - Recorded the revision in SPEC §6 and the Phase B entry.
+  - Added the full 0–45° sweep in 1° steps from the implemented code.
+  - Confirmed that the profile takes only the tilt, and added the test: radius 3,000 km, rotation 8 h and 72 h, retrograde spin, and lunar pull 3 leave temperatures identical, with the swing held fixed.
+* **How It Was Verified:**  
+  - The new test passes, and it also checks that tilt does change the result.
+  - Suite 255/255.
+
+### Prompt 14
+* **User Prompt:**  
+  > *[Not C1: record the summer-drought interiors for M8 as a known limitation and keep the milestone order. First, give me a short by-eye check for the Phase B temperatures (Earth defaults, Load Earth Map, Köppen mode, a few Go-to points with expected codes and temperatures) and a commit message; I'll commit before Phase C. Then: (1) Phoenix: your Phase A explanation (cold-air capacity excess) predicted a drop with warming, but it rose from 1,335 to 1,432 mm/yr. Show its rain split by term and month on the new temperatures before attributing it to M7. (2) Measure C2 (convergence-scaled rain; recycling 0.5 as a separate variant), one round, with its effect on Manaus, Kisangani, Petrolina, Mombasa, the M5 rain-shadow pairs, and the Köppen table. Proposal only; stop for my approval. Also, the full jobs took 27–28 s this round vs 7.7 s before: time it again on the next run, and if it's still slow, find out why instead of attributing it to the machine.]*
+* **What the AI Provided:**  
+  - Recorded the M8 limitation in SPEC §7.
+  - Measured the checklist values with the app's code and wrote the Phase B by-eye check.
+  - Gave a commit message.
+  - Stopped for your commit before Phase C.
+* **Where the Model Misread Me:**  
+  Fair point on the timing. I put the slow jobs down to "this machine's noise" without checking. That's unverified, and the next run will measure it.
+
+### Prompt 15
+* **User Prompt:**  
+  > *"spin it up for me again so I can check"*
+* **What the AI Provided:**  
+  - Started the dev server (`py serve.py`, port 8000; launch.json "static").
+  - Confirmed it serves the app's modules (200 in the server log).
+  - Pointed you to the Phase B by-eye check.
+* **How It Was Verified:**  
+  - The server log shows the page and its modules loading with 200.
+  - My calls appear in tool-log/2026-10-24.jsonl under this session's id (6d238cce…).
+  - The file also has a `session_start` at 23:15Z for a different session id (755395d7…). That's another session started in this folder; its lines carry its own id.
+
+### Prompt 16 (end of the day)
+* **User Prompt:**  
+  > *[Stop here for today. Wrap up: (1) record the Phase B by-eye results (short version: Earth defaults confirmed; Köppen map shows Europe and Russia D, Sahara and Australia BWh; Paris Dfb 15.1 / −0.5; tilt 0 → 45 → 23.5 smooth: PASS; rest of the table not run); (2) add a "Next session" note to the Climate inputs entry and plans/climate-inputs-plan.md (Phoenix rain split, C2 one round, retime the 12-month job, C1 recorded for M8); (3) stop the dev server; (4) confirm the tool log and the encoding check, and give a final commit message. No other changes.]*
+* **What the AI Provided:**  
+  - Recorded the results and the "Next session" notes in the Climate inputs entry and in the plan file.
+  - Stopped the dev server.
+  - Confirmed the tool log and the encoding check, and gave the final commit message.
+* **How It Was Verified:**  
+  - The preview server list shows the server stopped.
+  - The tool log has every call this turn.
+  - The encoding check passed on LOG.md and the plan file.
 
 ---
 

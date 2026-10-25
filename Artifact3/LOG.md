@@ -7,8 +7,11 @@ bottom. Claude Code updates this at the end of every milestone.
 
 - [x] M1 — Bridge core and hex math (rule questions still open: see
   Session 1 Decisions)
-- [ ] M2 — TTS exporter
-- [ ] M3 — Calibration on our real table
+- [ ] M2 — TTS exporter (built and solo-tested; every step but the hold
+  test passes; open: confirm the TTS Grid fields and fix the fallback,
+  then re-approve `report_pointy.txt`)
+- [ ] M3 — Calibration on our real table (open item carried from M2: the
+  hold / in-motion test, step 7, is untested)
 - [ ] M4 — GM access without copy-paste (local MCP server)
 - [ ] M5 — Combat state and change log
 - [ ] Later — Line of sight, cover, reaction triggers, action accounting,
@@ -343,6 +346,227 @@ as prompts. Each fix lists how it was verified.
   `test_golden_report` and `test_report_matches_golden` passed against in
   Prompt 13.
 
+### Prompt 15
+* **User Prompt:**  
+  > *"Plan milestone M2 (TTS exporter) only. Don't write code yet. Read
+  > LOG.md first, especially the items recorded for M2. [Facts: TTS runs
+  > Lua only on the host, so the bridge runs on the host's computer
+  > (confirm or correct); hex grid painted on 3D terrain, geometry from
+  > three "AIT: Calibration" markers, TTS Grid as fallback; airborne units
+  > on pedestals, Flying is a description condition; solo test on a copy
+  > of the table first. Propose: Lua structure and bundling; the exporter
+  > (ait: filter, held objects, payload, 127.0.0.1); triggers (button,
+  > timer, one offline notice); calibration format, math, validation, and
+  > report; final description syntax; bridge changes and tests; the solo
+  > in-game checklist; unsure TTS behaviors; ambiguities and SPEC changes.
+  > Rules: 127.0.0.1 only; no blocking servers.]"*
+* **What the AI Provided:** The M2 plan, in chat, with no code. Read the
+  M2 notes in this log and the current SPEC first. Recommendations:
+  - a single hand-maintained `tts/exporter.lua` as the object script of a
+    dedicated "AIT Bridge" object
+  - flag held objects rather than skip them
+  - calibration as a 2×2 affine lattice basis built from the three markers
+  - schema v2 and payload v2
+
+  Open questions are listed in the plan. No files changed except this log.
+* **Where the Model Misread Me:** n/a.
+* **How It Was Verified:** n/a (plan only).
+
+### Prompt 16
+* **User Prompt:**  
+  > *"Build M2 with your recommended answers, except: Q1: the pedestal is a
+  > separate object placed under the mini. Q2: no TTS Grid fallback when
+  > markers exist but are invalid. Save the last valid calibration
+  > (snapshots/, git-ignored) and keep using it, with a warning line naming
+  > the problem. If no valid calibration has ever been saved, the report
+  > says positions are unavailable rather than guessing. The TTS Grid is
+  > used only when there are no calibration markers at all. Add "lock the
+  > calibration markers" to my checklist, and a test that a slightly bumped
+  > marker within tolerance doesn't change any unit's hex. Q3: flag held
+  > objects as planned, but only marked units count toward in_motion. If a
+  > unit stays in motion for more than 30 s, warn and stop letting it block
+  > history. Add a test for that. Approve the last_payload.json extra.
+  > Update SPEC and LOG.md with these decisions, build, run the tests, and
+  > stop with the checklist."*
+* **What the AI Provided:** Recorded the decisions (M2 Decisions, SPEC §1–§4
+  and §6) before coding, then built M2 (see M2 Changed). One added
+  behavior, so the bump test can actually guarantee "no hex changes":
+  - if every marker is within 0.25 hex of its saved position, the saved
+    calibration is kept as-is
+  - a plain recomputation could still move hexes far from the markers
+
+  Gave the solo in-game checklist in chat.
+* **Where the Model Misread Me:** n/a. My plan's Q2 recommendation (the
+  TTS Grid fallback with a banner) was replaced by your rule.
+* **How It Was Verified:** 86 tests OK (see M2 Checks). The pointy golden
+  diff is limited to its first two lines. The calibrated golden was checked
+  against hand-chosen hexes and hand-computed distances. The Lua is
+  unverified (no interpreter; in-game checklist pending).
+
+### Prompt 17
+* **User Prompt:**  
+  > *"Start the bridge in the background and give me the URLs; I'm starting
+  > the solo checklist."*
+* **What the AI Provided:** Checked that `snapshots/` was empty (so no
+  saved calibration), then started the bridge in the background with the
+  preview tool (`bridge` in `.claude/launch.json`). Gave you the /report,
+  /snapshot.json, and /health URLs.
+* **Where the Model Misread Me:** n/a.
+* **How It Was Verified:** GET /health → 200, `schema: 2`, no payload yet.
+  The bridge log shows it listening on 127.0.0.1:8765.
+
+### Prompt 18
+* **User Prompt:**  
+  > *"Step 2 result: loaded fine, the Snapshot button appears, but every
+  > export fails: [AIT Bridge - 30eebb] Lua Error: (37,8-47): pattern too
+  > complex at match, at isMarked, at collect, at send, at onSnapshotClick
+  > (and from the timer at line 163). This is MoonSharp's pattern-matching
+  > recursion limit, hit on long descriptions (our table has rules cards
+  > with long text). Fix: [1. isMarked without patterns: find the first
+  > non-whitespace character with a loop, take a short substring,
+  > lowercase it, compare with "ait" + optional spaces + ":" using plain
+  > string operations; same for any other pattern on description text. 2.
+  > Check each object inside pcall so one bad object is skipped. 3. Report
+  > Lua errors in collect/send in chat once, repeating only if the message
+  > changes, never every tick.] Record "MoonSharp pattern too complex on
+  > long strings" in LOG.md as a TTS quirk. Give me the updated
+  > exporter.lua to paste, and I'll restart from step 2."*
+* **What the AI Provided:** Changes in `tts/exporter.lua`:
+  - `isMarked` now uses a byte loop to skip whitespace, then compares a
+    40-character lowercase slice; there are no patterns left anywhere in
+    the script.
+  - A new `describe(obj)` runs inside pcall for each object; skipped
+    objects are reported once with the first error.
+  - `send` runs inside pcall, and so does the reply handler. Errors go
+    through `noticeOnce`, so they show again only if the message changes.
+  - The button's "busy" message comes only from a genuinely pending
+    request.
+
+  Recorded the quirk and the step 2 results. The bridge (Python) is
+  unchanged and still running.
+* **Where the Model Misread Me:** n/a. Root cause: my Prompt 16 exporter
+  used Lua patterns on full description text. I didn't know about
+  MoonSharp's recursion limit, and the patterns would have been fine in
+  standard Lua.
+* **How It Was Verified:** A search of the script finds no `match`,
+  `gmatch`, `gsub`, `find`, or `%` pattern left. Read through by hand for
+  syntax and definition order. It's still unrun (no Lua interpreter here):
+  your step 2 rerun is the real check.
+
+### Prompt 19
+* **User Prompt:**  
+  > *"Stop the bridge."*
+* **What the AI Provided:** Read the bridge log, then stopped the bridge
+  with preview_stop (it had run for 42 min). What the log showed:
+  - every POST /tts answered 200
+  - about every 5 s from 22:52:31–22:53:26, and from 23:11:27 to 23:23:02
+  - a few off-schedule POSTs, which look like Snapshot button clicks
+
+  `snapshots/` now holds `calibration.json`, `history.jsonl`,
+  `last_payload.json`, and `latest.json`.
+* **Where the Model Misread Me:** n/a.
+* **How It Was Verified:** preview_stop confirmed the server stopped; the
+  log above came from preview_logs. This confirms that TTS
+  `WebRequest.custom` reaches `http://127.0.0.1:8765` with a JSON body the
+  bridge accepts. I haven't opened the saved snapshot files yet.
+
+### Prompt 20
+* **User Prompt:**  
+  > *"start it again"*
+* **What the AI Provided:** Restarted the bridge in the background with
+  the preview tool. TTS exports resumed by themselves, with no reload:
+  POST /tts → 200 at 23:24:12 and 23:24:17. `/health` showed
+  `last_payload_at` 23:24:17Z and `latest_seq` 19, which was reloaded from
+  `snapshots/` and kept counting.
+* **Where the Model Misread Me:** n/a.
+* **How It Was Verified:** The bridge log (preview_logs) and GET /health.
+  Whether chat showed exactly one offline line and one reconnect line is
+  yours to report from TTS.
+
+### Prompt 21
+* **User Prompt:**  
+  > *"Remaining results: flip, marker on/off, small bump, break calibration
+  > (warning shown, hexes unchanged, cleared when B was put back), pedestal
+  > check, and save/reload all pass. The hold/in-motion test is NOT done;
+  > record it as untested in LOG.md and as an open item for M3, not as
+  > passed. Then: [1. Fix the TTS Grid fallback constant (size =
+  > corner-to-corner width, spacing = size·√3/2) once you've confirmed it
+  > against last_payload.json, with a test; report the Grid.type number and
+  > offset fields. 2. Record the confirmed TTS behaviors, including the
+  > MoonSharp "pattern too complex" fix and that Save & Play reloads from
+  > the last save (save the game first). 3. Show both golden reports for
+  > approval. 4. Run the tests, update LOG.md (M2 planned / changed /
+  > problems / checks), and suggest a commit message.]"*
+* **What the AI Provided:**
+  - Recorded your results, with the hold test as untested and open for M3.
+  - Read `last_payload.json`: it has no `grid` key, so I couldn't confirm
+    the Grid.type number, the offset fields, or the spacing rule. I didn't
+    change the constant, and proposed a per-field diagnostic instead.
+  - Recorded the confirmed TTS behaviors, the open questions, and the
+    unreported steps.
+  - Ran the tests (86 OK), showed both goldens, and suggested a commit
+    message.
+* **Where the Model Misread Me:** n/a. Root cause found for the missing
+  grid: the exporter wraps `gridSettings()` in pcall and drops the grid
+  silently on any error. That hid the failure until now.
+* **How It Was Verified:** Python one-liners on `last_payload.json` and
+  `latest.json`; the test run.
+
+### Prompt 22
+* **User Prompt:**  
+  > *"Earlier results I hadn't sent: [step 3: calibrated, hex step 1.73 (=
+  > 2·√3/2 for my TTS grid size 2), rows at −60.0°, mismatch 0.0%; step 4:
+  > all marked objects appeared, the unmarked bag didn't, Hive showed
+  > FLYING, Spite's hexes formed a triangle; step 5: Operator moved
+  > (11,−6) → (12,−6), distance to Spite 3 → 4; step 10: exactly one "not
+  > reachable" line, then one "reconnected" line; button placement fine.]
+  > Answers: 1. Yes: read each Grid field separately, include a list of
+  > unreadable fields in the payload, and report them in chat once. Then
+  > I'll rerun a snapshot so you can confirm the size rule and fix the
+  > fallback constant. 2. Golden reports: report_calibrated.txt approved.
+  > report_pointy.txt waits until after the Grid fix. 3. materials/ is
+  > already in .gitignore and committed. Read the file to confirm, and
+  > remove that item from LOG.md. 4. Marker B moved; I'll put it back and
+  > lock it. Run the tests, update LOG.md, and give me the updated
+  > exporter.lua to paste. Stop the bridge after the check."*
+* **What the AI Provided:**
+  - Recorded the results; every step except step 7 now passes.
+  - Exporter 0.3: per-field Grid reads, `grid_unreadable`, and a one-time
+    chat notice.
+  - Confirmed `materials/` is in `.gitignore` (line 12) and removed the
+    open item.
+  - Recorded the golden approvals. Ran the tests (86 OK) and sent the
+    exporter.
+  - Kept the bridge running so I can check your rerun payload; I'll stop
+    it after that check.
+* **Where the Model Misread Me:** n/a. I read "stop the bridge after the
+  check" as after I check your rerun payload, since that check can't
+  happen with the bridge stopped. If you meant right away, say so.
+  - **Not verified:** whether `materials/` is committed. That needs git,
+    which I don't run unless asked.
+* **How It Was Verified:** Read `.gitignore`; 86 tests OK. The Lua is
+  still unrun until you paste it; there's no Lua interpreter here.
+
+### Prompt 23
+* **User Prompt:**  
+  > *"good to commit?"*
+* **What the AI Provided:**
+  - **Verdict:** yes, as an M2 checkpoint (tests green, git-ignored runtime
+    data), with the commit message saying what's still open.
+  - **Scanned what would be committed:** no personal paths, email, or
+    secrets. The only path hit is `.claude/settings.json`'s own deny
+    rules, which was already committed.
+  - **Flagged:**
+    - LOG.md now names your table's minis (Operator, Spite, Hive) with
+      their hex coordinates, and the repo is public.
+    - Exporter 0.3 hasn't run in TTS yet.
+    - The Session 0 placeholders are still unfilled.
+* **Where the Model Misread Me:** n/a.
+* **How It Was Verified:** A search of the repo for paths, email, and
+  secret-like strings, excluding `snapshots/`, `tool-log/*.jsonl`, and
+  `materials/`. I didn't run git, so this doesn't check what GitHub Desktop
+  will actually stage.
+
 ### Decisions (M1)
 Recorded before implementing. "Unconfirmed" means I chose a default because
 the question wasn't answered yet; each is one constant or one function to
@@ -529,7 +753,6 @@ change.
   (fixture data, git-ignored). Both deleted in Prompt 12.
 - Rulebook PDF: can't be rendered (no pdftoppm), but its text is readable
   through the `pdftotext` that comes with Git for Windows (Prompt 9).
-  `materials/` isn't in `.gitignore` yet.
 
 **Checks**
 - `py -m unittest discover -s tests -v`: 59 tests, all OK. Covers both
@@ -562,3 +785,266 @@ change.
   and the deliberate malformed POST (the client exits 1 on HTTP 400). The
   rejected first ExitPlanMode has only a `requested` line, and the denied
   plan-file Write has no line, both as tool-log/README.md describes.
+
+### M2 — TTS exporter
+
+**Planned**
+- From the M2 plan (Prompt 15) with your changes (Prompt 16):
+  - the Lua exporter as one object script
+  - marker calibration with a saved fallback, and the TTS Grid only when
+    there are no markers
+  - held/moving flags with the 30 s rule
+  - Flying, schema/payload v2, and `last_payload.json`
+  - a solo in-game checklist
+
+**Decisions (Prompt 16, recorded before building)**
+- **Bundling (SPEC §2):** one hand-maintained file, `tts/exporter.lua`. It
+  goes in the object script of a dedicated "AIT Bridge" object, not the
+  Global script, so the table mod's own Global script is untouched and the
+  exporter travels as a Saved Object.
+- **Host only:** TTS runs Lua only on the host, so the bridge runs on the
+  host's computer. Confirmed as TTS design; the client side can't be
+  checked in a solo test.
+- **Pedestals (Q1, your answer):** a pedestal is a separate object placed
+  under the mini. Leave pedestals unmarked; the mini's own position gives
+  its hex.
+- **Calibration (Q2, your rule):**
+  - Three `AIT: Calibration` markers: `Point: Origin`, `Point: A` +
+    `Hexes: N`, `Point: B` + `Hexes: N`, on painted hex centers.
+  - From them: q-vector = (A − Origin)/N_A. The r-vector is (B − Origin)/N_B
+    when the rows are 60° apart, or the sum of both vectors when they're
+    120° apart.
+  - Rejected if the spacing differs by more than 3%, or the angle is more
+    than 3° off 60°/120°.
+  - Each valid calibration is saved to `snapshots/calibration.json`
+    (git-ignored).
+  - If the markers are later invalid, the bridge keeps using the last saved
+    calibration and adds a warning line naming the problem. If none was
+    ever saved, the report says positions are unavailable instead of
+    guessing.
+  - The TTS Grid is used only when there are no calibration markers at all.
+- **Calibration stability (Q2):** if every marker is within 0.25 hex of its
+  saved position (same N), the saved calibration is kept unchanged, so a
+  slightly bumped marker can't change any unit's hex. Bigger moves give a
+  new calibration.
+- **Held and moving objects (Q3, your rule):** Lua sends `held_by_color`
+  and `resting`. Only marked units count toward `in_motion`. While a unit
+  is in motion, history isn't appended. If a unit stays in motion for
+  more than 30 s, a warning names it and it stops blocking history.
+- **Snapshot button (Q4):** on the AIT Bridge object; only the host's
+  clicks count.
+- **Chat (Q5):** host-only lines: loaded; one offline notice; one
+  reconnect notice; a bridge rejection (shown once per distinct message);
+  one confirmation per button press. Timer sends are silent.
+- **Marker keys (Q6):** `Point` and `Hexes`, as above.
+- **Versions (Q8):** schema 2 and payload_version 2. Fixtures are
+  regenerated, and the golden report needs your re-approval.
+- **Sloped terrain (Q9):** an M3 check, not handled in M2.
+- **last_payload.json (approved extra):** the bridge saves every raw POST
+  body to `snapshots/last_payload.json` (git-ignored) for debugging and
+  for capturing real fixtures.
+- **Final description syntax (SPEC §2):** the M1 provisional syntax, plus
+  the `Calibration` kind and the `Flying` condition (any case), which sets
+  `flying: true` and shows `FLYING` in the report.
+
+**Changed**
+- `tts/exporter.lua` (new): about 190 lines.
+  - Marker pre-filter (skips leading blank lines), collects marked
+    objects, payload v2 built so an empty list is `[]`.
+  - `WebRequest.custom` POST to 127.0.0.1 with a 10 s in-flight
+    timeout.
+  - Offline, reconnect, and rejection notices, each shown once.
+  - Host-only Snapshot button and a 5 s timer.
+  - Every unverified TTS call is marked `VERIFY`.
+- `bridge/hexgrid.py`: grids are now a `Lattice` (origin + q/r world
+  vectors). `tts_lattice` replaces `Grid`. Added `lattice_from_markers`,
+  `CalibrationError`, `hex_step`, and `row_angle_deg`. Nearness is measured
+  in regular-hex units, so rotation and scale don't matter.
+- `bridge/snapshot.py`:
+  - Schema 2.
+  - The grid is chosen by `_choose_lattice`: TTS Grid, calibration, saved
+    calibration, or unavailable. Calibration markers are parsed, and the
+    stability rule is applied.
+  - Units gain `flying`, `held_by`, `moving`, and `in_motion_since`; the
+    snapshot gains `in_motion`, with the 30 s stale rule.
+  - `same_board` ignores motion fields.
+  - `build_snapshot(payload, received_at, seq, previous, saved_calibration)`.
+- `bridge/server.py`:
+  - History is compared against the last *recorded* snapshot, and isn't
+    appended while `in_motion`.
+  - Saves `calibration.json` and the raw body to `last_payload.json`;
+    reloads both on restart.
+- `bridge/report.py`: the grid line per source, the alert lines
+  (calibration warning, positions unavailable, in motion), `FLYING`, and
+  "unavailable" for hexes and distances.
+- `bridge/constants.py`: versions 2, calibration and motion tolerances,
+  the Grid offset field names (unverified), and the new storage files.
+- Tests: new `test_calibration.py`, plus motion, flying, alert-line, and
+  storage tests; all fixtures moved to payload v2.
+  - New `payload_calibrated.json`, written by a scratch script from a
+    hand-chosen lattice (17°, step 2.5, origin (10, −4)).
+  - Its expected snapshot and the new golden `report_calibrated.txt`.
+- `report_pointy.txt` regenerated: only lines 1–2 changed (`schema 2`, and
+  the grid line now reads `Grid: TTS Grid (no calibration markers),
+  pointy-top (TTS type 2), hex step 2.00 x 2.00 units`). Approval status:
+  see Problems.
+- Prompt 18: `tts/exporter.lua` no longer uses patterns, checks each
+  object in pcall, and shows errors once.
+- Prompt 22: `tts/exporter.lua` 0.3 reads each Grid field on its own and
+  sends `grid_unreadable`. The bridge ignores that key; no Python change.
+  The file on disk had been re-indented by 4 spaces since my last edit.
+  The content was unchanged, so I kept that formatting.
+
+**Problems / open questions**
+- The exporter has now run in the game (Prompts 18–21). It's still not
+  checkable outside TTS, because there's no Lua interpreter here.
+- **TTS Grid settings never arrive (Prompt 21).** `snapshots/last_payload.json`
+  has no `grid` key: `pcall(gridSettings)` failed, so the exporter left it
+  out without saying anything. So the Grid.type number and the offset
+  field names are still unknown, and the TTS Grid fallback constant
+  (size = corner-to-corner, spacing = size·√3/2) wasn't changed. You asked
+  for it to be confirmed against the payload first.
+  - **Hypothesis (unverified):** MoonSharp raises an error when Lua reads a
+    field that doesn't exist on a TTS object (e.g. `Grid.offsetZ`) instead
+    of returning nil, so one missing field drops the whole grid.
+  - **Fix built (Prompt 22, exporter 0.3):** each Grid field is read in
+    its own pcall. Readable fields go in `grid`; unreadable ones are
+    listed in `grid_unreadable` and shown in chat once. Waiting on your
+    rerun so the payload can confirm the size rule; then the fallback
+    constant gets fixed, with a test.
+- **Evidence for the corner-to-corner rule, not proof:** the saved
+  calibration has a hex step of exactly 1.7321 (√3), rows exactly 60°
+  apart, and 0.0% spacing mismatch. That suggests the markers snapped to
+  TTS's grid. √3 is what a size-2 grid gives if size is corner-to-corner,
+  but the payload doesn't show `sizeX`.
+- **Hold / in-motion test (checklist step 7): not done.** This is
+  untested, not passed, and is carried to M3 as an open item. Whether
+  `resting` stays false on uneven terrain is untested for the same reason.
+  The last payload had `resting: true` for all 9 objects, and no
+  `held_by_color` key at all (nil while not held).
+- **State at the last payload:** the markers didn't validate ("inconsistent
+  spacing: A gives 1.750 and B gives 3.076 units per hex"), so the bridge
+  was using the saved calibration with a warning. Marker B had moved; you
+  said you'd put it back and lock it (Prompt 22).
+- **Golden reports (Prompt 22):** `report_calibrated.txt` is approved.
+  `report_pointy.txt` waits until after the Grid fix.
+- Under the stability rule, gradual marker drift stays hidden until a
+  marker is more than 0.25 hex from its saved position. Then the
+  calibration updates in one step.
+- If the grid fix goes in, the pointy fixture's world positions map to
+  different hexes, so `report_pointy.txt` would need regenerating and
+  re-approving.
+
+**Checks**
+- `py -m unittest discover -s tests`: 86 tests, all OK. That includes:
+  - Calibration math: unrotated markers match the TTS Grid; a 17° grid;
+    120° rows; mirrored rows; every error; the tolerances.
+  - A bumped marker within tolerance changes no unit's hex.
+  - A marker moved beyond tolerance recalibrates.
+  - Invalid markers use the saved calibration; with none saved, positions
+    are unavailable.
+  - Motion: held, not resting, and terrain-not-counted; exactly 30 s
+    still blocks; 31 s warns and stops blocking; the clock resets on
+    release.
+  - Flying.
+  - Server: no history in motion, calibration saved across a restart,
+    `last_payload.json` kept even when malformed.
+  - The calibrated fixture hand-checked: hexes, Goliath's 12, distances
+    4/6/5/4, and the objective.
+- The live bridge wasn't started at that point (you asked to stop after
+  the tests); checklist step 1 started it later.
+- Prompt 21: `py -m unittest discover -s tests` → 86 tests OK (no code
+  changes since Prompt 16 apart from the Lua fix).
+- In-game solo test on a copy of the table: results under "In-game results
+  so far".
+
+**Confirmed TTS behaviors (solo test, Prompts 18–21)**
+- **Host and Lua:**
+  - The exporter works as an object script: `onLoad` runs, and
+    `self.createButton` shows the button on the token.
+  - The click handler runs.
+  - `print()` reaches chat. Whether other players see it is untested,
+    since this was a solo test.
+- **Timer:** `Wait.time(fn, 5, -1)` repeats forever.
+- **Objects:** `getObjects()` and `getDescription()` work. Position,
+  rotation, and bounds, copied into plain tables, encode and are accepted
+  by the bridge.
+- **Network:** `WebRequest.custom(url, "POST", true, body, headers,
+  callback)` reaches `http://127.0.0.1:8765` with a JSON body. Replies come
+  back, and after a bridge restart exports resume without reloading the
+  game.
+- **JSON:** `JSON.encode` of the object list works.
+- **held_by_color:** absent (nil) while nobody holds the object. Its value
+  while held is untested.
+- **Saving:** the script survives a save and reload.
+  - **Save & Play reloads the game from the last save** (your
+    observation), so save the game before clicking Save & Play, or table
+    changes since the last save are lost.
+- **Grid:** reading the TTS `Grid` settings failed, so it's unverified (see
+  Problems).
+
+**TTS quirks (found in the game)**
+- **MoonSharp: "pattern too complex" on long strings** (Prompt 18).
+  - **What happened:** Lua patterns such as the trim `^%s*(.-)%s*$` hit
+    MoonSharp's pattern-matching recursion limit on long text. Our table's
+    rules cards have long descriptions, and `isMarked` ran on every
+    object, so every export failed with
+    `Lua Error: (37,8-47): pattern too complex` (from the button and the
+    timer).
+  - **Rule from now on:** no Lua patterns on description or other
+    unbounded text. Use byte loops and short `sub()` slices instead.
+
+**In-game results so far (solo test)**
+- Step 2, first run (Prompt 18): the script loaded, and the Snapshot
+  button appeared on the token. Every export then failed with the error
+  above, before any request was sent, so `WebRequest` is still untested.
+- Confirmed in passing:
+  - `onLoad` runs and `self.createButton` works.
+  - The click handler is reached.
+  - `Wait.time(…, 5, -1)` repeats, since the error also came from the
+    timer.
+  - `getObjects()`/`getDescription()` work.
+  - Lua errors show in chat.
+- After the Prompt 18 fix (bridge log, Prompt 19): **`WebRequest.custom`
+  POSTs to 127.0.0.1 work.** Every export got a 200, timer sends arrived
+  every 5 s, and button sends arrived in between. A valid calibration was
+  saved. The other checklist steps aren't reported yet.
+- Step 10, bridge side (Prompts 19–20): after the bridge was stopped and
+  restarted, exports resumed within seconds with no reload, and history
+  `seq` carried on (19). The chat-notice part of step 10 is waiting on
+  your report.
+- Your results (Prompt 21) — **pass:**
+  - step 6, flip
+  - step 8, marker on/off
+  - step 9, small bump
+  - step 9, breaking the calibration: the warning showed, hexes stayed
+    unchanged, and it cleared when B was put back
+  - the pedestal check: a flyer reports the hex under its pedestal
+  - step 11, save and reload
+- **Not done:** step 7, hold / in motion. It's untested and open for M3.
+- Your earlier results (Prompt 22) — **pass:**
+  - **Step 3:** calibrated with hex step 1.73 (= 2·√3/2 for your TTS grid
+    size 2), rows at −60.0°, mismatch 0.0%.
+  - **Step 4:** every marked object appeared and the unmarked bag didn't;
+    Hive showed `FLYING`; Spite's hexes formed a triangle.
+  - **Step 5:** Operator moved from (11,−6) to (12,−6), and its distance
+    to Spite went from 3 to 4.
+  - **Step 10:** chat showed exactly one "not reachable" line, then one
+    "reconnected" line.
+  - **Step 12:** the button placement is fine.
+- Every checklist step except step 7 has now passed.
+
+**In-game checklist (solo, pending):** given in chat with Prompt 16 and
+summarized here.
+1. Start the bridge.
+2. Install the script on the "AIT Bridge" object.
+3. Place and lock the three calibration markers.
+4. Mark test units: a pedestal flyer, and a Size 2 on a corner.
+5. Move one hex.
+6. Turn and flip the Size 2.
+7. Hold a mini for 10 s, then 40 s.
+8. Add and remove a marker.
+9. Bump a locked marker slightly, then break one.
+10. Stop and restart the bridge.
+11. Save and reload.
+12. Report back the VERIFY results.

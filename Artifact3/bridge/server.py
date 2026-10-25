@@ -1,4 +1,4 @@
-"""HTTP endpoints and snapshot storage. All I/O for the bridge lives here.
+"""HTTP endpoints and storage in snapshots/. All I/O for the bridge lives here.
 
   POST /tts            raw Lua payload → processed snapshot
   GET  /snapshot.json  latest processed snapshot
@@ -30,27 +30,50 @@ def iso(moment):
     return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _read_json(path):
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _last_history_line(path):
+    last = None
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    last = line
+    return json.loads(last) if last else None
+
+
 class Store:
-    """Latest snapshot (latest.json) plus change-only history (history.jsonl)."""
+    """Everything in snapshots/: the latest snapshot (latest.json), the
+    change-only history (history.jsonl), the last valid calibration
+    (calibration.json), and the last raw POST body (last_payload.json)."""
 
     def __init__(self, directory):
         self.directory = Path(directory)
         self.lock = threading.Lock()
-        self.latest = None
-        self.last_payload_at = None
-        latest_path = self.directory / C.LATEST_FILE
-        if latest_path.exists():
-            with open(latest_path, encoding="utf-8") as f:
-                self.latest = json.load(f)
-            self.last_payload_at = self.latest.get("received_at")
+        self.latest = _read_json(self.directory / C.LATEST_FILE)
+        self.last_payload_at = self.latest.get("received_at") if self.latest else None
+        self.recorded = _last_history_line(self.directory / C.HISTORY_FILE)
+        self.calibration = _read_json(self.directory / C.CALIBRATION_FILE)
+
+    def save_raw(self, raw):
+        """Keep the last raw POST body, even a malformed one, for debugging."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self._replace(self.directory / C.LAST_PAYLOAD_FILE, raw)
 
     def accept(self, payload, received_at):
         """Build and store a snapshot. Returns (snapshot, recorded)."""
         with self.lock:
-            prev = self.latest
-            seq = prev["seq"] if prev else 0
-            snap = snapshot.build_snapshot(payload, received_at, seq)
-            recorded = not snapshot.same_board(prev, snap)
+            seq = self.recorded["seq"] if self.recorded else 0
+            snap = snapshot.build_snapshot(payload, received_at, seq,
+                                           self.latest, self.calibration)
+            # Not while a unit is mid-move, and only real board changes.
+            recorded = (not snap["in_motion"]
+                        and not snapshot.same_board(self.recorded, snap))
             if recorded:
                 snap["seq"] = seq + 1
             self.directory.mkdir(parents=True, exist_ok=True)
@@ -58,18 +81,27 @@ class Store:
                 with open(self.directory / C.HISTORY_FILE, "a",
                           encoding="utf-8", newline="\n") as f:
                     f.write(json.dumps(snap, sort_keys=True) + "\n")
-            self._write_latest(snap)
+                self.recorded = snap
+            calibration = snap["grid"]["calibration"]
+            if (snap["grid"]["source"] == "calibration"
+                    and calibration != self.calibration):
+                self._write_json(C.CALIBRATION_FILE, calibration)
+                self.calibration = calibration
+            self._write_json(C.LATEST_FILE, snap)
             self.latest = snap
             self.last_payload_at = received_at
             return snap, recorded
 
-    def _write_latest(self, snap):
+    def _write_json(self, name, obj):
+        text = json.dumps(obj, indent=2, sort_keys=True) + "\n"
+        self._replace(self.directory / name, text.encode("utf-8"))
+
+    @staticmethod
+    def _replace(path, data):
         # Write a temp file, then swap it in, so a reader never sees half a file.
-        path = self.directory / C.LATEST_FILE
         tmp = path.with_name(path.name + ".tmp")
-        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(snap, f, indent=2, sort_keys=True)
-            f.write("\n")
+        with open(tmp, "wb") as f:
+            f.write(data)
         os.replace(tmp, path)
 
 
@@ -168,6 +200,7 @@ def make_handler(store, clock, quiet):
                                  % C.MAX_BODY_BYTES})
                 return
             raw = self.rfile.read(int(length))
+            store.save_raw(raw)
             try:
                 payload = json.loads(raw.decode("utf-8"))
             except UnicodeDecodeError:

@@ -1,14 +1,18 @@
-"""World ↔ hex conversion, distances, and footprints. Pure functions only.
+"""World ↔ hex conversion, distances, footprints, calibration. Pure only.
 
 Coordinates are axial (q, r) tuples. World positions are TTS units on the
-table plane (X, Z). Conversion first normalizes world offsets by the grid's
-size so one hex step is 1 "unit", then applies the standard axial formulas:
+table plane (X, Z); height (Y) is never used. Every grid is a Lattice: hex
+(q, r) has its center at
 
-  pointy-top (rows run along X):    u = q + r/2      v = r * sqrt(3)/2
-  flat-top   (columns run along Z): u = q * sqrt(3)/2  v = r + q/2
+  origin + q * q_vec + r * r_vec          (world X, Z)
+
+The lattice comes from calibration markers (a painted grid, any rotation)
+or, as a fallback, from TTS's built-in Grid settings (`tts_lattice`).
+Nearness is measured in regular-hex units (one hex step = 1), so it doesn't
+depend on the lattice's scale or rotation.
 
 ASSUMPTION (verify in TTS, M2): Grid.sizeX/sizeY is the center-to-center
-distance between neighboring hexes, and offsetX/offsetZ is a hex center.
+distance between neighboring hexes, and the offset is a hex center.
 """
 
 import math
@@ -20,12 +24,13 @@ SQRT3 = math.sqrt(3.0)
 DIRECTIONS = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))
 
 
-class Grid(NamedTuple):
-    orientation: str   # "pointy" or "flat"
-    size_x: float
-    size_y: float
-    offset_x: float = 0.0
-    offset_z: float = 0.0
+class Lattice(NamedTuple):
+    origin_x: float
+    origin_z: float
+    q_x: float   # world vector from a hex center to its (q + 1) neighbor
+    q_z: float
+    r_x: float   # world vector from a hex center to its (r + 1) neighbor
+    r_z: float
 
 
 class Placement(NamedTuple):
@@ -33,28 +38,31 @@ class Placement(NamedTuple):
     offset_error: float   # footprint centroid to mini position, in hex steps
 
 
-# --- unit space (one hex step = 1) ---
-
-def _world_to_unit(grid, x, z):
-    return (x - grid.offset_x) / grid.size_x, (z - grid.offset_z) / grid.size_y
+class CalibrationError(ValueError):
+    """Calibration markers don't describe a hex lattice."""
 
 
-def _unit_to_world(grid, u, v):
-    return u * grid.size_x + grid.offset_x, v * grid.size_y + grid.offset_z
-
-
-def _axial_to_unit(orientation, q, r):
+def tts_lattice(orientation, size_x, size_y, offset_x=0.0, offset_z=0.0):
+    """Lattice for TTS's built-in hex grid: pointy-top rows run along X,
+    flat-top columns run along Z."""
     if orientation == "pointy":
-        return q + r / 2.0, r * SQRT3 / 2.0
-    return q * SQRT3 / 2.0, r + q / 2.0
+        return Lattice(offset_x, offset_z,
+                       size_x, 0.0, size_x / 2.0, size_y * SQRT3 / 2.0)
+    return Lattice(offset_x, offset_z,
+                   size_x * SQRT3 / 2.0, size_y / 2.0, 0.0, size_y)
 
 
-def _unit_to_axial(orientation, u, v):
-    if orientation == "pointy":
-        r = 2.0 * v / SQRT3
-        return u - r / 2.0, r
-    q = 2.0 * u / SQRT3
-    return q, v - q / 2.0
+def _frac_axial(lat, x, z):
+    """Fractional (q, r) of a world point (inverse of the lattice basis)."""
+    dx, dz = x - lat.origin_x, z - lat.origin_z
+    det = lat.q_x * lat.r_z - lat.q_z * lat.r_x
+    return ((dx * lat.r_z - dz * lat.r_x) / det,
+            (lat.q_x * dz - lat.q_z * dx) / det)
+
+
+def _regular(q, r):
+    """(q, r) in regular-hex units, where one hex step is 1."""
+    return q + r / 2.0, r * SQRT3 / 2.0
 
 
 # --- conversion ---
@@ -71,14 +79,61 @@ def axial_round(q, r):
     return int(rq), int(rr)
 
 
-def world_to_axial(grid, x, z):
-    u, v = _world_to_unit(grid, x, z)
-    return axial_round(*_unit_to_axial(grid.orientation, u, v))
+def world_to_axial(lat, x, z):
+    return axial_round(*_frac_axial(lat, x, z))
 
 
-def axial_to_world(grid, hex_):
+def axial_to_world(lat, hex_):
     """World (x, z) of a hex center."""
-    return _unit_to_world(grid, *_axial_to_unit(grid.orientation, *hex_))
+    q, r = hex_
+    return (lat.origin_x + q * lat.q_x + r * lat.r_x,
+            lat.origin_z + q * lat.q_z + r * lat.r_z)
+
+
+def hex_step(lat):
+    """World distance between neighboring hex centers (along q)."""
+    return math.hypot(lat.q_x, lat.q_z)
+
+
+def row_angle_deg(lat):
+    """Angle of the q direction from world +X, in degrees."""
+    return math.degrees(math.atan2(lat.q_z, lat.q_x))
+
+
+# --- calibration ---
+
+def lattice_from_markers(origin, a, hexes_a, b, hexes_b,
+                         spacing_tolerance, angle_tolerance_deg):
+    """Lattice from three markers on hex centers: `origin`, and `a` / `b`
+    sitting `hexes_a` / `hexes_b` hexes away along two hex rows through it.
+
+    Points are world (x, z). Rows 60° apart give q = a-row, r = b-row; rows
+    120° apart give r = a-row + b-row (the row 60° from a). Returns
+    (lattice, info); raises CalibrationError naming the problem.
+    """
+    ox, oz = origin
+    ax, az = (a[0] - ox) / hexes_a, (a[1] - oz) / hexes_a
+    bx, bz = (b[0] - ox) / hexes_b, (b[1] - oz) / hexes_b
+    la, lb = math.hypot(ax, az), math.hypot(bx, bz)
+    if la == 0.0 or lb == 0.0:
+        raise CalibrationError("marker %s is on Origin" % ("A" if la == 0.0 else "B"))
+    mismatch = abs(la - lb) / max(la, lb)
+    if mismatch > spacing_tolerance:
+        raise CalibrationError(
+            "inconsistent spacing: A gives %.3f and B gives %.3f units per hex "
+            "(%.1f%% apart); check Hexes or placement" % (la, lb, 100 * mismatch))
+    cos = max(-1.0, min(1.0, (ax * bx + az * bz) / (la * lb)))
+    between = math.degrees(math.acos(cos))
+    if abs(between - 60.0) <= angle_tolerance_deg:
+        rx, rz = bx, bz
+    elif abs(between - 120.0) <= angle_tolerance_deg:
+        rx, rz = ax + bx, az + bz
+    else:
+        raise CalibrationError(
+            "A and B aren't on hex rows through Origin (%.1f° apart; expected "
+            "60° or 120°)" % between)
+    lat = Lattice(ox, oz, ax, az, rx, rz)
+    return lat, {"angle_between_deg": between, "spacing_mismatch": mismatch}
 
 
 # --- distance ---
@@ -101,11 +156,11 @@ def footprint_distance(hexes_a, hexes_b):
 
 # --- footprints (position only; rotation never matters) ---
 
-def _centroid_error(grid, x, z, hexes):
-    units = [_axial_to_unit(grid.orientation, *h) for h in hexes]
-    cu = sum(p[0] for p in units) / len(units)
-    cv = sum(p[1] for p in units) / len(units)
-    u, v = _world_to_unit(grid, x, z)
+def _centroid_error(lat, x, z, hexes):
+    pts = [_regular(*h) for h in hexes]
+    cu = sum(p[0] for p in pts) / len(pts)
+    cv = sum(p[1] for p in pts) / len(pts)
+    u, v = _regular(*_frac_axial(lat, x, z))
     return math.hypot(cu - u, cv - v)
 
 
@@ -141,8 +196,9 @@ def nearest_hexes(grid, x, z, count):
     The 3 nearest centers are the triangle around the hex corner the base
     sits on. Ties break by row-major order.
     """
-    u, v = _world_to_unit(grid, x, z)
-    center = axial_round(*_unit_to_axial(grid.orientation, u, v))
+    fq, fr = _frac_axial(grid, x, z)
+    u, v = _regular(fq, fr)
+    center = axial_round(fq, fr)
     radius = 2
     candidates = [(center[0] + dq, center[1] + dr)
                   for dq in range(-radius, radius + 1)
@@ -150,7 +206,7 @@ def nearest_hexes(grid, x, z, count):
                   if distance((0, 0), (dq, dr)) <= radius]
 
     def key(h):
-        hu, hv = _axial_to_unit(grid.orientation, *h)
+        hu, hv = _regular(*h)
         return ((hu - u) ** 2 + (hv - v) ** 2, sort_key(h))
 
     hexes = tuple(sorted(sorted(candidates, key=key)[:count], key=sort_key))

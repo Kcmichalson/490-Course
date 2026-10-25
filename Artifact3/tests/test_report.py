@@ -14,15 +14,45 @@ def load_payload(name):
 
 
 class ReportTests(unittest.TestCase):
-    def test_golden_report(self):
-        snap = snapshot.build_snapshot(load_payload("payload_pointy.json"), RECEIVED_AT, 1)
-        with open(FIXTURES / "report_pointy.txt", encoding="utf-8", newline="") as f:
-            golden = f.read()
-        self.assertEqual(report.render(snap), golden)
+    def test_golden_reports(self):
+        for name in ("pointy", "calibrated"):
+            with self.subTest(golden=name):
+                snap = snapshot.build_snapshot(load_payload("payload_%s.json" % name),
+                                               RECEIVED_AT, 1)
+                with open(FIXTURES / ("report_%s.txt" % name), encoding="utf-8",
+                          newline="") as f:
+                    golden = f.read()
+                self.assertEqual(report.render(snap), golden)
+
+    def test_alert_lines(self):
+        good = snapshot.build_snapshot(load_payload("payload_calibrated.json"), RECEIVED_AT, 1)
+        bad = load_payload("payload_calibrated.json")
+        for o in bad["objects"]:
+            if "Point: B" in o["description"]:
+                o["description"] = "AIT: Calibration\nPoint: B\nHexes: 9"   # wrong N
+        saved = snapshot.build_snapshot(bad, RECEIVED_AT, 1, None, good["grid"]["calibration"])
+        text = report.render(saved)
+        self.assertIn("Grid: saved calibration from 2026-10-24T22:15:03Z, hex step 2.50 units", text)
+        self.assertIn("CALIBRATION WARNING: inconsistent spacing", text)
+        self.assertIn("Using the last valid calibration.", text)
+        text = report.render(snapshot.build_snapshot(bad, RECEIVED_AT, 1))
+        self.assertIn("Grid: none", text)
+        self.assertIn("POSITIONS UNAVAILABLE: inconsistent spacing", text)
+        self.assertIn("  hexes: unavailable", text)
+        self.assertIn("DISTANCES (opposing sides, hexes)\nunavailable", text)
+        moving = load_payload("payload_calibrated.json")
+        for o in moving["objects"]:
+            if o["name"] == "Scout":
+                o["held_by_color"] = "Red"
+            if o["name"] == "Hawk":
+                o["resting"] = False
+        text = report.render(snapshot.build_snapshot(moving, RECEIVED_AT, 1))
+        self.assertIn("IN MOTION: Scout (held by Red), Hawk (not resting); "
+                      "positions may be mid-move.", text)
 
     def test_empty_board(self):
         snap = snapshot.build_snapshot(
-            {"payload_version": 1, "grid": {"type": 3, "sizeX": 1.0, "sizeY": 1.0},
+            {"payload_version": 2, "grid": {"type": 3, "sizeX": 1.0, "sizeY": 1.0},
              "objects": []}, RECEIVED_AT, 1)
         text = report.render(snap)
         self.assertIn("flat-top (TTS type 3)", text)
@@ -40,7 +70,7 @@ class ReportTests(unittest.TestCase):
 
     def test_warnings_and_half_size_shown(self):
         snap = snapshot.build_snapshot(
-            {"payload_version": 1, "grid": {"type": 2, "sizeX": 2.0, "sizeY": 2.0},
+            {"payload_version": 2, "grid": {"type": 2, "sizeX": 2.0, "sizeY": 2.0},
              "objects": [{"guid": "d1", "name": "Drone", "description": "AIT: Unit\nSize: 1/2",
                           "position": {"x": 0, "y": 0, "z": 0}}]}, RECEIVED_AT, 1)
         text = report.render(snap)

@@ -19,15 +19,17 @@ def unit(snap, name):
 
 
 def minimal(*objects):
-    return {"payload_version": 1,
+    return {"payload_version": 2,
             "grid": {"type": 2, "sizeX": 2.0, "sizeY": 2.0},
             "objects": list(objects)}
 
 
-def obj(description, guid="g1", name="Thing", x=0.0, z=0.0, rot=0.0):
+def obj(description, guid="g1", name="Thing", x=0.0, z=0.0, rot=0.0,
+        held=None, resting=True):
     return {"guid": guid, "name": name, "description": description,
             "position": {"x": x, "y": 1.0, "z": z},
-            "rotation": {"x": 0.0, "y": rot, "z": 0.0}}
+            "rotation": {"x": 0.0, "y": rot, "z": 0.0},
+            "held_by_color": held, "resting": resting}
 
 
 class MarkerTests(unittest.TestCase):
@@ -104,7 +106,7 @@ class ValidationTests(unittest.TestCase):
     def test_top_level_errors(self):
         good = minimal()
         self.assertRejected([], "must be a JSON object")
-        self.assertRejected({**good, "payload_version": 2}, "payload_version")
+        self.assertRejected({**good, "payload_version": 1}, "payload_version")
         self.assertRejected({**good, "payload_version": True}, "payload_version")
         self.assertRejected({k: v for k, v in good.items() if k != "grid"}, "missing 'grid'")
         self.assertRejected({**good, "grid": "hex"}, "'grid' must be an object")
@@ -194,7 +196,8 @@ class FixtureTests(unittest.TestCase):
 
     def test_flat_fixture_hand_checked(self):
         snap = S.build_snapshot(load("payload_flat.json"), RECEIVED_AT, 1)
-        self.assertEqual(snap["grid"]["orientation"], "flat")
+        self.assertEqual(snap["grid"]["source"], "tts_grid")
+        self.assertEqual(snap["grid"]["tts_grid"]["orientation"], "flat")
         self.assertEqual(unit(snap, "Scout")["hexes"], [[-2, 1]])
         hunter = unit(snap, "Hunter")
         self.assertEqual(sorted(map(tuple, hunter["hexes"])), sorted([(3, -1), (3, 0), (2, 0)]))
@@ -206,11 +209,111 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual(snap["objectives"][0]["units_in_zone"],
                          [{"guid": "bb0101", "hexes_inside": 1, "hexes_total": 3}])
 
+    def test_calibrated_fixture_hand_checked(self):
+        snap = S.build_snapshot(load("payload_calibrated.json"), RECEIVED_AT, 1)
+        self.assertEqual([u["name"] for u in snap["units"]],
+                         ["Ironclad", "Scout", "Goliath", "Hawk"])
+        hexes = {u["name"]: set(map(tuple, u["hexes"])) for u in snap["units"]}
+        self.assertEqual(hexes["Ironclad"], {(4, -1), (5, -1), (4, 0)})
+        self.assertEqual(hexes["Scout"], {(2, 1)})
+        tri = {(8, 1), (9, 1), (8, 2)}
+        self.assertEqual(hexes["Goliath"], tri | {(9, 0), (8, 0), (7, 1), (7, 2), (10, 1),
+                                                  (10, 0), (9, 2), (7, 3), (8, 3)})
+        self.assertEqual(hexes["Hawk"], {(-2, 3)})
+        self.assertTrue(unit(snap, "Hawk")["flying"])   # blank lines before AIT too
+        self.assertFalse(unit(snap, "Scout")["flying"])
+        names = {u["guid"]: u["name"] for u in snap["units"]}
+        dist = {(names[d["a"]], names[d["b"]]): d["hexes"] for d in snap["distances"]}
+        self.assertEqual(dist, {("Ironclad", "Goliath"): 4, ("Ironclad", "Hawk"): 6,
+                                ("Scout", "Goliath"): 5, ("Scout", "Hawk"): 4})
+        self.assertEqual(snap["terrain"][0]["hexes"], [[3, 3]])
+        self.assertEqual(snap["objectives"][0]["hexes"], [[4, 0]])
+        self.assertEqual(snap["objectives"][0]["units_in_zone"],
+                         [{"guid": "aa0201", "hexes_inside": 1, "hexes_total": 3}])
+        self.assertNotIn("Flight stand", json.dumps(snap))   # unmarked pedestal
+        self.assertNotIn("Cal origin", json.dumps(snap["units"]))
+        self.assertEqual(snap["in_motion"], [])
+        self.assertEqual(snap["warnings"], [])
+
     def test_matches_expected_files(self):
-        for orient in ("pointy", "flat"):
-            with self.subTest(orient=orient):
-                snap = S.build_snapshot(load("payload_%s.json" % orient), RECEIVED_AT, 1)
-                self.assertEqual(snap, load("expected_snapshot_%s.json" % orient))
+        for name in ("pointy", "flat", "calibrated"):
+            with self.subTest(fixture=name):
+                snap = S.build_snapshot(load("payload_%s.json" % name), RECEIVED_AT, 1)
+                self.assertEqual(snap, load("expected_snapshot_%s.json" % name))
+
+
+class MotionTests(unittest.TestCase):
+    T0 = "2026-10-24T22:15:00Z"
+
+    def at(self, when, previous=None, held="Red", resting=True, kind="Unit"):
+        desc = "AIT: %s\nSide: player\nSize: 1" % kind
+        return S.build_snapshot(minimal(obj(desc, held=held, resting=resting)),
+                                when, 1, previous)
+
+    def test_held_unit_is_in_motion(self):
+        snap = self.at(self.T0)
+        self.assertEqual(snap["in_motion"], ["g1"])
+        self.assertEqual(snap["units"][0]["held_by"], "Red")
+        self.assertEqual(snap["units"][0]["in_motion_since"], self.T0)
+
+    def test_not_resting_unit_is_in_motion(self):
+        snap = self.at(self.T0, held=None, resting=False)
+        self.assertEqual(snap["in_motion"], ["g1"])
+        self.assertIsNone(snap["units"][0]["held_by"])
+
+    def test_still_unit_is_not_in_motion(self):
+        for held in (None, ""):
+            snap = self.at(self.T0, held=held)
+            self.assertEqual(snap["in_motion"], [])
+            self.assertIsNone(snap["units"][0]["in_motion_since"])
+
+    def test_only_units_count(self):
+        snap = self.at(self.T0, kind="Terrain")
+        self.assertEqual(snap["in_motion"], [])
+
+    def test_stale_motion_stops_blocking_after_30_seconds(self):
+        first = self.at(self.T0)
+        later = self.at("2026-10-24T22:15:20Z", first)
+        self.assertEqual(later["in_motion"], ["g1"])
+        self.assertEqual(later["units"][0]["in_motion_since"], self.T0)
+        self.assertEqual(later["warnings"], [])
+        edge = self.at("2026-10-24T22:15:30Z", later)   # exactly 30 s: still counts
+        self.assertEqual(edge["in_motion"], ["g1"])
+        stale = self.at("2026-10-24T22:15:31Z", edge)
+        self.assertEqual(stale["in_motion"], [])
+        self.assertEqual(stale["warnings"],
+                         ["'Thing' has been in motion for over 30 s (held by Red); "
+                          "it no longer holds back history"])
+        # Released: the clock resets.
+        released = self.at("2026-10-24T22:15:40Z", stale, held=None)
+        self.assertIsNone(released["units"][0]["in_motion_since"])
+        again = self.at("2026-10-24T22:15:45Z", released)
+        self.assertEqual(again["units"][0]["in_motion_since"], "2026-10-24T22:15:45Z")
+
+    def test_picking_up_and_putting_back_is_not_a_board_change(self):
+        still = self.at(self.T0, held=None)
+        held = self.at(self.T0, held="Red")
+        self.assertTrue(S.same_board(still, held))
+
+
+class FlyingTests(unittest.TestCase):
+    def flying(self, conditions):
+        desc = "AIT: Unit\nSide: npc\nSize: 1" + ("\nConditions: " + conditions
+                                                  if conditions is not None else "")
+        return S.build_snapshot(minimal(obj(desc)), RECEIVED_AT, 1)["units"][0]["flying"]
+
+    def test_flying_condition(self):
+        self.assertTrue(self.flying("Flying"))
+        self.assertTrue(self.flying("impaired, FLYING"))
+        self.assertFalse(self.flying("Impaired"))
+        self.assertFalse(self.flying("none"))
+        self.assertFalse(self.flying(None))
+
+    def test_taking_off_is_a_board_change(self):
+        grounded = S.build_snapshot(minimal(obj("AIT: Unit\nSide: npc\nSize: 1")), RECEIVED_AT, 1)
+        flying = S.build_snapshot(minimal(obj("AIT: Unit\nSide: npc\nSize: 1\nConditions: Flying")),
+                                  RECEIVED_AT, 1)
+        self.assertFalse(S.same_board(grounded, flying))
 
 
 class RotationTests(unittest.TestCase):

@@ -75,7 +75,7 @@ class EndpointTests(BridgeTestCase):
         status, ctype, body = self.call("GET", "/health")
         self.assertEqual(status, 200)
         self.assertIn("application/json", ctype)
-        self.assertEqual(json.loads(body), {"status": "ok", "schema": 1,
+        self.assertEqual(json.loads(body), {"status": "ok", "schema": 2,
                                             "last_payload_at": None, "latest_seq": None})
 
     def test_no_snapshot_yet(self):
@@ -84,7 +84,7 @@ class EndpointTests(BridgeTestCase):
         self.assertEqual((status, body), (404, "No snapshot yet.\n"))
 
     def test_post_each_fixture(self):
-        for orient in ("pointy", "flat"):
+        for orient in ("pointy", "flat", "calibrated"):
             with self.subTest(orient=orient):
                 status, _, body = self.call("POST", "/tts", fixture_bytes("payload_%s.json" % orient))
                 self.assertEqual(status, 200, body)
@@ -132,12 +132,12 @@ class MalformedTests(BridgeTestCase):
         self.assertBadRequest(b"{not json", "invalid JSON")
         self.assertBadRequest(b"\xff\xfe\x00", "not UTF-8")
         self.assertBadRequest(b"[1, 2]", "must be a JSON object")
-        self.assertBadRequest(b'{"payload_version": 1, "objects": []}', "missing 'grid'")
+        self.assertBadRequest(b'{"payload_version": 2, "objects": []}', "missing 'grid'")
         self.assertBadRequest(
-            b'{"payload_version": 1, "grid": {"type": 1, "sizeX": 2, "sizeY": 2}, "objects": []}',
+            b'{"payload_version": 2, "grid": {"type": 1, "sizeX": 2, "sizeY": 2}, "objects": []}',
             "grid must be hex")
         self.assertBadRequest(
-            b'{"payload_version": 1, "grid": {"type": 2, "sizeX": 2, "sizeY": 2}, "objects": {}}',
+            b'{"payload_version": 2, "grid": {"type": 2, "sizeX": 2, "sizeY": 2}, "objects": {}}',
             "'objects' must be a list")
 
     def test_bad_post_does_not_replace_good_snapshot(self):
@@ -169,6 +169,57 @@ class StorageTests(BridgeTestCase):
         lines = self.history_lines()
         self.assertEqual(len(lines), 2)
         self.assertEqual([json.loads(l)["seq"] for l in lines], [1, 2])
+
+    def post_json(self, payload):
+        return json.loads(self.call("POST", "/tts", json.dumps(payload).encode())[2])
+
+    def test_no_history_while_a_unit_is_in_motion(self):
+        held = fixture_json("payload_pointy.json")
+        held["objects"][0]["held_by_color"] = "Red"
+        held["objects"][0]["position"]["x"] += 2.0        # mid-move
+        self.assertEqual(self.post_json(held)["recorded"], False)
+        self.assertEqual(self.history_lines(), [])
+        report = self.call("GET", "/report")[2]
+        self.assertIn("IN MOTION: Vanguard (held by Red)", report)
+        placed = fixture_json("payload_pointy.json")      # put down, back home
+        result = self.post_json(placed)
+        self.assertEqual((result["recorded"], result["seq"]), (True, 1))
+        self.assertEqual(len(self.history_lines()), 1)
+        self.assertEqual(self.post_json(placed)["recorded"], False)   # unchanged
+
+    def test_valid_calibration_is_saved_and_survives_restart(self):
+        self.call("POST", "/tts", fixture_bytes("payload_calibrated.json"))
+        cal_path = Path(self.tmp.name) / C.CALIBRATION_FILE
+        self.assertTrue(cal_path.exists())
+        saved = json.loads(cal_path.read_text(encoding="utf-8"))
+        self.assertAlmostEqual(saved["lattice"]["q"]["x"], 2.3907619, places=4)
+        self.stop()
+        self.start()
+        bad = fixture_json("payload_calibrated.json")
+        for o in bad["objects"]:
+            if "Point: B" in o["description"]:
+                o["description"] = "AIT: Calibration\nPoint: B\nHexes: 9"
+        self.post_json(bad)
+        snap = json.loads(self.call("GET", "/snapshot.json")[2])
+        self.assertEqual(snap["grid"]["source"], "saved_calibration")
+        self.assertIn("CALIBRATION WARNING", self.call("GET", "/report")[2])
+        self.assertEqual(json.loads(cal_path.read_text(encoding="utf-8")), saved)
+
+    def test_invalid_calibration_with_nothing_saved_is_unavailable(self):
+        bad = fixture_json("payload_calibrated.json")
+        bad["objects"] = [o for o in bad["objects"] if "Point: A" not in o["description"]]
+        self.post_json(bad)
+        self.assertIn("POSITIONS UNAVAILABLE: missing calibration marker: Point: A",
+                      self.call("GET", "/report")[2])
+        self.assertFalse((Path(self.tmp.name) / C.CALIBRATION_FILE).exists())
+
+    def test_last_payload_is_kept_even_when_malformed(self):
+        path = Path(self.tmp.name) / C.LAST_PAYLOAD_FILE
+        body = fixture_bytes("payload_pointy.json")
+        self.call("POST", "/tts", body)
+        self.assertEqual(path.read_bytes(), body)
+        self.call("POST", "/tts", b"{broken")
+        self.assertEqual(path.read_bytes(), b"{broken")
 
     def test_restart_reloads_latest(self):
         self.call("POST", "/tts", fixture_bytes("payload_pointy.json"))

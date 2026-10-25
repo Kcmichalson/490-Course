@@ -1,5 +1,5 @@
 {
-  "payload_version": 1,
+  "payload_version": 2,
   "exporter": "lancer-bridge-lua/0.1",
   "grid": {"type": 2, "sizeX": 2.0, "sizeY": 2.0, "offsetX": 0.0, "offsetY": 1.0, "offsetZ": 0.0},
   "objects": [

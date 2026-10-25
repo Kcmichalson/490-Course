@@ -1,0 +1,304 @@
+{
+  "payload_version": 2,
+  "exporter": "ait-exporter/0.2",
+  "trigger": "timer",
+  "grid": {
+    "type": 1,
+    "sizeX": 1.0,
+    "sizeY": 1.0,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  "objects": [
+    {
+      "guid": "ca0001",
+      "name": "Cal origin",
+      "description": "AIT: Calibration\nPoint: Origin",
+      "position": {
+        "x": 10.0,
+        "y": 1.0,
+        "z": -4.0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 10.0,
+          "y": 1.0,
+          "z": -4.0
+        },
+        "size": {
+          "x": 0.5,
+          "y": 1.0,
+          "z": 0.5
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "ca0002",
+      "name": "Cal A",
+      "description": "AIT: Calibration\nPoint: A\nHexes: 6",
+      "position": {
+        "x": 24.34457,
+        "y": 1.0,
+        "z": 0.38558
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 24.34457,
+          "y": 1.0,
+          "z": 0.38558
+        },
+        "size": {
+          "x": 0.5,
+          "y": 1.0,
+          "z": 0.5
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "ca0003",
+      "name": "Cal B",
+      "description": "AIT: Calibration\nPoint: B\nHexes: 5",
+      "position": {
+        "x": 12.81189,
+        "y": 1.0,
+        "z": 8.17963
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 12.81189,
+          "y": 1.0,
+          "z": 8.17963
+        },
+        "size": {
+          "x": 0.5,
+          "y": 1.0,
+          "z": 0.5
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "aa0201",
+      "name": "Ironclad",
+      "description": "AIT: Unit\nSide: Player\nSize: 2\nHP: 8/12, Heat: 3/8, Structure: 4",
+      "position": {
+        "x": 19.98505,
+        "y": 1.0,
+        "z": -2.45659
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 133.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 19.98505,
+          "y": 1.0,
+          "z": -2.45659
+        },
+        "size": {
+          "x": 3.4,
+          "y": 1.0,
+          "z": 3.4
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "aa0202",
+      "name": "Scout",
+      "description": "AIT: Unit\nSide: Player\nSize: 1\nHP: 7/7, Structure: 4",
+      "position": {
+        "x": 15.3439,
+        "y": 2.4,
+        "z": -0.10222
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 20.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 15.3439,
+          "y": 2.4,
+          "z": -0.10222
+        },
+        "size": {
+          "x": 1.6,
+          "y": 1.0,
+          "z": 1.6
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "bb0201",
+      "name": "Goliath",
+      "description": "AIT: Unit\nSide: NPC\nSize: 4\nHP: 30/30, Heat: 0/10, Structure: 4",
+      "position": {
+        "x": 30.67285,
+        "y": 1.0,
+        "z": 5.33898
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 250.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 30.67285,
+          "y": 1.0,
+          "z": 5.33898
+        },
+        "size": {
+          "x": 7.0,
+          "y": 1.0,
+          "z": 7.0
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "bb0202",
+      "name": "Hawk",
+      "description": "\n\nAIT: Unit\nSide: NPC\nSize: 1\nHP: 5/5\nConditions: Flying",
+      "position": {
+        "x": 6.90561,
+        "y": 6.5,
+        "z": 1.84592
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 6.90561,
+          "y": 6.5,
+          "z": 1.84592
+        },
+        "size": {
+          "x": 1.6,
+          "y": 1.0,
+          "z": 1.6
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "ff0201",
+      "name": "Flight stand",
+      "description": "",
+      "position": {
+        "x": 6.90561,
+        "y": 3.0,
+        "z": 1.84592
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 6.90561,
+          "y": 3.0,
+          "z": 1.84592
+        },
+        "size": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "cc0201",
+      "name": "Boulder",
+      "description": "AIT: Terrain\nCover: Hard",
+      "position": {
+        "x": 18.85942,
+        "y": 1.5,
+        "z": 5.50056
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 18.85942,
+          "y": 1.5,
+          "z": 5.50056
+        },
+        "size": {
+          "x": 0.6,
+          "y": 1.0,
+          "z": 0.6
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    },
+    {
+      "guid": "ee0201",
+      "name": "Relay",
+      "description": "AIT: Objective",
+      "position": {
+        "x": 19.56305,
+        "y": 1.0,
+        "z": -1.07628
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "bounds": {
+        "center": {
+          "x": 19.56305,
+          "y": 1.0,
+          "z": -1.07628
+        },
+        "size": {
+          "x": 0.6,
+          "y": 1.0,
+          "z": 0.6
+        }
+      },
+      "held_by_color": null,
+      "resting": true
+    }
+  ]
+}

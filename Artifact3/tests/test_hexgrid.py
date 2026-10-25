@@ -5,12 +5,12 @@ import unittest
 from bridge import constants as C
 from bridge import hexgrid as H
 
-POINTY = H.Grid("pointy", 2.0, 2.0)
-FLAT = H.Grid("flat", 2.0, 2.0)
-OFFSET_GRIDS = (H.Grid("pointy", 2.0, 2.0, 1.5, -3.25),
-                H.Grid("flat", 1.0, 1.0, -7.0, 2.0),
-                H.Grid("pointy", 2.0, 3.0, 0.0, 0.0),   # non-uniform size
-                H.Grid("flat", 3.0, 2.0, 0.5, 0.5))
+POINTY = H.tts_lattice("pointy", 2.0, 2.0)
+FLAT = H.tts_lattice("flat", 2.0, 2.0)
+OFFSET_GRIDS = (H.tts_lattice("pointy", 2.0, 2.0, 1.5, -3.25),
+                H.tts_lattice("flat", 1.0, 1.0, -7.0, 2.0),
+                H.tts_lattice("pointy", 2.0, 3.0, 0.0, 0.0),   # non-uniform size
+                H.tts_lattice("flat", 3.0, 2.0, 0.5, 0.5))
 HEXES = list(itertools.product(range(-5, 6), repeat=2))
 
 
@@ -44,7 +44,7 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(H.world_to_axial(FLAT, 3 * s, 1.0), (3, -1))
 
     def test_offset_moves_the_origin(self):
-        grid = H.Grid("pointy", 2.0, 2.0, 10.0, -4.0)
+        grid = H.tts_lattice("pointy", 2.0, 2.0, 10.0, -4.0)
         self.assertEqual(H.world_to_axial(grid, 10.0, -4.0), (0, 0))
         self.assertEqual(H.axial_to_world(grid, (1, 0)), (12.0, -4.0))
 

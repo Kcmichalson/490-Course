@@ -6,22 +6,41 @@ PORT = 8765
 MAX_BODY_BYTES = 1_000_000
 
 # --- Versions ---
-SCHEMA_VERSION = 1    # processed snapshot (snapshots/latest.json)
-PAYLOAD_VERSION = 1   # raw payload the Lua exporter POSTs to /tts
+SCHEMA_VERSION = 2    # processed snapshot (snapshots/latest.json)
+PAYLOAD_VERSION = 2   # raw payload the Lua exporter POSTs to /tts
 
-# --- Storage (relative to Artifact3/) ---
+# --- Storage (relative to Artifact3/; all git-ignored) ---
 SNAPSHOT_DIR = "snapshots"
 LATEST_FILE = "latest.json"
 HISTORY_FILE = "history.jsonl"
+CALIBRATION_FILE = "calibration.json"   # last valid calibration
+LAST_PAYLOAD_FILE = "last_payload.json" # last raw POST body, for debugging
 
-# --- Tracking marker: first description line "AIT: <kind>" ---
+# --- Tracking marker: first non-blank description line "AIT: <kind>" ---
 MARKER_KEY = "ait"
-KINDS = ("unit", "terrain", "hazard", "objective")
+KINDS = ("unit", "terrain", "hazard", "objective", "calibration")
 
-# --- TTS Grid settings ---
+# --- TTS Grid settings (used only when there are no calibration markers) ---
 # Grid.type → hex orientation. UNVERIFIED: which TTS hex type is pointy-top
 # is a guess; check in TTS during M2. Type 1 (rectangles) is rejected.
 GRID_TYPE_ORIENTATION = {2: "pointy", 3: "flat"}
+# Which Grid offset fields are world X and world Z. UNVERIFIED (M2): TTS may
+# use offsetY for the Z axis; the exporter sends every offset field raw.
+GRID_OFFSET_X_FIELD = "offsetX"
+GRID_OFFSET_Z_FIELD = "offsetZ"
+
+# --- Calibration markers (user's rules, LOG.md Session 1, Prompt 16) ---
+CALIBRATION_POINTS = ("origin", "a", "b")
+CAL_SPACING_TOLERANCE = 0.03      # A and B per-hex spacing may differ by 3%
+CAL_ANGLE_TOLERANCE_DEG = 3.0     # rows must be 60° or 120° apart, ±3°
+# Keep the saved calibration if every marker is within this many hexes of
+# its saved position, so a bumped marker can't shift any unit's hex.
+CAL_MARKER_TOLERANCE_HEX = 0.25
+
+# --- Motion (user's rule, Prompt 16) ---
+# A marked unit that's held or not resting is in motion and holds back
+# history, but for at most this long; then it's warned about and ignored.
+MOTION_STALE_SECONDS = 30
 
 # --- Footprints ---
 # LANCER Size → occupied hexes, per the user's rule (LOG.md, Session 1,

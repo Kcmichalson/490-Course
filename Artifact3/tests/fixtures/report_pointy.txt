@@ -1,5 +1,5 @@
-LANCER BOARD  #1  2026-10-24T22:15:03Z  schema 1
-Grid: hex, pointy-top (TTS type 2), hex step 2.00 x 2.00 units
+LANCER BOARD  #1  2026-10-24T22:15:03Z  schema 2
+Grid: TTS Grid (no calibration markers), pointy-top (TTS type 2), hex step 2.00 x 2.00 units
 Hexes: (q,r) axial
 Range: nearest occupied hex to nearest occupied hex, adjacent = 1
 

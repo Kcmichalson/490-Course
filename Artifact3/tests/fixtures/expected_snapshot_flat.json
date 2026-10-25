@@ -7,19 +7,41 @@
     }
   ],
   "grid": {
-    "offset": {
-      "x": 1.0,
-      "y": 1.0,
-      "z": -0.5
+    "calibration": null,
+    "calibration_error": null,
+    "hex_step": 2.0,
+    "lattice": {
+      "origin": {
+        "x": 1.0,
+        "z": -0.5
+      },
+      "q": {
+        "x": 1.7320508075688772,
+        "z": 1.0
+      },
+      "r": {
+        "x": 0.0,
+        "z": 2.0
+      }
     },
-    "orientation": "flat",
-    "size": {
-      "x": 2.0,
-      "y": 2.0
-    },
-    "tts_type": 3
+    "row_angle_deg": 30.000000000000004,
+    "source": "tts_grid",
+    "tts_grid": {
+      "offsets": {
+        "offsetX": 1.0,
+        "offsetY": 1.0,
+        "offsetZ": -0.5
+      },
+      "orientation": "flat",
+      "size": {
+        "x": 2.0,
+        "y": 2.0
+      },
+      "type": 3
+    }
   },
   "hazards": [],
+  "in_motion": [],
   "objectives": [
     {
       "extra": {},
@@ -42,7 +64,7 @@
     }
   ],
   "received_at": "2026-10-24T22:15:03Z",
-  "schema": 1,
+  "schema": 2,
   "seq": 1,
   "terrain": [
     {
@@ -63,13 +85,17 @@
   "units": [
     {
       "extra": {},
+      "flying": false,
       "guid": "aa0101",
+      "held_by": null,
       "hexes": [
         [
           -2,
           1
         ]
       ],
+      "in_motion_since": null,
+      "moving": false,
       "name": "Scout",
       "notes": [],
       "rotation_y": 0.0,
@@ -98,7 +124,9 @@
     },
     {
       "extra": {},
+      "flying": false,
       "guid": "bb0101",
+      "held_by": null,
       "hexes": [
         [
           3,
@@ -113,6 +141,8 @@
           0
         ]
       ],
+      "in_motion_since": null,
+      "moving": false,
       "name": "Hunter",
       "notes": [],
       "rotation_y": 60.0,

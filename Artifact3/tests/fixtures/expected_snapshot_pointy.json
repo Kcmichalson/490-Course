@@ -22,17 +22,38 @@
     }
   ],
   "grid": {
-    "offset": {
-      "x": 0.0,
-      "y": 1.0,
-      "z": 0.0
+    "calibration": null,
+    "calibration_error": null,
+    "hex_step": 2.0,
+    "lattice": {
+      "origin": {
+        "x": 0.0,
+        "z": 0.0
+      },
+      "q": {
+        "x": 2.0,
+        "z": 0.0
+      },
+      "r": {
+        "x": 1.0,
+        "z": 1.7320508075688772
+      }
     },
-    "orientation": "pointy",
-    "size": {
-      "x": 2.0,
-      "y": 2.0
-    },
-    "tts_type": 2
+    "row_angle_deg": 0.0,
+    "source": "tts_grid",
+    "tts_grid": {
+      "offsets": {
+        "offsetX": 0.0,
+        "offsetY": 1.0,
+        "offsetZ": 0.0
+      },
+      "orientation": "pointy",
+      "size": {
+        "x": 2.0,
+        "y": 2.0
+      },
+      "type": 2
+    }
   },
   "hazards": [
     {
@@ -54,6 +75,7 @@
       "notes": []
     }
   ],
+  "in_motion": [],
   "objectives": [
     {
       "extra": {},
@@ -100,7 +122,7 @@
     }
   ],
   "received_at": "2026-10-24T22:15:03Z",
-  "schema": 1,
+  "schema": 2,
   "seq": 1,
   "terrain": [
     {
@@ -143,7 +165,9 @@
   "units": [
     {
       "extra": {},
+      "flying": false,
       "guid": "aa0002",
+      "held_by": null,
       "hexes": [
         [
           2,
@@ -158,6 +182,8 @@
           1
         ]
       ],
+      "in_motion_since": null,
+      "moving": false,
       "name": "Ironclad",
       "notes": [],
       "rotation_y": 359.0,
@@ -188,13 +214,17 @@
     },
     {
       "extra": {},
+      "flying": false,
       "guid": "aa0001",
+      "held_by": null,
       "hexes": [
         [
           0,
           0
         ]
       ],
+      "in_motion_since": null,
+      "moving": false,
       "name": "Vanguard",
       "notes": [],
       "rotation_y": 180.0,
@@ -225,13 +255,17 @@
       "extra": {
         "tier": "1"
       },
+      "flying": false,
       "guid": "bb0001",
+      "held_by": null,
       "hexes": [
         [
           5,
           -3
         ]
       ],
+      "in_motion_since": null,
+      "moving": false,
       "name": "Assault-1",
       "notes": [],
       "rotation_y": 90.0,
@@ -256,7 +290,9 @@
     },
     {
       "extra": {},
+      "flying": false,
       "guid": "bb0002",
+      "held_by": null,
       "hexes": [
         [
           6,
@@ -287,6 +323,8 @@
           3
         ]
       ],
+      "in_motion_since": null,
+      "moving": false,
       "name": "Demolisher",
       "notes": [],
       "rotation_y": 12.0,

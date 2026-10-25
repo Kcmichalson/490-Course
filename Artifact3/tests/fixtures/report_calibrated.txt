@@ -1,0 +1,34 @@
+LANCER BOARD  #1  2026-10-24T22:15:03Z  schema 2
+Grid: calibrated from 3 markers, hex step 2.50 units, rows at 17.0°, spacing mismatch 0.0%
+Hexes: (q,r) axial
+Range: nearest occupied hex to nearest occupied hex, adjacent = 1
+
+UNITS (4)
+[player] Ironclad  Size 2  HP 8/12  Heat 3/8  Structure 4  Conditions: -
+  hexes: (4,-1) (5,-1) (4,0)
+[player] Scout  Size 1  HP 7/7  Heat -  Structure 4  Conditions: -
+  hexes: (2,1)
+[npc] Goliath  Size 4  HP 30/30  Heat 0/10  Structure 4  Conditions: -
+  hexes: (8,0) (9,0) (10,0) (7,1) (8,1) (9,1) (10,1) (7,2) (8,2) (9,2) (7,3) (8,3)
+[npc] Hawk  Size 1  FLYING  HP 5/5  Heat -  Structure -  Conditions: Flying
+  hexes: (-2,3)
+
+TERRAIN (1)
+Boulder: (3,3)
+  other: cover Hard
+
+HAZARDS (0)
+none
+
+OBJECTIVES (1)
+Relay: (4,0)
+  inside (any occupied hex in zone): Ironclad (1/3 hexes)
+
+DISTANCES (opposing sides, hexes)
+Ironclad - Goliath: 4
+Ironclad - Hawk: 6
+Scout - Goliath: 5
+Scout - Hawk: 4
+
+WARNINGS (0)
+none

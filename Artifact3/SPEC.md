@@ -32,7 +32,7 @@ cloud hosting.
 ## 2. TTS side
 
 - **Tracking marker (replaces TTS tags, Session 1):** an object is tracked
-  only if the first line of its description is `AIT: Unit` (mechs, NPCs,
+  only if the first non-blank line of its description is `AIT: Unit` (mechs, NPCs,
   deployables), `AIT: Terrain` (cover and obstacles), `AIT: Hazard`, or
   `AIT: Objective`, case-insensitive. Anything without it is ignored. This
   lets us mark or re-mark objects mid-game by editing the description. The
@@ -49,6 +49,14 @@ cloud hosting.
   reconnects.
 - **Grids:** send the table's grid type, size, and offset with every
   payload so the bridge never hard-codes hex orientation.
+- **Calibration markers (M2, Session 1):** our table is a hex grid painted
+  on a 3D terrain model, not TTS's built-in grid. Three `AIT: Calibration`
+  markers (one on a hex center, one N hexes along each row direction) give
+  the grid's origin, spacing, and angle; TTS Grid settings are the
+  fallback. Details are for the M2 plan.
+- **Flying (Session 1):** airborne minis sit on pedestals, but flying is
+  never inferred from height (the terrain varies in height). It's the
+  description condition `Conditions: Flying`.
 - **Bundling:** how multi-file Lua source reaches TTS **(decide, M2)**:
   the VS Code TTS extension's `#include`, a stdlib Python bundler in tools/
   that writes one file to paste, or a single hand-maintained file.
@@ -69,8 +77,13 @@ cloud hosting.
   `seq`, and raw world position/rotation).
 - **Hex math:** axial (q, r) internally; world → hex using the Grids
   settings; hex distance; footprints by LANCER Size: Size ½ and 1 = 1 hex,
-  Size 2 = 3, Size 3 = 7, Size 4 = 12 (rows of 3, 4, 3, 2), rotated in 60°
-  steps with the mini (shapes in LOG.md, Session 1 Decisions).
+  Size 2 = 3, Size 3 = 7, Size 4 = 12 (the Size 2 triangle plus every hex
+  touching it: rows of 3, 4, 3, 2). Every footprint is placed by position
+  only; a mini's rotation is kept as raw data and never changes its
+  footprint. Size 2 and 4 are point-up or point-down depending on which hex
+  corner the base sits on, so a flip (house rule: costs 1 movement) is a
+  move, while turning in place isn't (shapes and reasons in LOG.md,
+  Session 1 Decisions).
   Distances between units are measured between their nearest occupied
   hexes, adjacent = 1 (confirmed Session 1).
 - Snapshots carry a `schema` version and a `seq` number; payloads carry a
@@ -119,6 +132,7 @@ payloads and golden report.
 
 **M2 — TTS exporter**
 Lua exporter with the `AIT:` marker filter, description stats, Grids,
+calibration from `AIT: Calibration` markers (Grid settings as fallback),
 Snapshot button, timer, offline handling, and the bundling decision.
 - In-game: marked objects appear in /snapshot.json; unmarked don't, and
   editing a description to add or remove the marker takes effect on the
@@ -133,6 +147,11 @@ Run against a copy of our actual LANCER table and minis.
   that distance, in both axes
 - Size 2+ minis report the hexes I see them occupying
 - I paste one /report into the GM chat and it reads the board correctly
+- Elevation: minis on high and low ground report the hex directly under
+  their base
+- Tile seams: hexes stay aligned across seams between terrain tiles
+- Pedestals: flying minis on pedestals report the hex directly under their
+  base
 
 **M4 — GM access without copy-paste (if the GM runs in Claude)**
 A local MCP server (stdio, standard library) exposing tools such as

@@ -34,12 +34,13 @@ class MarkerTests(unittest.TestCase):
     def test_kinds_any_case_and_spacing(self):
         for text, kind in [("AIT: Unit", "unit"), ("ait: terrain", "terrain"),
                            ("AIT:HAZARD", "hazard"), ("  ait :  Objective  ", "objective"),
-                           ("Ait: Unit\nSize: 2", "unit"), ("AIT: Unit\r\nSize: 2", "unit")]:
+                           ("Ait: Unit\nSize: 2", "unit"), ("AIT: Unit\r\nSize: 2", "unit"),
+                           ("\nAIT: Unit", "unit"), ("\n  \n\t\r\nAIT: Terrain\nCover: Hard", "terrain")]:
             with self.subTest(text=text):
                 self.assertEqual(S.parse_marker(text), (kind, None))
 
     def test_not_marked(self):
-        for text in ["", "Size: 2", "\nAIT: Unit", "HP: 3\nAIT: Unit", "Unit", "AITX: Unit"]:
+        for text in ["", "\n\n", "Size: 2", "HP: 3\nAIT: Unit", "Unit", "AITX: Unit"]:
             with self.subTest(text=text):
                 self.assertEqual(S.parse_marker(text), (None, None))
 
@@ -69,6 +70,11 @@ class DescriptionTests(unittest.TestCase):
 
     def test_marker_only(self):
         self.assertEqual(S.parse_description("AIT: Unit"), ({}, [], []))
+
+    def test_blank_lines_before_marker(self):
+        pairs, notes, _ = S.parse_description("\n\n  \nAIT: Unit\nSize: 2\nHP: 3/5")
+        self.assertEqual(pairs, {"size": "2", "hp": "3/5"})
+        self.assertEqual(notes, [])
 
     def test_stat_values(self):
         self.assertEqual(S.parse_stat("8/12"), {"current": 8, "max": 12})
@@ -132,7 +138,8 @@ class ValidationTests(unittest.TestCase):
         snap = S.build_snapshot(minimal(
             obj("AIT: Unit", guid="a", name="Bare"),
             obj("AIT: Unit\nSide: npc\nSize: 7", guid="b", name="Huge"),
-            obj("AIT: Unit\nSide: npc\nSize: 2", guid="c", name="Tilted", rot=30.0),
+            obj("AIT: Unit\nSide: npc\nSize: 4", guid="c", name="Offcorner4", x=20.0),
+            obj("AIT: Unit\nSide: npc\nSize: 2", guid="f", name="Offcorner", x=-10.0),
             obj("AIT: Unit\nSide: npc\nSize: 1\nHP: lots", guid="d", name="Odd", x=10.0),
             obj("AIT: Foo", guid="e", name="Typo"),
             obj("AIT: Unit\nSide: npc", guid="a", name="Dupe")),
@@ -141,12 +148,14 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("'Bare' has no Size; using 1", text)
         self.assertIn("'Bare' has no Side; using unknown", text)
         self.assertIn("'Huge' has unsupported Size '7'; skipped", text)
-        self.assertIn("'Tilted' rotation 30° is between 60° steps", text)
-        self.assertIn("'Tilted' may be between hexes", text)
+        self.assertNotIn("rotation", text)
+        self.assertIn("'Offcorner' may be between hexes", text)
+        self.assertIn("'Offcorner4' may be between hexes", text)
         self.assertIn("'Odd' hp 'lots' is not a number", text)
         self.assertIn("unknown AIT kind 'Foo'", text)
         self.assertIn("duplicate guid 'a'", text)
-        self.assertEqual(sorted(u["name"] for u in snap["units"]), ["Bare", "Odd", "Tilted"])
+        self.assertEqual(sorted(u["name"] for u in snap["units"]),
+                         ["Bare", "Odd", "Offcorner", "Offcorner4"])
         self.assertEqual(unit(snap, "Bare")["side"], "unknown")
         self.assertEqual(unit(snap, "Odd")["extra"], {"hp": "lots"})
 
@@ -189,7 +198,8 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual(unit(snap, "Scout")["hexes"], [[-2, 1]])
         hunter = unit(snap, "Hunter")
         self.assertEqual(sorted(map(tuple, hunter["hexes"])), sorted([(3, -1), (3, 0), (2, 0)]))
-        self.assertEqual(hunter["rotation_steps"], 1)
+        self.assertNotIn("rotation_steps", hunter)    # rotation is raw data only
+        self.assertEqual(hunter["rotation_y"], 60.0)
         self.assertEqual(snap["distances"][0]["hexes"], 4)
         self.assertEqual(snap["terrain"][0]["hexes"], [[0, 0]])
         self.assertEqual(snap["objectives"][0]["hexes"], [[2, 0]])
@@ -201,6 +211,53 @@ class FixtureTests(unittest.TestCase):
             with self.subTest(orient=orient):
                 snap = S.build_snapshot(load("payload_%s.json" % orient), RECEIVED_AT, 1)
                 self.assertEqual(snap, load("expected_snapshot_%s.json" % orient))
+
+
+class RotationTests(unittest.TestCase):
+    """Footprints depend on position only; rotation is raw data (Prompt 13)."""
+
+    # Pointy grid, size 2: two neighboring corners on the edge (3,0)-(2,1).
+    TWO_ON_TOP_CORNER = (5.0, 0.57735)    # corner of (2,0),(3,0),(2,1)
+    ONE_ON_TOP_CORNER = (6.0, 1.154701)   # corner of (3,0),(2,1),(3,1)
+
+    def snap_at(self, size, x, z, rot):
+        desc = "AIT: Unit\nSide: npc\nSize: %s" % size
+        return S.build_snapshot(minimal(obj(desc, x=x, z=z, rot=rot)), RECEIVED_AT, 1)
+
+    def test_turning_in_place_never_changes_hexes(self):
+        places = {"1/2": (7.12, -5.15), "1": (7.12, -5.15),
+                  "2": self.TWO_ON_TOP_CORNER, "3": (14.0, 3.464102),
+                  "4": self.TWO_ON_TOP_CORNER}
+        for size, (x, z) in places.items():
+            first = self.snap_at(size, x, z, 0.0)
+            for rot in range(-180, 361, 7):
+                with self.subTest(size=size, rot=rot):
+                    snap = self.snap_at(size, x, z, float(rot))
+                    self.assertEqual(snap["units"][0]["hexes"], first["units"][0]["hexes"])
+                    self.assertEqual(snap["units"][0]["rotation_y"], float(rot))
+                    self.assertNotIn("rotation_steps", snap["units"][0])
+                    self.assertEqual(snap["warnings"], [])
+                    self.assertTrue(S.same_board(first, snap))
+
+    def test_flip_to_the_other_corner_is_a_move(self):
+        # House rule: flipping a Size 2 or 4 (point-up ↔ point-down) costs 1
+        # movement. It's a move to the neighboring corner, so it registers.
+        for size, count in (("2", 3), ("4", 12)):
+            with self.subTest(size=size):
+                a = self.snap_at(size, *self.TWO_ON_TOP_CORNER, 0.0)
+                b = self.snap_at(size, *self.ONE_ON_TOP_CORNER, 0.0)
+                self.assertEqual(len(b["units"][0]["hexes"]), count)
+                self.assertNotEqual(a["units"][0]["hexes"], b["units"][0]["hexes"])
+                self.assertFalse(S.same_board(a, b))
+                self.assertEqual(b["warnings"], [])
+
+    def test_size_4_is_the_triangle_plus_touching_hexes(self):
+        snap = self.snap_at("4", *self.TWO_ON_TOP_CORNER, 0.0)
+        tri = {(2, 0), (3, 0), (2, 1)}
+        expected = tri | {(q + dq, r + dr) for q, r in tri
+                          for dq, dr in ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))}
+        self.assertEqual(set(map(tuple, snap["units"][0]["hexes"])), expected)
+        self.assertEqual(len(expected), 12)
 
 
 class SameBoardTests(unittest.TestCase):

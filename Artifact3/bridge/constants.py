@@ -25,30 +25,28 @@ GRID_TYPE_ORIENTATION = {2: "pointy", 3: "flat"}
 
 # --- Footprints ---
 # LANCER Size → occupied hexes, per the user's rule (LOG.md, Session 1,
-# Prompts 2 and 5): Size 1/2 and 1 = 1 hex, 2 = 3, 3 = 7, 4 = 12 in rows of
-# 3, 4, 3, 2. Axial (q, r) offsets at rotation 0. Shapes confirmed in
-# Prompt 7: Size 2 = triangle, Size 3 = flower, Size 4 = rows 3, 4, 3, 2.
+# Prompts 2, 5, 7, 12, 13): Size 1/2 and 1 = 1 hex, 2 = 3 (triangle),
+# 3 = 7 (flower), 4 = 12 (the Size 2 triangle plus every hex touching it).
+# Every footprint is placed by position only; a mini's rotation never
+# changes it (Prompts 12 and 13).
+
+# Hex-centered sizes: axial (q, r) offsets around the hex nearest the base.
+# Size 1/2 and 1 = that hex; Size 3 = that hex plus its 6 neighbors.
 FOOTPRINTS = {
     0.5: ((0, 0),),
     1: ((0, 0),),
-    2: ((0, 0), (1, 0), (0, 1)),
     3: ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)),
-    4: ((-1, 0), (0, 0), (1, 0),
-        (-2, 1), (-1, 1), (0, 1), (1, 1),
-        (-2, 2), (-1, 2), (0, 2),
-        (-2, 3), (-1, 3)),
 }
+# Corner-centered sizes: the 3 hex centers nearest the base (the triangle
+# around the hex corner it sits on), grown by this many rings of touching
+# hexes. Size 2 = the triangle; Size 4 = the triangle + every hex touching
+# it. Which corner the base sits on decides point-up vs point-down.
+CORNER_RINGS = {2: 0, 4: 1}
+SIZES = tuple(sorted(set(FOOTPRINTS) | set(CORNER_RINGS)))
 DEFAULT_SIZE = 1
 
-# Footprints rotate with the mini in 60° steps (user's rule, Prompt 5).
-# UNVERIFIED (M3 calibration): which TTS Y rotation is the shape's 0, and
-# whether +Y rotation turns it the same way as one axial step.
-ROTATION_STEP_DEG = 60.0
-ROTATION_OFFSET_DEG = 0.0
-ROTATION_SIGN = 1
-
-# Warn when a mini is this far from a clean placement.
-ROTATION_TOLERANCE_DEG = 15.0
+# Warn when a mini is this far from a clean placement (its hex center for
+# hex-centered sizes, its corner for corner-centered sizes).
 PLACEMENT_TOLERANCE_HEX = 0.3   # fraction of one hex step
 
 # --- Sides ---

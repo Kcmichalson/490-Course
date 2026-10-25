@@ -30,7 +30,6 @@ class Grid(NamedTuple):
 
 class Placement(NamedTuple):
     hexes: tuple          # sorted (q, r) tuples
-    rotation_steps: int   # 0-5
     offset_error: float   # footprint centroid to mini position, in hex steps
 
 
@@ -100,45 +99,62 @@ def footprint_distance(hexes_a, hexes_b):
     return min(distance(a, b) for a in hexes_a for b in hexes_b)
 
 
-# --- footprints ---
+# --- footprints (position only; rotation never matters) ---
 
-def rotate(offset, steps):
-    """Rotate an axial offset about (0, 0) by `steps` 60° steps."""
-    q, r = offset
-    for _ in range(steps % 6):
-        q, r = -r, q + r
-    return q, r
-
-
-def rotation_steps(rotation_y, step_deg, offset_deg, sign):
-    """Snap a TTS Y rotation to 60° steps. Returns (steps 0-5, error in deg)."""
-    turns = sign * (rotation_y - offset_deg) / step_deg
-    nearest = round(turns)
-    return int(nearest) % 6, (turns - nearest) * step_deg
-
-
-def is_rotation_symmetric(shape):
-    return set(rotate(h, 1) for h in shape) == set(shape)
-
-
-def place_footprint(grid, x, z, shape, steps):
-    """Place a footprint so its centroid lands nearest the mini at (x, z).
-
-    `shape` is a tuple of axial offsets at rotation 0 (constants.FOOTPRINTS).
-    A Size 2 triangle's centroid is a hex corner; a Size 3 flower's is the
-    center hex; the same rule places every shape.
-    """
-    offsets = [rotate(h, steps) for h in shape]
-    units = [_axial_to_unit(grid.orientation, *h) for h in offsets]
+def _centroid_error(grid, x, z, hexes):
+    units = [_axial_to_unit(grid.orientation, *h) for h in hexes]
     cu = sum(p[0] for p in units) / len(units)
     cv = sum(p[1] for p in units) / len(units)
     u, v = _world_to_unit(grid, x, z)
-    origin = axial_round(*_unit_to_axial(grid.orientation, u - cu, v - cv))
-    ou, ov = _axial_to_unit(grid.orientation, *origin)
-    error = math.hypot(ou + cu - u, ov + cv - v)
-    hexes = tuple(sorted(((origin[0] + q, origin[1] + r) for q, r in offsets),
+    return math.hypot(cu - u, cv - v)
+
+
+def place_footprint(grid, x, z, shape):
+    """Hex-centered footprint: `shape` offsets around the hex nearest (x, z).
+
+    `shape` comes from constants.FOOTPRINTS (Size 1/2, 1, 3).
+    """
+    origin = world_to_axial(grid, x, z)
+    hexes = tuple(sorted(((origin[0] + q, origin[1] + r) for q, r in shape),
                          key=sort_key))
-    return Placement(hexes, steps, error)
+    return Placement(hexes, _centroid_error(grid, x, z, [origin]))
+
+
+def corner_footprint(grid, x, z, rings):
+    """Corner-centered footprint (Size 2, 4): the 3 hex centers nearest
+    (x, z), plus `rings` rings of every hex touching them.
+
+    A corner is shared by exactly 3 hexes, so the corner the base sits on
+    decides the triangle's point-up/point-down orientation. Turning the
+    mini in place can't change it; moving it to another corner can.
+    """
+    triangle = nearest_hexes(grid, x, z, 3)
+    hexes = set(triangle.hexes)
+    for _ in range(rings):
+        hexes |= {n for h in hexes for n in neighbors(h)}
+    return Placement(tuple(sorted(hexes, key=sort_key)), triangle.offset_error)
+
+
+def nearest_hexes(grid, x, z, count):
+    """The `count` hexes whose centers are nearest (x, z).
+
+    The 3 nearest centers are the triangle around the hex corner the base
+    sits on. Ties break by row-major order.
+    """
+    u, v = _world_to_unit(grid, x, z)
+    center = axial_round(*_unit_to_axial(grid.orientation, u, v))
+    radius = 2
+    candidates = [(center[0] + dq, center[1] + dr)
+                  for dq in range(-radius, radius + 1)
+                  for dr in range(-radius, radius + 1)
+                  if distance((0, 0), (dq, dr)) <= radius]
+
+    def key(h):
+        hu, hv = _axial_to_unit(grid.orientation, *h)
+        return ((hu - u) ** 2 + (hv - v) ** 2, sort_key(h))
+
+    hexes = tuple(sorted(sorted(candidates, key=key)[:count], key=sort_key))
+    return Placement(hexes, _centroid_error(grid, x, z, hexes))
 
 
 def hexes_in_rect(grid, cx, cz, size_x, size_z):
@@ -165,18 +181,8 @@ def hexes_in_rect(grid, cx, cz, size_x, size_z):
     return tuple(sorted(found, key=sort_key))
 
 
-# --- labels and ordering ---
+# --- ordering ---
 
 def sort_key(hex_):
     """Row-major order: by r, then q."""
     return hex_[1], hex_[0]
-
-
-def label(grid, hex_):
-    """Human-friendly cXrY label: odd-r offset (pointy) or odd-q (flat)."""
-    q, r = hex_
-    if grid.orientation == "pointy":
-        col, row = q + (r - (r & 1)) // 2, r
-    else:
-        col, row = q, r + (q - (q & 1)) // 2
-    return "c%dr%d" % (col, row)

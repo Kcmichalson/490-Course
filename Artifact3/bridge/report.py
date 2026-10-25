@@ -4,21 +4,11 @@ The format is fixed by tests/fixtures/report_pointy.txt (golden file).
 Changing it means updating that file and recording why in LOG.md.
 """
 
-from bridge import hexgrid
-
 _ORIENTATION_NAMES = {"pointy": "pointy-top", "flat": "flat-top"}
-_LABEL_SCHEMES = {"pointy": "odd-r", "flat": "odd-q"}
 
 
-def _grid(snapshot):
-    g = snapshot["grid"]
-    return hexgrid.Grid(g["orientation"], g["size"]["x"], g["size"]["y"],
-                        g["offset"]["x"], g["offset"]["z"])
-
-
-def _hexes(grid, hexes):
-    return " ".join("(%d,%d)%s" % (q, r, hexgrid.label(grid, (q, r)))
-                    for q, r in hexes)
+def _hexes(hexes):
+    return " ".join("(%d,%d)" % (q, r) for q, r in hexes)
 
 
 def _size(size):
@@ -42,18 +32,17 @@ def _details(item, lines):
         lines.append("  notes: " + " / ".join(item["notes"]))
 
 
-def _areas(title, items, grid, lines):
+def _areas(title, items, lines):
     lines.append("%s (%d)" % (title, len(items)))
     if not items:
         lines.append("none")
     for item in items:
-        lines.append("%s: %s" % (item["name"], _hexes(grid, item["hexes"])))
+        lines.append("%s: %s" % (item["name"], _hexes(item["hexes"])))
         _details(item, lines)
     lines.append("")
 
 
 def render(snapshot):
-    grid = _grid(snapshot)
     g = snapshot["grid"]
     names = {u["guid"]: u["name"] for u in snapshot["units"]}
     lines = [
@@ -62,8 +51,7 @@ def render(snapshot):
         "Grid: hex, %s (TTS type %d), hex step %.2f x %.2f units"
         % (_ORIENTATION_NAMES[g["orientation"]], g["tts_type"],
            g["size"]["x"], g["size"]["y"]),
-        "Hexes: (q,r) axial + cXrY label (%s column/row)"
-        % _LABEL_SCHEMES[g["orientation"]],
+        "Hexes: (q,r) axial",
         "Range: nearest occupied hex to nearest occupied hex, adjacent = 1",
         "",
         "UNITS (%d)" % len(snapshot["units"]),
@@ -78,18 +66,18 @@ def render(snapshot):
                         _stat(s, "hp"), _stat(s, "heat"),
                         _stat(s, "structure"),
                         ", ".join(s["conditions"]) or "-"))
-        lines.append("  hexes: " + _hexes(grid, u["hexes"]))
+        lines.append("  hexes: " + _hexes(u["hexes"]))
         _details(u, lines)
     lines.append("")
 
-    _areas("TERRAIN", snapshot["terrain"], grid, lines)
-    _areas("HAZARDS", snapshot["hazards"], grid, lines)
+    _areas("TERRAIN", snapshot["terrain"], lines)
+    _areas("HAZARDS", snapshot["hazards"], lines)
 
     lines.append("OBJECTIVES (%d)" % len(snapshot["objectives"]))
     if not snapshot["objectives"]:
         lines.append("none")
     for obj in snapshot["objectives"]:
-        lines.append("%s: %s" % (obj["name"], _hexes(grid, obj["hexes"])))
+        lines.append("%s: %s" % (obj["name"], _hexes(obj["hexes"])))
         inside = ", ".join("%s (%d/%d hexes)" % (names[z["guid"]],
                                                  z["hexes_inside"],
                                                  z["hexes_total"])

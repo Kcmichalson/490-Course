@@ -100,8 +100,13 @@ as prompts. Each fix lists how it was verified.
   needs checking.
 * **Where the Model Misread Me:** I treated "3 hexes" as a triangle and "7"
   as center + ring. Those shapes weren't stated (3 hexes could be a line).
-  Still to confirm (see Decisions).
+  Confirmed later, in Prompt 7.
 * **How It Was Verified:** n/a (no fix).
+* **Correction (Prompt 12):** this rulebook Read is logged in
+  tool-log/2026-10-24.jsonl as `requested` then **`failed`**, with the
+  pdftoppm error. In chat I said it was logged as `ok`. Root cause: my
+  check matched only the tool names in the log and never read the
+  `status` field.
 
 ### Prompt 3 (plan rejected with a change)
 * **User Prompt:**  
@@ -255,20 +260,123 @@ as prompts. Each fix lists how it was verified.
   covered by `test_hexes_in_rect_zone` and the Uplink zone check in
   `test_pointy_fixture_hand_checked`.
 
+### Prompt 12
+* **User Prompt:**  
+  > *"Finishing M1: [1. Size 2 footprint bug: a corner is shared by exactly
+  > 3 hexes, so rotation can't change a Size 2 triangle; make Size ½, 1, 2,
+  > 3 position-only, keep 60° rotation for Size 4 only with a tolerance
+  > near the snap boundary; add tests; record why. 2. Size 4 shape:
+  > "[confirm the LOG.md drawing, or describe the fix]". 3. Report: axial
+  > only, drop cXrY. 4. Allow blank lines before the AIT marker. 5. Golden
+  > report: "[approved / changes]"; regenerate after 1 and 3 and show the
+  > diff. 6. Clear snapshots/ after checks. 7. Session 0: "[date, notes on
+  > the previous combat, prototype notes]". 8. Correct the prompt log: the
+  > first rulebook Read is logged as "failed". 9. Record for M2, don't
+  > build: hex grid painted on 3D terrain; calibration from three "AIT:
+  > Calibration" markers, Grid settings as fallback; M3 checks for
+  > elevation and tile seams.] Run the tests, update LOG.md, and stop."*  
+  > *"10. Record for M2: airborne units sit on a pedestal [...] The
+  > pedestal is [part of the mini / a separate object]. Don't infer flying
+  > from height [...] flying is a description condition ("Conditions:
+  > Flying"); the report shows it per unit, and same_board treats taking off
+  > or landing as a change. In M3, check that minis on pedestals still
+  > report the hex directly under their base."*
+* **What the AI Provided:**
+  - **Item 1:** Size ½, 1, 2, and 3 are placed by position only (new
+    `hexgrid.nearest_hexes` for Size 2). Size 4 alone rotates, with 10° of
+    hysteresis carried over from the previous snapshot. New tests: turning
+    Size ½, 2, and 3 minis through 360° never changes their hexes; a Size
+    4 jiggling past the 30° boundary keeps its step; Size 2 is always a
+    triangle across a sweep of positions.
+  - **Size 4 shape:** found that the 3-4-3-2 shape repeats every 120°, so a
+    60° turn moves a Size 4 to another corner, the same flaw as item 1.
+    Flagged it instead of changing your rule.
+  - **Items 3, 4, 6, 8, 9, 10:** done or recorded as asked.
+  - **Item 5:** regenerated the golden report and expected snapshots, and
+    showed the diff in chat.
+  - **Items 2, 5, 7, and 10's pedestal question:** left as questions,
+    because their bracketed placeholders weren't filled in.
+* **Where the Model Misread Me:** My first new Size 4 test assumed six
+  distinct orientations. That's wrong for this shape; it failed, and the
+  failure exposed the open issue above. The test now checks the shape's
+  real symmetry instead. The test's premise was mine, not an expectation
+  of yours.
+* **How It Was Verified:** `py -m unittest discover -s tests`: 62 tests
+  OK. The golden diff shows only the removed `cXrY` labels; every hex,
+  distance, and zone count is unchanged. The expected-snapshot diff shows
+  only `rotation_steps` → `null` for the Size 1, 2, and 3 units. A direct
+  check confirmed which 60° rotations map the Size 4 shape onto itself
+  (every second step).
+
+### Prompt 13
+* **User Prompt:**  
+  > *"Item 2: the drawing is right. I checked the rulebook figure: Size 4 is
+  > the Size 2 triangle plus every hex touching it (12 hexes). Make Size 4
+  > position-only like Size 2: the 3 hex centers nearest the base position
+  > plus every hex touching them. Remove rotation from footprints entirely,
+  > along with the hysteresis, and keep the rotation field in the snapshot
+  > only as raw data. Record in LOG.md that point-up vs point-down for Size
+  > 2 and 4 is decided by which corner the base sits on, so a flip (a house
+  > rule in our game, costing 1 movement) registers as a move, while
+  > turning a mini in place doesn't. Update the tests, SPEC, and LOG.md."*
+* **What the AI Provided:** Size 4 is now placed by position only
+  (`hexgrid.corner_footprint`), and all rotation code and the hysteresis
+  are gone. Units keep `rotation_y` as raw data. Recorded the
+  point-up/point-down and flip rule in Decisions. Updated the tests, SPEC
+  §3, and this log.
+* **Where the Model Misread Me:** n/a. One process slip: my first attempt
+  to back up the fixtures copied three files onto one scratchpad file
+  (the folder didn't exist). The repo files weren't affected. I redid the
+  backup before regenerating.
+* **How It Was Verified:** `py -m unittest discover -s tests -v`: 59
+  tests OK (see Checks). Golden report diff: no change. Expected-snapshot
+  diff: only the `rotation_steps` lines removed.
+
+### Prompt 14
+* **User Prompt:**  
+  > *"I approve tests/fixtures/report_pointy.txt as the golden report.
+  > Record that in LOG.md."*
+* **What the AI Provided:** Recorded the approval in M1 Problems / open
+  questions and removed it from the open list. No code or fixture changed.
+* **Where the Model Misread Me:** n/a.
+* **How It Was Verified:** n/a (no fix). The approved file is the one
+  `test_golden_report` and `test_report_matches_golden` passed against in
+  Prompt 13.
+
 ### Decisions (M1)
 Recorded before implementing. "Unconfirmed" means I chose a default because
 the question wasn't answered yet; each is one constant or one function to
 change.
-- **Tracking marker (your rule, Prompt 3):** the first description line,
-  trimmed, must be `AIT: Unit|Terrain|Hazard|Objective` (any case, spaces
-  around the colon allowed). Leading blank lines are not skipped (my
-  default, Q8 unconfirmed). An unknown kind or an empty `AIT:` is skipped
-  with a warning. The Lua side only pre-filters on the `ait:` prefix; the
-  bridge decides.
-- **Footprints (your rule, Prompts 2 and 5):** Size ½ = 1, Size 1 = 1,
-  Size 2 = 3, Size 3 = 7, Size 4 = 12 hexes. Rotated in 60° steps from the
-  mini's Y rotation; the footprint's centroid is placed nearest the mini's
-  position. Shapes at rotation 0, in pointy-top view:
+- **Tracking marker (your rule, Prompts 3 and 12):** the first non-blank
+  description line, trimmed, must be `AIT: Unit|Terrain|Hazard|Objective`
+  (any case, spaces around the colon allowed). Blank lines before it are
+  allowed (Prompt 12). An unknown kind or an empty `AIT:` is skipped with a
+  warning. The Lua side only pre-filters on an `ait:` prefix (after skipping
+  leading blank lines; see the M2 notes); the bridge decides.
+- **Footprints (your rule, Prompts 2, 5, 7, 12, and 13):** Size ½ = 1,
+  Size 1 = 1, Size 2 = 3, Size 3 = 7, Size 4 = 12 hexes. **Every size is
+  placed by position only. Rotation never affects a footprint** (Prompt 13,
+  replacing Prompt 5's 60° rotation and Prompt 12's Size 4 exception).
+  - Hex-centered: Size ½ and 1 = the nearest hex; Size 3 = the nearest hex
+    plus its 6 neighbors.
+  - Corner-centered: Size 2 = the 3 hex centers nearest the base; Size 4 =
+    those 3 plus every hex touching them. You checked this against the
+    rulebook figure in Prompt 13.
+  - **Why (Prompts 12 and 13):** a hex corner is shared by exactly 3 hexes,
+    so a Size 2 base on a corner covers one fixed triangle, and Size 4 is
+    that triangle plus its ring. Rotation can't change either. Using
+    rotation to choose the orientation picked a different corner, so idly
+    turning a mini could shift its footprint. That's why the hysteresis
+    from Prompt 12 was removed too.
+  - **Point-up vs point-down (Prompt 13):** for Size 2 and 4, this is
+    decided by which corner the base sits on. A flip, which our house
+    rules allow for 1 movement, means moving the base to the neighboring
+    corner, so it registers as a move (a board change). Turning a mini in
+    place doesn't.
+  - The snapshot keeps `rotation_y` as raw data only. It's ignored by
+    footprints and by `same_board`.
+  Shapes, in pointy-top view (the two-on-top corner; the other corner gives
+  the upside-down shapes, with Size 4 rows of 2, 3, 4, 3):
   ```
   Size 2      Size 3      Size 4 (rows 3,4,3,2)
   o o          o o          o o o
@@ -278,10 +386,9 @@ change.
   ```
   (row r=0 drawn on top; each row is offset half a hex from the next)
   Size 2 = triangle, Size 3 = flower, Size 4 = rows 3, 4, 3, 2 (confirmed
-  in Prompt 7). Which TTS
-  rotation counts as 0°, and whether +rotation turns the shape clockwise,
-  are calibration constants (verify in M3). Size 5+ or an unreadable Size
-  is skipped with a warning; a missing Size defaults to 1 with a warning.
+  in Prompt 7; drawing confirmed in Prompt 13). Size 5+ or an unreadable
+  Size is skipped with a warning; a missing Size defaults to 1 with a
+  warning.
 - **Range (accepted in Prompt 7):** nearest occupied hex to nearest
   occupied hex, adjacent = 1, as SPEC §3 proposes. The report states the
   rule in its header.
@@ -298,9 +405,13 @@ change.
 - **Broken marked object (my default, Q5 unconfirmed):** skipped with a
   warning, and the rest of the board is stored. Top-level structure errors
   return 400.
-- **Hex label (my default, Q6 unconfirmed):** `cXrY` = odd-r column/row
-  (pointy-top) or odd-q (flat-top), shown after the axial pair, e.g.
-  `(5,-3)c3r-3`.
+- **Hex label (your rule, Prompt 12):** the report shows axial `(q,r)`
+  only; the `cXrY` label is dropped. This overrides CLAUDE.md's "also show
+  a human-friendly label in reports". CLAUDE.md is edit-protected for
+  Claude, so that line needs your edit.
+- **Schema v1 edited in place (Prompts 12 and 13):** `rotation_steps` was
+  added and then removed; units keep only the raw `rotation_y`. v1 hasn't
+  been committed or used by anything yet, so it wasn't bumped to v2.
 - **History storage (SPEC §3):** one append-only `snapshots/history.jsonl`,
   one full snapshot per line, appended only when the board changes.
   "Changed" ignores `received_at`, `seq`, and raw world position/rotation,
@@ -317,6 +428,36 @@ change.
   centers inside the object's XZ bounds; if none, the hex under the center.
 - **Schema additions:** `seq` (increments on each recorded change) and
   `payload_version` (Lua contract, separate from snapshot `schema`).
+
+### Recorded for M2 and M3 (Prompt 12; not built)
+- **Calibration from markers (M2):** our table is a hex grid painted on a
+  3D terrain model, not TTS's built-in grid. M2 must support three `AIT:
+  Calibration` markers: one on a hex center, and one N hexes along each of
+  the two row directions. From them the bridge derives the grid origin,
+  hex spacing, and angle. TTS Grid settings become the fallback.
+  For the M2 plan:
+  - How N is given (e.g. a key in each marker's description).
+  - How the two direction markers are told apart.
+  - That the painted grid may be rotated, which the current math doesn't
+    handle.
+  - That "Calibration" becomes a fifth AIT kind. Until then the bridge
+    warns "unknown AIT kind".
+- **Lua marker pre-filter (M2):** skip leading blank lines before checking
+  for the `ait:` prefix, to match the bridge (Prompt 12, item 4).
+- **Airborne units (M2):** airborne minis sit on a pedestal, so they're
+  physically higher than other minis. Whether the pedestal is part of the
+  mini or a separate object is **still to answer** (left as a placeholder
+  in Prompt 12). Flying is never inferred from height, because the terrain
+  itself varies in height. It's a description condition (`Conditions:
+  Flying`), shown per unit in the report. `same_board` treats taking off
+  or landing as a change. M1 already behaves this way, because conditions
+  are shown in the report and are part of the board comparison.
+- **M3 checks:**
+  - **Elevation:** minis on high and low ground report the hex directly
+    under their base.
+  - **Tile seams:** hexes stay aligned across terrain-tile seams.
+  - **Pedestals:** minis on pedestals report the hex directly under their
+    base.
 
 ### M1 — Bridge core and hex math
 
@@ -342,24 +483,53 @@ change.
 - Windows detail: the server asks for exclusive use of its port
   (`SO_EXCLUSIVEADDRUSE`). Python's default `SO_REUSEADDR` on Windows lets a
   second bridge bind the same port silently. A test covers it.
+- Prompt 12 changes:
+  - Size ½, 1, 2, 3 placed by position only; Size 4 rotates with
+    hysteresis (`build_snapshot` now takes the previous snapshot).
+  - `hexgrid.label` removed; the report shows axial only.
+  - Blank lines allowed before the marker.
+  - Constants: `NEAREST_HEXES`, `SIZES`, `ROTATING_SIZES`,
+    `ROTATION_HYSTERESIS_DEG`.
+  - Golden report and expected snapshots regenerated; 62 tests.
+  - `snapshots/` cleared.
+- Prompt 13 changes:
+  - Size 4 placed by position only too: new `hexgrid.corner_footprint`
+    (the nearest-3 triangle plus N rings of touching hexes).
+    `constants.CORNER_RINGS = {2: 0, 4: 1}` replaces `NEAREST_HEXES` and
+    the Size 4 entry in `FOOTPRINTS`.
+  - Removed all rotation code: `rotate`, `rotation_steps`, the hysteresis,
+    the rotation constants and warning, `build_snapshot`'s `previous`
+    argument, and the snapshot's `rotation_steps`.
+  - Expected snapshots regenerated (only `rotation_steps` removed); golden
+    report unchanged.
 
 **Problems / open questions**
-- Still open (see Decisions): my defaults for skipping broken objects,
-  the label format, and whitespace before the marker. Shapes, range, and
-  "inside" were confirmed in Prompt 7; objective area in Prompt 11.
+- Still open (see Decisions):
+  - Session 0 placeholders.
+  - Whether the pedestal is part of the mini or a separate object.
+  - My default for skipping broken objects.
+
+  Resolved: shapes, range, and "inside" (Prompt 7); objective area
+  (Prompt 11); labels and blank lines before the marker (Prompt 12);
+  Size 4 shape and position-only footprints (Prompt 13); golden report
+  approved (Prompt 14).
 - TTS facts to verify in M2: the `Grid` vs `Grids` name, `Grid.type`
   values, what `sizeX/sizeY` and the offsets mean, axis direction, and
-  `getPosition`/`getBounds` behavior. Rotation 0 and its direction are
-  checked in M3 calibration.
+  `getPosition`/`getBounds` behavior. (No rotation calibration is needed
+  any more: footprints ignore rotation, Prompt 13.)
 - The expected snapshots and golden report were rendered by the code, then
   checked by hand against independently worked hexes, labels, distances,
-  and zone counts (also asserted in test_snapshot.py). The golden needs
-  your approval as the expectation.
+  and zone counts (also asserted in test_snapshot.py). **Golden report
+  approved (Prompt 14):** `tests/fixtures/report_pointy.txt`, as it stood
+  after Prompt 13, is the expected output. Changing it from now on needs
+  your approval and a LOG.md entry saying why.
 - The preview pane sends `HEAD /`, which the bridge answers with 501.
   Harmless; noted, not changed.
 - The live check left `snapshots/latest.json` and `snapshots/history.jsonl`
-  (fixture data, git-ignored).
-- Rulebook PDF unreadable here (no PDF renderer; installing is forbidden).
+  (fixture data, git-ignored). Both deleted in Prompt 12.
+- Rulebook PDF: can't be rendered (no pdftoppm), but its text is readable
+  through the `pdftotext` that comes with Git for Windows (Prompt 9).
+  `materials/` isn't in `.gitignore` yet.
 
 **Checks**
 - `py -m unittest discover -s tests -v`: 59 tests, all OK. Covers both
@@ -367,6 +537,19 @@ change.
   rotations, hand-checked distances, malformed payloads → 400, oversize →
   413, change-only history, restart reload, a 127.0.0.1-only bind, and a
   busy port failing.
+- After Prompt 13: 59 tests, all OK. The rotation and hysteresis tests
+  were removed. Added: turning any size (½ through 4) in place through 360°
+  never changes its hexes, adds no warning, and isn't a board change;
+  Size 4 placed on a corner equals the LOG.md drawing (rows 3,4,3,2), and
+  the other corner gives rows 2,3,4,3; a flip to the neighboring corner
+  changes Size 2 and Size 4 hexes and is a board change; Size 2 and 4 are
+  valid (3 and 12 connected hexes) across a sweep of positions; Size 4 is
+  the triangle plus every hex touching it.
+- After Prompt 12: 62 tests, all OK. Adds: rotation-independence for Size
+  ½/2/3, Size 4 hysteresis at the snap boundary, the Size 2 triangle across
+  a position sweep, and blank lines before the marker. The live bridge
+  wasn't rerun (Prompt 12 asked for tests only); the server tests cover
+  the endpoints.
 - Live bridge (started in the background with the preview tool, stopped
   with preview_stop): GET /health → 200; POST payload_pointy.json → 200
   (seq 1, 4 units, no warnings); GET /report → 200, identical to the golden
@@ -374,7 +557,8 @@ change.
   400 "invalid JSON …"; GET /health afterwards → 200 with
   last_payload_at set.
 - Tool-log: every call this session appears with a requested line and an
-  ok/failed line. The one `failed` is the deliberate malformed POST (the
-  client exits 1 on HTTP 400). The rejected first ExitPlanMode has only a
-  `requested` line, and the denied plan-file Write has no line, both as
-  tool-log/README.md describes.
+  ok/failed line. Two are `failed`: the first rulebook Read (pdftoppm
+  missing; corrected in Prompt 12, since this line first named only one)
+  and the deliberate malformed POST (the client exits 1 on HTTP 400). The
+  rejected first ExitPlanMode has only a `requested` line, and the denied
+  plan-file Write has no line, both as tool-log/README.md describes.

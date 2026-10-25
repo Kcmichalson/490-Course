@@ -83,111 +83,112 @@ class DistanceTests(unittest.TestCase):
         self.assertEqual(H.footprint_distance([(0, 0)], [(1, 0)]), 1)
 
 
-class RotationTests(unittest.TestCase):
-    def test_six_steps_is_identity(self):
-        for h in HEXES:
-            self.assertEqual(H.rotate(h, 6), h)
-            self.assertEqual(H.distance((0, 0), H.rotate(h, 1)), H.distance((0, 0), h))
+def corner(grid, hexes):
+    """World (x, z) of the corner shared by three mutually adjacent hexes."""
+    pts = [H.axial_to_world(grid, h) for h in hexes]
+    return (sum(p[0] for p in pts) / 3, sum(p[1] for p in pts) / 3)
 
-    def test_rotation_steps_snap_and_wrap(self):
-        args = (60.0, 0.0, 1)
-        self.assertEqual(H.rotation_steps(0.0, *args)[0], 0)
-        self.assertEqual(H.rotation_steps(59.0, *args)[0], 1)
-        self.assertEqual(H.rotation_steps(359.0, *args)[0], 0)
-        self.assertEqual(H.rotation_steps(-61.0, *args)[0], 5)
-        self.assertEqual(H.rotation_steps(300.0, *args)[0], 5)
-        self.assertAlmostEqual(H.rotation_steps(359.0, *args)[1], -1.0)
-        self.assertEqual(H.rotation_steps(60.0, 60.0, 0.0, -1)[0], 5)
-        self.assertEqual(H.rotation_steps(90.0, 60.0, 30.0, 1)[0], 1)
 
-    def test_symmetry(self):
-        self.assertTrue(H.is_rotation_symmetric(C.FOOTPRINTS[1]))
-        self.assertTrue(H.is_rotation_symmetric(C.FOOTPRINTS[3]))
-        self.assertFalse(H.is_rotation_symmetric(C.FOOTPRINTS[2]))
-        self.assertFalse(H.is_rotation_symmetric(C.FOOTPRINTS[4]))
+def rows(hexes):
+    by_r = {}
+    for q, r in hexes:
+        by_r.setdefault(r, []).append(q)
+    return [len(by_r[r]) for r in sorted(by_r)]
+
+
+# Two triangles from the user's drawing orientation (two hexes on the upper
+# row, r smaller) and the opposite orientation (one hex on the upper row).
+TWO_ON_TOP = [(2, 0), (3, 0), (2, 1)]
+ONE_ON_TOP = [(3, 0), (2, 1), (3, 1)]   # shares the edge (3,0)-(2,1)
+# The LOG.md drawing of Size 4: rows of 3, 4, 3, 2.
+SIZE_4_DRAWING = {(-1, 0), (0, 0), (1, 0),
+                  (-2, 1), (-1, 1), (0, 1), (1, 1),
+                  (-2, 2), (-1, 2), (0, 2),
+                  (-2, 3), (-1, 3)}
 
 
 class FootprintTests(unittest.TestCase):
-    def place(self, grid, size, hexes_at_rest, steps=0):
-        """Put a mini exactly on the centroid of `hexes_at_rest` and place it."""
-        pts = [H.axial_to_world(grid, h) for h in hexes_at_rest]
-        x = sum(p[0] for p in pts) / len(pts)
-        z = sum(p[1] for p in pts) / len(pts)
-        return H.place_footprint(grid, x, z, C.FOOTPRINTS[size], steps)
-
-    def test_shape_sizes(self):
+    def test_size_tables(self):
         self.assertEqual({k: len(v) for k, v in C.FOOTPRINTS.items()},
-                         {0.5: 1, 1: 1, 2: 3, 3: 7, 4: 12})
+                         {0.5: 1, 1: 1, 3: 7})
+        self.assertEqual(C.CORNER_RINGS, {2: 0, 4: 1})
+        self.assertEqual(C.SIZES, (0.5, 1, 2, 3, 4))
 
     def test_size_1_and_half(self):
         for size in (0.5, 1):
-            p = H.place_footprint(POINTY, 7.12, -5.15, C.FOOTPRINTS[size], 0)
+            p = H.place_footprint(POINTY, 7.12, -5.15, C.FOOTPRINTS[size])
             self.assertEqual(p.hexes, ((5, -3),))
             self.assertLess(p.offset_error, C.PLACEMENT_TOLERANCE_HEX)
 
-    def test_size_2_triangle_both_orientations(self):
-        up = [(2, 0), (3, 0), (2, 1)]
-        p = self.place(POINTY, 2, up)
-        self.assertEqual(set(p.hexes), set(up))
-        self.assertAlmostEqual(p.offset_error, 0.0)
-        down = [(-3, -1), (-3, 0), (-4, 0)]   # one step: (0,0),(0,1),(-1,1)
-        p = self.place(POINTY, 2, down, steps=1)
-        self.assertEqual(set(p.hexes), set(down))
-
-    def test_size_2_every_rotation_is_a_triangle(self):
+    def test_size_2_corner_footprint(self):
         for grid in (POINTY, FLAT):
-            for steps in range(6):
-                p = H.place_footprint(grid, -3.3, 4.1, C.FOOTPRINTS[2], steps)
-                with self.subTest(grid=grid.orientation, steps=steps):
-                    self.assertEqual(len(set(p.hexes)), 3)
-                    for a, b in itertools.combinations(p.hexes, 2):
-                        self.assertEqual(H.distance(a, b), 1)
+            for tri in (TWO_ON_TOP, ONE_ON_TOP):
+                p = H.corner_footprint(grid, *corner(grid, tri), 0)
+                self.assertEqual(set(p.hexes), set(tri))
+                self.assertAlmostEqual(p.offset_error, 0.0)
+
+    def test_size_2_and_4_always_valid_across_positions(self):
+        # Sweep positions across several hexes, including negatives.
+        for grid in (POINTY, FLAT) + OFFSET_GRIDS:
+            for i in range(-12, 13):
+                for j in range(-12, 13):
+                    x, z = i * 0.37 + 0.011, j * 0.41 - 0.007
+                    tri = H.corner_footprint(grid, x, z, 0).hexes
+                    big = H.corner_footprint(grid, x, z, 1).hexes
+                    with self.subTest(grid=grid, x=x, z=z):
+                        self.assertEqual(len(set(tri)), 3)
+                        for a, b in itertools.combinations(tri, 2):
+                            self.assertEqual(H.distance(a, b), 1)
+                        self.assertEqual(len(set(big)), 12)
+                        self.assertTrue(set(tri) <= set(big))
+                        self.assertTrue(connected(big))
+
+    def test_size_2_mini_slightly_off_its_corner_keeps_its_triangle(self):
+        x, z = corner(POINTY, TWO_ON_TOP)
+        for dx, dz in ((0.15, 0.0), (-0.1, 0.12), (0.0, -0.15)):
+            p = H.corner_footprint(POINTY, x + dx, z + dz, 0)
+            self.assertEqual(set(p.hexes), set(TWO_ON_TOP))
 
     def test_size_3_flower(self):
-        center = (6, 2)
-        expected = {center, *H.neighbors(center)}
-        for steps in range(6):
-            p = self.place(POINTY, 3, [center], steps)
-            self.assertEqual(set(p.hexes), expected)
-        p = self.place(FLAT, 3, [(-4, -2)])
-        self.assertEqual(set(p.hexes), {(-4, -2), *H.neighbors((-4, -2))})
+        for grid, center in ((POINTY, (6, 2)), (FLAT, (-4, -2))):
+            p = H.place_footprint(grid, *H.axial_to_world(grid, center), C.FOOTPRINTS[3])
+            self.assertEqual(set(p.hexes), {center, *H.neighbors(center)})
+            self.assertAlmostEqual(p.offset_error, 0.0)
 
-    def test_size_4_rows_3_4_3_2(self):
-        shape = C.FOOTPRINTS[4]
-        rows = {}
-        for q, r in shape:
-            rows.setdefault(r, []).append(q)
-        self.assertEqual([len(rows[r]) for r in sorted(rows)], [3, 4, 3, 2])
-        # Each row is a contiguous run.
-        for qs in rows.values():
-            self.assertEqual(sorted(qs), list(range(min(qs), max(qs) + 1)))
-        self.assertTrue(connected(shape))
+    def test_size_4_matches_the_drawing(self):
+        # Size 4 = the Size 2 triangle plus every hex touching it (user,
+        # Prompt 13; matches the rulebook figure and the LOG.md drawing).
+        tri = [(0, 1), (-1, 1), (-1, 2)]   # two on top, like TWO_ON_TOP
+        p = H.corner_footprint(POINTY, *corner(POINTY, tri), 1)
+        self.assertEqual(set(p.hexes), SIZE_4_DRAWING)
+        self.assertEqual(rows(p.hexes), [3, 4, 3, 2])
+        self.assertAlmostEqual(p.offset_error, 0.0)
 
-    def test_size_4_every_rotation(self):
-        for grid in (POINTY, FLAT):
-            for steps in range(6):
-                p = H.place_footprint(grid, 2.2, -6.7, C.FOOTPRINTS[4], steps)
-                with self.subTest(grid=grid.orientation, steps=steps):
-                    self.assertEqual(len(set(p.hexes)), 12)
-                    self.assertTrue(connected(p.hexes))
-        # A Size 4 placed on its own centroid reproduces itself, at negatives.
-        shape = [(q - 4, r - 3) for q, r in C.FOOTPRINTS[4]]
-        self.assertEqual(set(self.place(POINTY, 4, shape).hexes), set(shape))
+    def test_size_4_other_corner_is_rows_2_3_4_3(self):
+        p = H.corner_footprint(POINTY, *corner(POINTY, ONE_ON_TOP), 1)
+        self.assertEqual(rows(p.hexes), [2, 3, 4, 3])
+        self.assertTrue(connected(p.hexes))
 
-    def test_rotated_size_4_matches_rotated_shape(self):
-        for steps in range(6):
-            rotated = [H.rotate(h, steps) for h in C.FOOTPRINTS[4]]
-            shifted = [(q + 3, r - 5) for q, r in rotated]
-            p = self.place(FLAT, 4, shifted, steps)
-            self.assertEqual(set(p.hexes), set(shifted))
+    def test_flip_is_a_move_to_the_neighboring_corner(self):
+        # The two corners at the ends of the shared edge (3,0)-(2,1) are
+        # one corner apart; moving the base between them flips the shape.
+        for rings in (0, 1):
+            a = H.corner_footprint(POINTY, *corner(POINTY, TWO_ON_TOP), rings).hexes
+            b = H.corner_footprint(POINTY, *corner(POINTY, ONE_ON_TOP), rings).hexes
+            self.assertNotEqual(set(a), set(b))
+            self.assertEqual(len(a), len(b))
 
     def test_off_center_mini_reports_error(self):
-        # A Size 2 mini sitting on a hex center is halfway between placements.
-        p = H.place_footprint(POINTY, 0.0, 0.0, C.FOOTPRINTS[2], 0)
+        # A Size 2 or 4 mini sitting on a hex center isn't on any corner;
+        # a Size 1 mini sitting on a corner isn't on any hex center.
+        for rings in (0, 1):
+            p = H.corner_footprint(POINTY, 0.0, 0.0, rings)
+            self.assertGreater(p.offset_error, C.PLACEMENT_TOLERANCE_HEX)
+        p = H.place_footprint(POINTY, *corner(POINTY, TWO_ON_TOP), C.FOOTPRINTS[1])
         self.assertGreater(p.offset_error, C.PLACEMENT_TOLERANCE_HEX)
 
 
-class AreaAndLabelTests(unittest.TestCase):
+class AreaTests(unittest.TestCase):
     def test_hexes_in_rect_row(self):
         s = math.sqrt(3)
         self.assertEqual(H.hexes_in_rect(POINTY, 2.0, -2 * s, 5.0, 1.0),
@@ -199,19 +200,6 @@ class AreaAndLabelTests(unittest.TestCase):
 
     def test_small_rect_falls_back_to_center_hex(self):
         self.assertEqual(H.hexes_in_rect(POINTY, 7.3, -5.0, 0.1, 0.1), ((5, -3),))
-
-    def test_labels(self):
-        self.assertEqual(H.label(POINTY, (0, 0)), "c0r0")
-        self.assertEqual(H.label(POINTY, (5, -3)), "c3r-3")
-        self.assertEqual(H.label(POINTY, (6, 2)), "c7r2")
-        self.assertEqual(H.label(POINTY, (-1, 1)), "c-1r1")
-        self.assertEqual(H.label(FLAT, (-2, 1)), "c-2r0")
-        self.assertEqual(H.label(FLAT, (3, -1)), "c3r0")
-
-    def test_labels_are_unique(self):
-        for grid in (POINTY, FLAT):
-            labels = [H.label(grid, h) for h in HEXES]
-            self.assertEqual(len(set(labels)), len(labels))
 
 
 if __name__ == "__main__":

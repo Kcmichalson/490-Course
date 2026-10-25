@@ -42,9 +42,19 @@ def _vec3(value):
 
 # --- description ---
 
+def _split_marker_line(description):
+    """(first non-blank line, the lines after it). Blank lines before the
+    marker are allowed (Prompt 12)."""
+    lines = description.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip():
+            return line, lines[i + 1:]
+    return "", []
+
+
 def parse_marker(description):
-    """Return (kind or None, warning or None) from the first line."""
-    first = description.splitlines()[0] if description else ""
+    """Return (kind or None, warning or None) from the first non-blank line."""
+    first, _ = _split_marker_line(description)
     match = _MARKER_RE.match(first.strip())
     if not match:
         return None, None
@@ -63,7 +73,7 @@ def parse_description(description):
     kept as notes. Provisional syntax until M2 (LOG.md, Session 1).
     """
     pairs, notes, warnings = {}, [], []
-    for line in description.splitlines()[1:]:
+    for line in _split_marker_line(description)[1]:
         line = line.strip()
         if not line:
             continue
@@ -95,7 +105,7 @@ def parse_size(value):
     text = value.strip().lower()
     if text in _SIZE_WORDS:
         return _SIZE_WORDS[text]
-    if text.isdigit() and int(text) in C.FOOTPRINTS:
+    if text.isdigit() and int(text) in C.SIZES:
         return int(text)
     return None
 
@@ -206,25 +216,21 @@ def _build_unit(grid, head, pairs, obj, warnings):
     if not side:
         side = C.SIDE_UNKNOWN
         warnings.append("'%s' has no Side; using %s" % (name, side))
+    # Rotation is kept as raw data only; footprints depend on position alone.
     rotation = _vec3(obj.get("rotation"))
     rotation_y = rotation["y"] if rotation else 0.0
-    shape = C.FOOTPRINTS[size]
-    steps, rot_error = 0, 0.0
-    if not hexgrid.is_rotation_symmetric(shape):
-        steps, rot_error = hexgrid.rotation_steps(
-            rotation_y, C.ROTATION_STEP_DEG, C.ROTATION_OFFSET_DEG,
-            C.ROTATION_SIGN)
-        if abs(rot_error) > C.ROTATION_TOLERANCE_DEG:
-            warnings.append("'%s' rotation %.0f° is between 60° steps"
-                            % (name, rotation_y))
     pos = head["position"]
-    placed = hexgrid.place_footprint(grid, pos["x"], pos["z"], shape, steps)
+    if size in C.CORNER_RINGS:
+        placed = hexgrid.corner_footprint(grid, pos["x"], pos["z"],
+                                          C.CORNER_RINGS[size])
+    else:
+        placed = hexgrid.place_footprint(grid, pos["x"], pos["z"],
+                                         C.FOOTPRINTS[size])
     if placed.offset_error > C.PLACEMENT_TOLERANCE_HEX:
         warnings.append("'%s' may be between hexes" % name)
     stats, extra = _stats(pairs, warnings, name)
     return {"guid": head["guid"], "name": name, "side": side, "size": size,
             "hexes": [list(h) for h in placed.hexes],
-            "rotation_steps": placed.rotation_steps,
             "stats": stats, "extra": extra,
             "world": pos, "rotation_y": rotation_y}
 

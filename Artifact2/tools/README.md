@@ -188,6 +188,78 @@ differ slightly from the tile export at the same place: Paris is
 
 Tests (synthetic maps, no model): `py -B -m unittest tools/test_mapquery.py`
 
+## Map mode: `companion.py --ask` (bonus)
+
+```
+py -B tools/companion.py --ask QUESTION.md --map fcm-map-data-1024x512.bin.gz [--picture fcm-map-koppen.png] [--out DIR]
+```
+
+Claude gets your question, a one-line description of the map, and,
+optionally, the exported map picture. The picture goes in as an image in
+the first message, so no file tool is needed.
+
+It may call the three map tools, and nothing else. It answers with:
+- `## Placements`: a JSON list of `{name, lat, lon, koppen, reasons}`
+- `## Campaign hooks`
+
+**What's sent:** the question text, the map's size and extent, the
+picture if you give one, and the answers to the model's own tool calls
+(single cells, region summaries, and the overview). The map file itself is
+never uploaded: the tool runs on this machine and returns only what is
+asked.
+
+**How `claude -p` is restricted** (flags confirmed in `claude --help`,
+2.1.308):
+
+| Flag or setting | What it does |
+|---|---|
+| `--tools ""` | Disables every built-in tool. |
+| `--mcp-config <temp file>` + `--strict-mcp-config` | The only server is `fcm` (`mapquery.py serve`), and no other MCP configuration is read. |
+| `--allowedTools mcp__fcm__point,mcp__fcm__region,mcp__fcm__overview` | Pre-approves just the three map tools. |
+| `--permission-prompts none` | Denies anything else that would ask. |
+| `--disable-slash-commands`, `--no-session-persistence` | No skills or commands, and nothing saved. |
+| `--input-format stream-json`, `--output-format stream-json --verbose` | The picture can go in the first message, and the model's tool calls can be read back. |
+| Fresh temporary folder, API key variables removed | The same as tile mode. |
+
+**Safe mode:** the script tries `--safe-mode` first. If the map tool
+didn't load under it (judged from the start-up message, the model's own
+calls, and the server's log), it runs once more without `--safe-mode` and
+says so. The header records which happened. Without `--safe-mode`, run
+from an empty temporary folder, no project CLAUDE.md or settings are
+there to load.
+
+**What the code checks:**
+- **sections:** both headings are present.
+- **placements JSON:** a fenced ```json list whose items have the five
+  fields.
+- **on land:** each lat/lon is Land or Land ice, according to
+  `mapquery.point`.
+- **climate matches the map:** each placement's `koppen` is the cell's
+  code. Any Köppen code or °C value in its `reasons` matches that cell
+  (its monthly values, warmest, coldest, or mean) or a standard Köppen
+  threshold.
+
+On a failure, the script retries once with the failures sent back, as in
+tile mode.
+
+**Output files:**
+- `answer.md` gets the same header style as tile mode: question, map,
+  picture, date, model, safe mode, checks passed, and the number of tool
+  calls by tool.
+- `answer.toolcalls.jsonl` lists every call the server received, with its
+  arguments, success, and attempt number.
+- If the checks fail twice, the last answer is kept as `answer.raw.md`
+  and the script exits with code 1.
+
+**Limits:**
+- Only the JSON placements are checked. Climate claims in the
+  surrounding prose and in the campaign hooks aren't.
+- The checks can't tell whether a placement is a good choice, only that
+  it is on land and described truthfully.
+
+Tests (canned answers and streams, no model):
+`py -B -m unittest tools/test_companion_ask.py`
+
 ## Example
 
 [examples/](examples/) has a real pair from the first run (2026-10-25):

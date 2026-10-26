@@ -4648,8 +4648,10 @@ Hard stop 23:00.
 **Status**
 - (A) Export Map Data and Export Map Picture: **done**; your by-eye check
   passed and you committed it.
-- (B) the query tool: **done**, awaiting your by-hand check.
-- (C) `--ask` mode: not started.
+- (B) the query tool: **done**; your hand checks passed and you
+  committed it.
+- (C) `--ask` mode: **done**. Your real run passed on attempt 1;
+  awaiting your commit.
 
 ### (A) Export Map Data, Export Map Picture
 
@@ -4743,6 +4745,90 @@ Hard stop 23:00.
 - I can't read your exported Earth file: it's in your Downloads folder,
   outside Artifact2/. The by-hand check against it is yours.
 
+### (C) companion.py --ask (map mode)
+
+**Changed**
+- tools/companion.py:
+  - New map mode. Tile mode's functions are untouched: its 20 tests pass
+    unchanged.
+  - `main()` gained `--ask` / `--map` / `--picture`, and the tile
+    argument became optional; mixing the two modes is an error (exit 2).
+  - New pieces:
+    - `check_ask`: sections, the placements JSON, on land, and climate
+      matches the map (the tile checks reused per placement against
+      `mapquery.point`)
+    - `parse_stream`: claude's stream-json output (start-up message,
+      tool uses, result)
+    - `make_map_ask`: the restricted command, the temporary MCP config,
+      the image block, the `--safe-mode` fallback
+    - `run_ask`: one retry; per-attempt call logs
+    - `ask_header` and `ask_main`
+- tools/test_companion_ask.py (19 tests):
+  - each check failing
+  - the stream parser
+  - the exact command line, captured by replacing `subprocess.run`:
+    flags, the MCP config naming only mapquery, the API key removed, the
+    image block, the `--safe-mode` fallback, and the error when the tool
+    loads neither way
+  - the retry path, with calls tagged by attempt
+  - the files written; argument errors
+- tools/examples/question-empires.md (5 powers and 2 events).
+- tools/README.md: a "Map mode" section.
+
+**Problems**
+- A test found that `run_ask` appended to call logs left over in its
+  folder. I fixed the code: each attempt now starts with an empty log.
+- My first design killed the run if the start-up message didn't list the
+  map tools. A server can still be "pending" at start-up, so that could
+  abort good runs. Before any test, I changed it to decide after the run,
+  from the start-up message, the model's tool calls, and the server log.
+- Settled by your real run:
+  - **`--safe-mode` drops `--mcp-config` servers**, so the script's
+    fallback ran the answer without it ("safe mode off", as expected).
+    That run still had no built-in tools and no MCP server but `fcm`, in
+    an empty temporary folder with no API key.
+  - **The image block over stream-json works:** the run passed with
+    `--picture fcm-map-koppen.png`.
+
+**Verification checks**
+- Python 55/55 (tile 20, mapquery 16, ask 19), with ResourceWarnings
+  treated as errors; Node 267/267.
+- **Real run (yours, 2026-10-25 20:48):**
+  - Command: `--ask tools/examples/question-empires.md`, the Earth map
+    data, and the Köppen picture.
+  - Model claude-opus-5-5; all checks passed on attempt 1.
+  - 17 map tool calls: overview ×1, point ×16.
+- **My review of tools/examples/answer.md and answer.toolcalls.jsonl:**
+  - All 7 placements' exact coordinates appear in the server's call log,
+    so the model checked each site itself before using it. It also
+    probed 9 sites it didn't use: 24, 10; 23.5, 90; 51.5, −1; 47, 38;
+    22, 20; −41, 174.5; 48, 35; 40, −100; 40, −92.
+  - The placements are:
+    - Ashen Throne: BWh, 26, 15
+    - Verdant League: Aw, 16, 104
+    - Frostwardens: ET, 66, 130
+    - Highmarch: ET, 46.5, 9
+    - Tidewrights: Cfb, 47, −2
+    - Long Drought: Dsb, 50, 50
+    - Southern Archive: Csb, −33.9, 18.8
+  - 5 campaign hooks, each linking three or more placements.
+  - The Highmarch is ET, not H: that Alpine cell is 1,407 m, below the
+    2,500 m Highland cutoff. That follows the map, not a check failure.
+- **Not checked by code (documented limit):**
+  - The prose line "Britain is subarctic and the American plains are
+    cold desert". It is consistent with the model having probed
+    51.5, −1 and 40, −100, but I can't confirm the values: the map file
+    is in your Downloads folder, outside Artifact2/.
+  - The hook's "−28.9 °C in January", which repeats the Frostwardens'
+    checked reasons.
+- The map data file isn't committed (approved default); the example
+  records its settings: the Earth map, 1024 × 512, Annual Mean wind.
+
+**Next**
+- Your commit of C.
+- Possible follow-ups (not built): check climate claims in the prose and
+  hooks too; an H-aware hint in the prompt for mountain placements.
+
 ---
 
 ## 2026-10-25 — Session 11 prompt log (Artifact 3: climate companion)
@@ -4831,6 +4917,34 @@ Hard stop 23:00.
 * **How It Was Verified:**  
   - Python 16/16, including a stdio subprocess and a Node-written file; Node 267/267.
   - Timings on a synthetic full-size grid.
+  - The tool log has every call.
+
+### Prompt 7
+* **User Prompt:**  
+  > *"B's hand checks pass and B is committed. Start C."*
+* **What the AI Provided:**  
+  - (C): companion.py map mode and its 19 tests.
+  - The example question, a README section, the LOG entry, and the cmd.exe commands for your real run.
+  - No model was run by me.
+* **Where the Model Misread Me:**  
+  - Not a misreading; two design slips of mine, fixed before you ran anything (details in the (C) entry): an early-kill rule that could abort good runs, and call logs that weren't reset per attempt.
+  - **Rule break (mine):** one command ran the Node suite and the tool-log check together (`&&`), against "one purpose per command". Both are read-only, and nothing else ran.
+
+### Prompt 8 (my real run results)
+* **User Prompt:**  
+  > *"Run passed: 17 tool calls, all checks passed on attempt 1, safe mode off as expected. Finish the LOG entry and give me C's commit message."*
+* **What the AI Provided:**  
+  - Reviewed tools/examples/answer.md and answer.toolcalls.jsonl. Every placement was point-checked by the model itself; the call log shows 9 other sites it probed and didn't use.
+  - Finished the (C) entry: what your run settled (`--safe-mode` drops MCP servers; the image input works), the review, and the limits.
+  - Gave C's commit message.
+* **How It Was Verified:**  
+  - Your run's checks (attempt 1).
+  - My comparison of the 7 placements with the server's call log.
+  - Python 55/55 and Node 267/267, rerun this turn.
+  - The tool log has every call.
+* **How It Was Verified:**  
+  - Python 55/55; Node 267/267.
+  - Tile mode's 20 tests pass unchanged.
   - The tool log has every call.
 * **Where the Model Misread Me:**  
   Not a misreading: your reply begins with ". (2)", so an item (1) may have been cut off. I asked you to resend it if so.

@@ -18,6 +18,7 @@ Standard library only.
 """
 
 import argparse
+import base64
 import datetime
 import glob
 import json
@@ -27,6 +28,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+import mapquery  # tools/mapquery.py, beside this script (map mode)
 
 SUMMARY_FORMAT = "fcm-tile-summary"
 
@@ -317,18 +320,329 @@ def run_companion(summary, ask, log=print):
     return not failed, reply, model, 2, failed
 
 
+# ---------- Map mode: --ask QUESTION --map DATA [--picture PNG] ----------
+# The model may call only the read-only map query tool (tools/mapquery.py,
+# a stdio MCP server); the picture goes in the first message as an image.
+
+ASK_SECTIONS = ["Placements", "Campaign hooks"]
+MAP_TOOLS = ["mcp__fcm__point", "mcp__fcm__region", "mcp__fcm__overview"]
+
+ASK_SYSTEM_PROMPT = (
+    "You are a worldbuilding assistant for a fantasy climate simulator. You can query one map through the "
+    "tools point, region, and overview (read-only). You have no other tools and cannot ask questions. "
+    "Reply with Markdown only."
+)
+
+ASK_PROMPT = """Here is my question about my fantasy world map:
+
+<<<
+{question}
+>>>
+
+The map: {map_desc}
+{picture_note}
+Use the map tools to ground your answer: overview for the landmasses and mountain ranges, region for an area, point for an exact place. Check every place you choose with point before you place anything there.
+
+Reply in Markdown with exactly these two level-2 headings, in this order:
+## Placements
+## Campaign hooks
+
+Rules:
+1. Placements: a short explanation, then one fenced ```json block holding a list. Each item: {{"name": "...", "lat": number, "lon": number, "koppen": "...", "reasons": "..."}}.
+2. Every placement must be on land: the point tool must answer "is_land": true for its lat/lon.
+3. "koppen" must be exactly the code the point tool returns at that lat/lon.
+4. In "reasons", the only Köppen code you may write is that placement's own code, and every temperature must be in °C and must be a value the point tool returned there (monthly, warmest, coldest, annual mean) or a standard Köppen threshold (0, -3, 10, 18, 22 °C).
+5. Campaign hooks: 3 to 6 bullet points of tabletop adventure ideas that use these places and their climates.
+6. No preamble and no closing remarks.
+"""
+
+
+def map_description(d):
+    h = d.header
+    return (f"{d.w} × {d.h} cells, latitude {h['lat_top']}° to {h['lat_bottom']}°, longitude {h['lon_west']}° "
+            f"spanning {h['lon_span']}°, {'wraps east-west' if h['wraps'] else 'does not wrap'}, "
+            f"planet radius {h.get('radius_km', 6371)} km")
+
+
+def find_json_block(text):
+    """The first ```json fenced block's text, or None."""
+    m = re.search(r"```json\s*\n(.*?)```", text, re.DOTALL)
+    return m.group(1) if m else None
+
+
+def check_ask(text, lookup):
+    """[(check name, [failures])] for an --ask answer. lookup(lat, lon) →
+    the map query tool's point answer (raises ValueError outside the map)."""
+    failed = []
+    headings = split_sections(text)
+    missing = [f"missing section: ## {s}" for s in ASK_SECTIONS if s.lower() not in headings]
+    if missing:
+        failed.append(("sections", missing))
+    block = find_json_block(headings.get("placements", ""))
+    if block is None:
+        failed.append(("placements JSON", ["no ```json block under ## Placements"]))
+        return failed
+    try:
+        places = json.loads(block)
+    except ValueError as e:
+        failed.append(("placements JSON", [f"the JSON block doesn't parse: {e}"]))
+        return failed
+    shape = []
+    if not isinstance(places, list) or not places:
+        shape.append("the JSON block must be a non-empty list")
+        places = []
+    good = []
+    for n, p in enumerate(places, 1):
+        if not isinstance(p, dict):
+            shape.append(f"placement {n} is not an object")
+            continue
+        bad = [k for k in ("name", "koppen", "reasons") if not isinstance(p.get(k), str)]
+        bad += [k for k in ("lat", "lon") if not isinstance(p.get(k), (int, float)) or isinstance(p.get(k), bool)]
+        if bad:
+            shape.append(f"placement {n} ({p.get('name', '?')}): missing or wrong {', '.join(bad)}")
+        else:
+            good.append(p)
+    if shape:
+        failed.append(("placements JSON", shape))
+    land, climate = [], []
+    for p in good:
+        label = f"{p['name']} ({p['lat']}, {p['lon']})"
+        try:
+            cell = lookup(p["lat"], p["lon"])
+        except ValueError as e:
+            land.append(f"{label}: {e}")
+            continue
+        if not cell["is_land"]:
+            land.append(f"{label} is {cell['category']}, not land")
+            continue
+        code = cell["koppen"]["code"] if cell["koppen"] else None
+        if p["koppen"] != code:
+            climate.append(f"{label}: koppen {p['koppen']} claimed, the map says {code}")
+        wrong = sorted({c for c in koppen_codes_in(p["reasons"]) if c != code})
+        climate += [f"{label}: reasons mention Köppen {c}, the map says {code}" for c in wrong]
+        t = cell["temperature_c"]
+        allowed = list(t["monthly"]) + [t["warmest"], t["coldest"], t["annual_mean"]] + THRESHOLDS_C
+        if _FAHRENHEIT_RE.search(p["reasons"]):
+            climate.append(f"{label}: temperature in °F (only °C is allowed)")
+        bad_t = sorted({v for v in temperatures_in(p["reasons"]) if all(abs(v - a) > TEMP_TOLERANCE_C + 1e-9 for a in allowed)})
+        climate += [f"{label}: {v:g} °C is not in the map's data there or a Köppen threshold" for v in bad_t]
+    if land:
+        failed.append(("on land", land))
+    if climate:
+        failed.append(("climate matches the map", climate))
+    return failed
+
+
+def parse_stream(lines):
+    """Read claude's stream-json output. → {result, is_error, model,
+    mcp_ok, mcp_status, tool_uses: [{name, input}]}."""
+    out = {"result": None, "is_error": True, "model": None, "mcp_ok": False, "mcp_status": "no init message", "tool_uses": []}
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        if msg.get("type") == "system" and msg.get("subtype") == "init":
+            servers = {s.get("name"): s.get("status") for s in msg.get("mcp_servers", [])}
+            tools = set(msg.get("tools", []))
+            out["mcp_status"] = servers.get("fcm", "not loaded")
+            out["mcp_ok"] = all(t in tools for t in MAP_TOOLS)
+            out["model"] = msg.get("model")
+        elif msg.get("type") == "assistant":
+            for block in (msg.get("message") or {}).get("content") or []:
+                if block.get("type") == "tool_use":
+                    out["tool_uses"].append({"name": block.get("name"), "input": block.get("input")})
+        elif msg.get("type") == "result":
+            out["result"] = msg.get("result")
+            out["is_error"] = bool(msg.get("is_error"))
+            out["model"] = ", ".join((msg.get("modelUsage") or {}).keys()) or out["model"]
+    return out
+
+
+def make_map_ask(claude, data_path, model=None, picture=None):
+    """ask(prompt, log_path) → (answer text, model, info), running
+    `claude -p` with only the map query tool. info: {safe_mode,
+    tool_uses}. Tries --safe-mode first; if the map tool isn't loaded
+    under it, stops that run before any answer and runs without it."""
+    image = None
+    if picture:
+        with open(picture, "rb") as f:
+            image = base64.b64encode(f.read()).decode("ascii")
+
+    def run(prompt, log_path, safe_mode):
+        content = []
+        if image:
+            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image}})
+        content.append({"type": "text", "text": prompt})
+        message = json.dumps({"type": "user", "message": {"role": "user", "content": content}})
+        with tempfile.TemporaryDirectory(prefix="fcm-companion-") as cwd:
+            config = os.path.join(cwd, "mcp.json")
+            with open(config, "w", encoding="utf-8") as f:
+                json.dump({"mcpServers": {"fcm": {"type": "stdio", "command": sys.executable, "args": [
+                    "-B", os.path.join(os.path.dirname(os.path.abspath(__file__)), "mapquery.py"), "serve",
+                    os.path.abspath(data_path), "--log", os.path.abspath(log_path)]}}}, f)
+            cmd = [claude, "-p", "--tools", "", "--mcp-config", config, "--strict-mcp-config",
+                   "--allowedTools", ",".join(MAP_TOOLS), "--disable-slash-commands", "--no-session-persistence",
+                   "--permission-prompts", "none", "--input-format", "stream-json", "--output-format", "stream-json",
+                   "--verbose", "--system-prompt", ASK_SYSTEM_PROMPT]
+            if safe_mode:
+                cmd.append("--safe-mode")
+            if model:
+                cmd += ["--model", model]
+            env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+            proc = subprocess.run(cmd, input=message + "\n", capture_output=True, text=True, encoding="utf-8",
+                                  cwd=cwd, env=env, timeout=900)
+        info = parse_stream(proc.stdout.splitlines())
+        if proc.returncode != 0 and info["result"] is None:
+            raise RuntimeError(f"claude exited with {proc.returncode}: {(proc.stderr or proc.stdout).strip()[:800]}")
+        return info
+
+    def tool_loaded(info, log_path):
+        # At start-up a server can still be "pending", so a call actually
+        # made (by the model's account or the server's log) also counts.
+        return info["mcp_ok"] or any(u["name"] in MAP_TOOLS for u in info["tool_uses"]) or bool(read_calls(log_path))
+
+    def ask(prompt, log_path):
+        info = run(prompt, log_path, safe_mode=True)
+        safe = True
+        if not tool_loaded(info, log_path):
+            print(f"Map tool not loaded under --safe-mode (status: {info['mcp_status']}); running again without --safe-mode.")
+            info = run(prompt, log_path, safe_mode=False)
+            safe = False
+            if not tool_loaded(info, log_path):
+                raise RuntimeError(f"the map query tool didn't load (status: {info['mcp_status']})")
+        if info["is_error"] or info["result"] is None:
+            raise RuntimeError(f"claude reported an error: {str(info['result'])[:800]}")
+        return info["result"], info["model"] or model or "CLI default", {"safe_mode": safe, "tool_uses": info["tool_uses"]}
+    return ask
+
+
+def read_calls(path):
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def run_ask(question, d, ask, log_dir, picture_name=None, log=print):
+    """Ask, check, retry once. → (ok, answer, model, attempt, failed,
+    calls (the server's log, each with its attempt), info)."""
+    prompt = ASK_PROMPT.format(
+        question=question.strip(), map_desc=map_description(d),
+        picture_note=f"A picture of the map ({picture_name}, with latitude/longitude lines) is attached.\n" if picture_name else "")
+    lookup = lambda lat, lon: mapquery.point(d, lat, lon)  # noqa: E731
+    calls = []
+    attempt_prompt = prompt
+    for attempt in (1, 2):
+        path = os.path.join(log_dir, f"calls-{attempt}.jsonl")
+        if os.path.exists(path):
+            os.remove(path)  # this attempt's calls only
+        answer, model, info = ask(attempt_prompt, path)
+        calls += [{**c, "attempt": attempt} for c in read_calls(path)]
+        failed = check_ask(answer, lookup)
+        if not failed:
+            return True, answer, model, attempt, [], calls, info
+        if attempt == 1:
+            log("Attempt 1 failed these checks:\n" + failure_text(failed))
+            log("Retrying once with the failures sent back…")
+            attempt_prompt = RETRY.format(prompt=prompt, failures=failure_text(failed), reply=answer)
+    return False, answer, model, 2, failed, calls, info
+
+
+def ask_header(question_path, data_path, d, picture_name, model, claude_source, attempt, calls, info):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    counts = {}
+    for c in calls:
+        counts[c["tool"]] = counts.get(c["tool"], 0) + 1
+    tally = ", ".join(f"{t} ×{n}" for t, n in sorted(counts.items())) or "none"
+    return (
+        f"# Map companion: {os.path.basename(question_path)}\n\n"
+        f"- **Question:** {os.path.basename(question_path)}\n"
+        f"- **Map:** {os.path.basename(data_path)} ({map_description(d)})\n"
+        f"- **Picture:** {picture_name or 'none'}\n"
+        f"- **Generated:** {now} by Claude Code headless "
+        f"(`claude -p`, {claude_source}, safe mode {'on' if info.get('safe_mode') else 'off'}), model {model}\n"
+        f"- **Checks passed:** {', '.join(['sections', 'placements JSON', 'on land', 'climate matches the map'])} "
+        f"(attempt {attempt} of 2)\n"
+        f"- **Map tool calls:** {len(calls)} ({tally}); listed in answer.toolcalls.jsonl\n\n"
+        "*Written by tools/companion.py. The answer below is the model's; the checks above are the code's, "
+        "against tools/mapquery.py.*\n\n"
+        "---\n\n"
+    )
+
+
+def ask_main(args):
+    try:
+        with open(args.ask, encoding="utf-8") as f:
+            question = f.read()
+        d = mapquery.MapData.load(args.map)
+    except (OSError, ValueError) as e:
+        print(f"Can't read the question or map: {e}", file=sys.stderr)
+        return 2
+    if args.picture and not os.path.exists(args.picture):
+        print(f"No picture at {args.picture}", file=sys.stderr)
+        return 2
+    claude, source = find_claude(args.claude)
+    if not claude:
+        print("claude CLI not found. Install it (see tools/README.md) or pass --claude PATH.", file=sys.stderr)
+        return 2
+    picture_name = os.path.basename(args.picture) if args.picture else None
+    print(f"Question {args.ask}; map {args.map} ({d.w} × {d.h}); picture {picture_name or 'none'}")
+    print(f"Using claude from {source}: {claude}")
+    out_dir = args.out or os.path.dirname(os.path.abspath(args.ask))
+    os.makedirs(out_dir, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="fcm-calls-") as log_dir:
+        try:
+            ok, answer, model, attempt, failed, calls, info = run_ask(
+                question, d, make_map_ask(claude, args.map, args.model, args.picture), log_dir, picture_name)
+        except (OSError, RuntimeError, ValueError, KeyError, subprocess.TimeoutExpired) as e:
+            print(f"claude run failed: {e}", file=sys.stderr)
+            return 2
+    with open(os.path.join(out_dir, "answer.toolcalls.jsonl"), "w", encoding="utf-8", newline="\n") as f:
+        for c in calls:
+            f.write(json.dumps(c, ensure_ascii=False) + "\n")
+    print(f"Map tool calls: {len(calls)} (model reported {len(info['tool_uses'])} on the last attempt)")
+    if not ok:
+        raw = os.path.join(out_dir, "answer.raw.md")
+        with open(raw, "w", encoding="utf-8", newline="\n") as f:
+            f.write(answer)
+        print("Attempt 2 also failed these checks:\n" + failure_text(failed), file=sys.stderr)
+        print(f"Kept the raw answer in {raw}; answer.md was not written.", file=sys.stderr)
+        return 1
+    path = os.path.join(out_dir, "answer.md")
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(ask_header(args.ask, args.map, d, picture_name, model, source, attempt, calls, info) + answer.strip() + "\n")
+    print(f"All checks passed (attempt {attempt}). Wrote {path}")
+    return 0
+
+
 def main(argv=None):
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except AttributeError:
             pass
-    ap = argparse.ArgumentParser(description="Worldbuilding advice for one exported tile, via claude -p.")
-    ap.add_argument("tile", help="tile summary JSON exported by the app")
+    ap = argparse.ArgumentParser(description="Worldbuilding advice for one exported tile, or answers about a whole "
+                                             "map (--ask), via claude -p.")
+    ap.add_argument("tile", nargs="?", help="tile summary JSON exported by the app")
+    ap.add_argument("--ask", metavar="QUESTION_FILE", help="map mode: a text file with your question")
+    ap.add_argument("--map", metavar="DATA", help="map mode: the File > Export Map Data file")
+    ap.add_argument("--picture", metavar="PNG", help="map mode: the File > Export Map Picture file (optional)")
     ap.add_argument("--out", help="folder for advice.md (default: the JSON's folder)")
     ap.add_argument("--claude", help="path to the claude CLI (default: PATH, then the desktop app's copy)")
     ap.add_argument("--model", help="model alias or name (default: the CLI's default)")
     args = ap.parse_args(argv)
+    if args.ask or args.map or args.picture:
+        if not (args.ask and args.map) or args.tile:
+            print("Map mode needs --ask QUESTION_FILE and --map DATA, and no tile file.", file=sys.stderr)
+            return 2
+        return ask_main(args)
+    if not args.tile:
+        print("Give a tile summary JSON, or --ask QUESTION_FILE --map DATA.", file=sys.stderr)
+        return 2
 
     try:
         summary = load_summary(args.tile)

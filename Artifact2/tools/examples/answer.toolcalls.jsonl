@@ -1,0 +1,17 @@
+{"ts": "2026-10-25T20:48:09", "tool": "overview", "arguments": {}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:09", "tool": "point", "arguments": {"lat": 24, "lon": 10}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:09", "tool": "point", "arguments": {"lat": 23.5, "lon": 90}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:09", "tool": "point", "arguments": {"lat": 66, "lon": 130}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:10", "tool": "point", "arguments": {"lat": 46.5, "lon": 9}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:10", "tool": "point", "arguments": {"lat": 51.5, "lon": -1}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:11", "tool": "point", "arguments": {"lat": 47, "lon": 38}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:11", "tool": "point", "arguments": {"lat": -33.9, "lon": 18.8}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:18", "tool": "point", "arguments": {"lat": 22, "lon": 20}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:19", "tool": "point", "arguments": {"lat": 16, "lon": 104}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:19", "tool": "point", "arguments": {"lat": -41, "lon": 174.5}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:19", "tool": "point", "arguments": {"lat": 47, "lon": -2}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:20", "tool": "point", "arguments": {"lat": 48, "lon": 35}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:20", "tool": "point", "arguments": {"lat": 40, "lon": -100}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:23", "tool": "point", "arguments": {"lat": 26, "lon": 15}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:23", "tool": "point", "arguments": {"lat": 50, "lon": 50}, "ok": true, "attempt": 1}
+{"ts": "2026-10-25T20:48:24", "tool": "point", "arguments": {"lat": 40, "lon": -92}, "ok": true, "attempt": 1}

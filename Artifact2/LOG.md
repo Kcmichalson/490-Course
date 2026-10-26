@@ -4837,8 +4837,10 @@ Your request (Session 11 Prompt 9); plan: plans/companion-chat-plan.md.
 Hard stop 22:30 (demo video); unfinished parts carry to a later session.
 
 **Status**
-- D1 place display: **done**, awaiting your by-eye check.
-- D2 bridge in serve.py: not started.
+- D1 place display: **done**; your by-eye check passed and you committed
+  it.
+- D2 bridge in serve.py: **done** (tested with the stand-in), awaiting
+  your check.
 - D3 wiring: not started.
 - Future steps (from the plan): the rainfall check (Climate inputs
   Phase C) and checking climate claims in prose.
@@ -4888,6 +4890,80 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
   - The panel sits top-left, clear of the overlay control and legend. No
     console errors.
 - The by-eye check at about 1280 px is yours.
+
+### D2: the bridge (serve.py + tools/bridge.py)
+
+**Changed**
+- tools/bridge.py (new, standard library only): `Bridge` with the POST
+  endpoints `token`, `map`, `chat`, `cancel` under /companion/.
+  - `check` runs before the body is read:
+    - POST only
+    - Host exactly `127.0.0.1:<port>`, Origin exactly
+      `http://127.0.0.1:<port>`
+    - the token (compared with `secrets.compare_digest`) on everything
+      but `token`
+    - Content-Length up to 256 KB, or 64 MB for the map
+  - chat:
+    - the request shape, then messages of at most 4,000 characters, a
+      map uploaded, and the lock (409 "busy")
+    - the last 12 messages are resent
+    - `claude -p` runs through `Popen`, so cancel can kill it
+    - "Not logged in" maps to `not_logged_in`; any other failure to
+      `run_failed`
+    - places are checked with `check_chat_places`; the map-tool calls are
+      counted from the server's log
+  - The map is stored in `tempfile.mkdtemp(prefix="fcm-bridge-")`.
+    `close()` deletes it; serve.py calls it on Ctrl+C and with `atexit`.
+  - The request log is `tool-log/bridge-YYYY-MM-DD.jsonl` (time, path,
+    status, error code, size; no text). It's untracked under
+    `tool-log/*.jsonl`.
+- tools/companion.py:
+  - `write_mcp_config`, `map_command`, and `child_env` are factored out
+    of `make_map_ask`; `--ask` builds the same command. The 19 `--ask`
+    tests, which capture the command line, pass unchanged.
+  - New `check_chat_places`: radius 25–1,000, on land, and Köppen and °C
+    values in paragraphs naming the place. A paragraph naming two places
+    passes a value that matches either one.
+- serve.py:
+  - `make_server(port)` attaches the bridge.
+  - `do_POST` and `do_GET` route /companion/ (GET is refused); other
+    POSTs get 405.
+  - No CORS headers are sent anywhere.
+  - `sys.dont_write_bytecode`, so importing tools/ makes no
+    `__pycache__`.
+- tools/fake_claude.py (the stand-in) and tools/test_bridge.py (13
+  tests).
+- SPEC §15: the bridge recorded as a deliberate local-only exception.
+
+**Problems**
+- My test helper read every response as JSON, including index.html.
+  Fixed in the test: it parses JSON only when the response is JSON.
+- **Rule break (mine):** one command printed the time and listed tools/
+  (two purposes). Both are read-only.
+
+**Verification checks**
+- Python 68/68 (bridge 13).
+- Security tests:
+  - wrong, missing, and `localhost` Origin
+  - a wrong Host, including a DNS-rebinding name
+  - a missing or wrong token
+  - GET refused
+  - no CORS headers on bridge or static replies
+  - the token differs per server start
+  - an oversized message (413 too_long) and an oversized body (413)
+  - busy while a run is going, then cancel ending it
+- Also tested:
+  - not logged in
+  - the history limited to the last 12 messages
+  - the restricted command line, with no `--safe-mode`
+  - places passed and flagged with exact reasons
+  - the temp folder inside the OS temp folder, removed on close
+  - every request logged, without the message text
+- Node 271/271.
+- The real serve.py restarted. From the page at http://127.0.0.1:8000,
+  the browser's own POST got the token (43 characters), and a tokened
+  chat answered 409 `no_map`. From http://localhost:8000 the same call
+  got 403 `bad_host`, as designed.
 
 ---
 
@@ -5018,6 +5094,21 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
   - The LOG entry, a by-eye check, and a commit message.
 * **Where the Model Misread Me:**  
   Not a misreading: my first in-app probe ran before the page's module had loaded and found no panel. The second probe, with no code change, found it.
+
+### Prompt 11
+* **User Prompt:**  
+  > *"D1 passes my by-eye check and is committed. Start D2."*
+* **What the AI Provided:**  
+  - D2: the bridge, the stand-in, 13 tests, and the SPEC §15 exception.
+  - Restarted the dev server and checked it from the page.
+  - The LOG entry, a check, and a commit message.
+* **Where the Model Misread Me:**  
+  - A test-helper bug of mine (described in the D2 entry).
+  - **Rule break (mine):** a two-purpose read-only command (the time plus a folder listing).
+* **How It Was Verified:**  
+  - Python 68/68; Node 271/271.
+  - The token and no_map from the real page.
+  - The tool log has every call.
 * **How It Was Verified:**  
   - Node 271/271.
   - The paste-and-click check in the app.

@@ -462,6 +462,86 @@ def parse_stream(lines):
     return out
 
 
+def write_mcp_config(folder, data_path, log_path):
+    """An MCP config naming only the map query server; → its path."""
+    config = os.path.join(folder, "mcp.json")
+    with open(config, "w", encoding="utf-8") as f:
+        json.dump({"mcpServers": {"fcm": {"type": "stdio", "command": sys.executable, "args": [
+            "-B", os.path.join(os.path.dirname(os.path.abspath(__file__)), "mapquery.py"), "serve",
+            os.path.abspath(data_path), "--log", os.path.abspath(log_path)]}}}, f)
+    return config
+
+
+def map_command(claude, config, safe_mode, model, system_prompt):
+    """The restricted claude -p command: no built-in tools, only the three
+    map tools, nothing that could prompt, nothing saved. claude is a path
+    or a command list (a test stand-in)."""
+    cmd = [*([claude] if isinstance(claude, str) else claude), "-p", "--tools", "", "--mcp-config", config,
+           "--strict-mcp-config", "--allowedTools", ",".join(MAP_TOOLS), "--disable-slash-commands",
+           "--no-session-persistence", "--permission-prompts", "none", "--input-format", "stream-json",
+           "--output-format", "stream-json", "--verbose", "--system-prompt", system_prompt]
+    if safe_mode:
+        cmd.append("--safe-mode")
+    if model:
+        cmd += ["--model", model]
+    return cmd
+
+
+def child_env():
+    # Never fall back to API-key billing: the signed-in subscription only.
+    return {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+
+
+def check_chat_places(reply, lookup):
+    """Live chat (step D): the places in a reply's ```json list, each
+    {name, lat, lon, radius_km, flagged, flags}. Flags: radius outside
+    25–1,000 km; not on land; a Köppen code or °C value, in a paragraph
+    naming the place, that matches none of the places that paragraph
+    names (the map's cell values or a Köppen threshold)."""
+    places = []
+    for m in re.finditer(r"```json\s*\n(.*?)```", reply, re.DOTALL):
+        try:
+            items = json.loads(m.group(1))
+        except ValueError:
+            continue
+        for p in items if isinstance(items, list) else []:
+            if isinstance(p, dict) and isinstance(p.get("lat"), (int, float)) and isinstance(p.get("lon"), (int, float)):
+                places.append({"name": str(p.get("name") or "Unnamed place"), "lat": p["lat"], "lon": p["lon"],
+                               "radius_km": p.get("radius_km"), "flags": []})
+    cells = {}
+    for p in places:
+        r = p["radius_km"]
+        if not isinstance(r, (int, float)) or not 25 <= r <= 1000:
+            p["flags"].append("radius_km must be 25–1,000")
+        try:
+            cells[id(p)] = cell = lookup(p["lat"], p["lon"])
+        except ValueError as e:
+            p["flags"].append(str(e))
+            continue
+        if not cell["is_land"]:
+            p["flags"].append(f"not on land ({cell['category']})")
+    text = re.sub(r"```json\s*\n.*?```", "", reply, flags=re.DOTALL)
+    for para in re.split(r"\n\s*\n", text):
+        named = [p for p in places if p["name"].lower() in para.lower() and id(p) in cells]
+        if not named:
+            continue
+        codes = {(cells[id(p)]["koppen"] or {}).get("code") for p in named}
+        allowed = list(THRESHOLDS_C)
+        for p in named:
+            t = cells[id(p)]["temperature_c"]
+            allowed += list(t["monthly"]) + [t["warmest"], t["coldest"], t["annual_mean"]]
+        bad_codes = sorted({c for c in koppen_codes_in(para) if c not in codes})
+        bad_temps = sorted({v for v in temperatures_in(para) if all(abs(v - a) > TEMP_TOLERANCE_C + 1e-9 for a in allowed)})
+        for p in named:
+            p["flags"] += [f"Köppen {c} stated, the map says {(cells[id(p)]['koppen'] or {}).get('code')}" for c in bad_codes]
+            p["flags"] += [f"{v:g} °C is not in the map's data there" for v in bad_temps]
+            if _FAHRENHEIT_RE.search(para):
+                p["flags"].append("temperature in °F")
+    for p in places:
+        p["flagged"] = bool(p["flags"])
+    return places
+
+
 def make_map_ask(claude, data_path, model=None, picture=None):
     """ask(prompt, log_path) → (answer text, model, info), running
     `claude -p` with only the map query tool. info: {safe_mode,
@@ -479,22 +559,9 @@ def make_map_ask(claude, data_path, model=None, picture=None):
         content.append({"type": "text", "text": prompt})
         message = json.dumps({"type": "user", "message": {"role": "user", "content": content}})
         with tempfile.TemporaryDirectory(prefix="fcm-companion-") as cwd:
-            config = os.path.join(cwd, "mcp.json")
-            with open(config, "w", encoding="utf-8") as f:
-                json.dump({"mcpServers": {"fcm": {"type": "stdio", "command": sys.executable, "args": [
-                    "-B", os.path.join(os.path.dirname(os.path.abspath(__file__)), "mapquery.py"), "serve",
-                    os.path.abspath(data_path), "--log", os.path.abspath(log_path)]}}}, f)
-            cmd = [claude, "-p", "--tools", "", "--mcp-config", config, "--strict-mcp-config",
-                   "--allowedTools", ",".join(MAP_TOOLS), "--disable-slash-commands", "--no-session-persistence",
-                   "--permission-prompts", "none", "--input-format", "stream-json", "--output-format", "stream-json",
-                   "--verbose", "--system-prompt", ASK_SYSTEM_PROMPT]
-            if safe_mode:
-                cmd.append("--safe-mode")
-            if model:
-                cmd += ["--model", model]
-            env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+            cmd = map_command(claude, write_mcp_config(cwd, data_path, log_path), safe_mode, model, ASK_SYSTEM_PROMPT)
             proc = subprocess.run(cmd, input=message + "\n", capture_output=True, text=True, encoding="utf-8",
-                                  cwd=cwd, env=env, timeout=900)
+                                  cwd=cwd, env=child_env(), timeout=900)
         info = parse_stream(proc.stdout.splitlines())
         if proc.returncode != 0 and info["result"] is None:
             raise RuntimeError(f"claude exited with {proc.returncode}: {(proc.stderr or proc.stdout).strip()[:800]}")

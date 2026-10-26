@@ -975,6 +975,20 @@ Last-used settings, bookmarks, and palettes persist in localStorage.
 - Fully client-side: no backend, no accounts, no uploads. Imported maps stay
   on the user's machine in both versions.
 - The app works offline once loaded locally (no CDN or network dependencies).
+- **Deliberate local-only exception (Session 11, step D): the companion
+  chat bridge.** `py serve.py` also answers POST requests under
+  `/companion/` (tools/bridge.py), so the in-app chat can run `claude -p`
+  on this computer.
+  - It exists only on the local server. GitHub Pages has no bridge, and
+    the chat panel says "Chat needs the local server (py serve.py)".
+  - Security: bound to 127.0.0.1; exact Host and Origin
+    (`127.0.0.1:8000`); a per-start random token on every request; no
+    CORS headers; one model run at a time; size limits; every request
+    logged (metadata only) to tool-log/bridge-*.jsonl.
+  - The uploaded map stays in the OS temp folder and is deleted when the
+    server exits.
+  - The model gets only the three read-only map tools (as `companion.py
+    --ask`).
 - Pushing to main redeploys the site, so only push when the app runs.
 
 ## 16. Out of scope for v1 (future ideas)

@@ -4839,9 +4839,10 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
 **Status**
 - D1 place display: **done**; your by-eye check passed and you committed
   it.
-- D2 bridge in serve.py: **done** (tested with the stand-in), awaiting
-  your check.
-- D3 wiring: not started.
+- D2 bridge in serve.py: **done**; your checks passed and you committed
+  it.
+- D3 wiring: **done** with the stand-in; **in progress until your first
+  real `claude -p` chat** (I can't run the real claude from my session).
 - Future steps (from the plan): the rainfall check (Climate inputs
   Phase C) and checking climate claims in prose.
 
@@ -4964,6 +4965,61 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
   the browser's own POST got the token (43 characters), and a tokened
   chat answered 409 `no_map`. From http://localhost:8000 the same call
   got 403 `bad_host`, as designed.
+
+### D3: wiring
+
+**Changed**
+- src/ui/chatclient.js (new):
+  - `isCompanionOrigin`: only http://127.0.0.1:8000 may chat.
+  - `errorText`: server not running, not logged in, busy, run failed,
+    cancelled, no claude, map not ready, too long.
+  - `createBridgeClient`: the token is fetched once and sent on every
+    request, with one new token if the server restarted (`bad_token`);
+    fetch failures map to `offline` and aborts to `cancelled`.
+  - `recentHistory`: the last 12 messages.
+- src/ui/chatpanel.js: a "Thinking…" or "Sending the map…" row with
+  Cancel, error messages in the warning color, the map-tool call count
+  under each reply, and `disable(note)`.
+- src/main.js:
+  - Export Map Data split into `buildMapData` (bytes) and the download.
+    The export behaves the same; `mapDataReady` and `mapDataKey` were
+    added.
+  - `sendChat`:
+    - uploads the map when its key changed, then posts the last 12
+      messages
+    - if the bridge says `no_map` (the server restarted), re-uploads once
+      and retries
+    - Cancel posts `/companion/cancel` and aborts the fetch
+    - a failed message isn't resent in the history
+  - Not on 127.0.0.1:8000: the panel shows "Chat needs the local server
+    (py serve.py), opened at http://127.0.0.1:8000." and the input and
+    Send are disabled.
+- tests/chatclient.test.js (6 tests); a tools/README.md section.
+
+**Problems**
+- My first in-app trial gave the stand-in a relative path. The run's
+  working folder is an empty temp folder, so the stand-in wasn't found.
+  That was my test setup, not app code, and it showed the "run failed"
+  message working.
+- Restarting the stand-in server then exposed a real gap: the page
+  believed its map was still uploaded, but a restarted server has none.
+  I fixed the code: on `no_map`, it re-uploads once and retries.
+
+**Verification checks**
+- Node 277/277; Python 68/68.
+- In the app at http://127.0.0.1:8000, with serve.py's own
+  `make_server` and the stand-in claude, running from the scratchpad (no
+  repo change):
+  - Sending before Köppen had run: "Open Köppen mode (Q) once…".
+  - After Köppen: "Sending the map…", then "Thinking…", then the reply
+    text, a "⚠ Lutetia" chip flagged "not on land (Ocean)" (correct on
+    the blank map), and "Map tool calls: 0".
+  - With the server stopped: "The local server isn't running…".
+  - At http://localhost:8000: the local-server note, with the input and
+    Send disabled.
+- Not checked by me: a real claude reply, real map-tool calls through the
+  bridge, and Cancel during a real run. Cancel during a run is covered by
+  the bridge test with the stand-in. The real-claude steps are yours.
 
 ---
 
@@ -5108,6 +5164,22 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
 * **How It Was Verified:**  
   - Python 68/68; Node 271/271.
   - The token and no_map from the real page.
+  - The tool log has every call.
+
+### Prompt 12
+* **User Prompt:**  
+  > *"D2 checks pass and D2 is committed. Start D3."*
+* **What the AI Provided:**  
+  - D3: the client, the panel states, and the main.js wiring.
+  - 6 Node tests and a README section.
+  - Checked in the app with the stand-in claude.
+  - The LOG entry, real-claude steps, a by-eye check, a demo script, and a commit message.
+* **Where the Model Misread Me:**  
+  - My own setup slip (a relative path for the stand-in).
+  - The re-upload gap found and fixed in code (both in the D3 entry).
+* **How It Was Verified:**  
+  - Node 277/277; Python 68/68.
+  - The in-app stand-in trials listed in the D3 entry.
   - The tool log has every call.
 * **How It Was Verified:**  
   - Node 271/271.

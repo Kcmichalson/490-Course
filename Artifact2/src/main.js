@@ -65,6 +65,9 @@ import { tileSummary, summaryFileName } from './io/tilesummary.js';
 import { encodeMapData, mapDataFileName, MAP_DATA_LAYERS, KOPPEN_WATER } from './io/mapdata.js';
 import { createChatPanel } from './ui/chatpanel.js';
 import { placeEllipse, placeScale } from './ui/places.js';
+import {
+  createBridgeClient, errorText, isCompanionOrigin, recentHistory, LOCAL_ONLY_NOTE,
+} from './ui/chatclient.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -547,15 +550,33 @@ function downloadBlob(blob, name) {
 // Köppen's land-only rain weights, the current wind). No new sim logic.
 async function exportMapData() {
   if (!worker) return;
-  const c = store.climate;
-  const req = climateRequest();
-  const hydro = c?.thermal && req.thermalKey ? hydros.get(req.thermalKey) : null;
-  const ctx = hydro ? koppenCtx(state.map, store.terrain, { ...c, hydro }) : null;
-  if (!ctx) {
+  if (!mapDataReady()) {
     contextbar.flash('Open Köppen mode (Q) once to compute rainfall, then export again.', 6000);
     return;
   }
   contextbar.flash('Exporting map data…', 60000);
+  const { gz, name } = await buildMapData();
+  downloadBlob(gz, name);
+  contextbar.flash(`Exported ${name} (${(gz.size / 1e6).toFixed(1)} MB)`);
+}
+
+// Export Map Data's inputs exist: the 12-month rain for the current
+// terrain and planet (a Köppen or precipitation mode ran it).
+function mapDataKoppenCtx() {
+  const c = store.climate;
+  const req = climateRequest();
+  const hydro = c?.thermal && req.thermalKey ? hydros.get(req.thermalKey) : null;
+  return hydro ? koppenCtx(state.map, store.terrain, { ...c, hydro }) : null;
+}
+const mapDataReady = () => Boolean(worker && mapDataKoppenCtx());
+// Changes whenever the map data would (terrain, planet, grid).
+const mapDataKey = () => `${store.version}|${climateRequest().thermalKey}`;
+
+// The Export Map Data file as a gzip Blob: { gz, name }. Callers check
+// mapDataReady() first.
+async function buildMapData() {
+  const ctx = mapDataKoppenCtx();
+  const req = climateRequest();
   const { months } = await worker.request('rainMonths', { hydroKey: req.thermalKey });
   await new Promise((r) => setTimeout(r, 30)); // let the message paint
   const map = state.map;
@@ -614,9 +635,7 @@ async function exportMapData() {
   };
   const bytes = encodeMapData(header, values);
   const gz = await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
-  const name = mapDataFileName(W, H);
-  downloadBlob(gz, name);
-  contextbar.flash(`Exported ${name} (${(gz.size / 1e6).toFixed(1)} MB)`);
+  return { gz, name: mapDataFileName(W, H) };
 }
 
 // Export Map Picture: the current mode at up to 2048 px wide, with the
@@ -1402,9 +1421,68 @@ const chatPanel = createChatPanel($('chat-panel'), {
   onShowPlace: showPlace,
   onClearPlace: () => { chatPlace = null; requestDraw(); },
 });
+// Sending (D3): only from http://127.0.0.1:8000, where serve.py's bridge
+// lives. The map goes up with the first message, and again only when it
+// changed; the last 6 exchanges are resent each turn.
+const chatHistory = [];
+const bridgeClient = createBridgeClient();
+let uploadedMapKey = null;
+let chatAbort = null;
+if (!isCompanionOrigin(location.origin)) chatPanel.disable(LOCAL_ONLY_NOTE);
+
+async function sendChat(text) {
+  chatPanel.addMessage('user', text);
+  chatHistory.push({ role: 'user', text });
+  chatPanel.setSending(true);
+  chatAbort = new AbortController();
+  const signal = chatAbort.signal;
+  const ensureMap = async () => {
+    if (uploadedMapKey === mapDataKey()) return;
+    if (!mapDataReady()) throw { code: 'no_map_data' };
+    chatPanel.setThinking(true, 'Sending the map…');
+    const key = mapDataKey();
+    const { gz } = await buildMapData();
+    await bridgeClient.post('/companion/map', gz, signal);
+    uploadedMapKey = key;
+  };
+  const ask = () => {
+    chatPanel.setThinking(true, 'Thinking…');
+    return bridgeClient.post('/companion/chat', JSON.stringify({ messages: recentHistory(chatHistory) }), signal);
+  };
+  try {
+    await ensureMap();
+    let r;
+    try {
+      r = await ask();
+    } catch (err) {
+      if (err?.code !== 'no_map') throw err;
+      uploadedMapKey = null; // the server restarted and lost the map: send it once more
+      await ensureMap();
+      r = await ask();
+    }
+    chatHistory.push({ role: 'assistant', text: r.reply });
+    chatPanel.addReply(r.reply, { places: r.places, toolCalls: r.tool_calls });
+  } catch (err) {
+    chatHistory.pop(); // an unanswered message isn't resent
+    chatPanel.addError(errorText(err?.code, err?.message));
+  } finally {
+    chatAbort = null;
+    chatPanel.setThinking(false);
+    chatPanel.setSending(false);
+    chatPanel.input.focus();
+  }
+}
+
 chatPanel.form.addEventListener('submit', (e) => {
   e.preventDefault();
-  chatPanel.setNote('Sending arrives with the local bridge (step D3). For now, use "Paste sample reply".');
+  const text = chatPanel.input.value.trim();
+  if (!text || chatAbort || !isCompanionOrigin(location.origin)) return;
+  chatPanel.input.value = '';
+  sendChat(text);
+});
+chatPanel.cancel.addEventListener('click', () => {
+  bridgeClient.post('/companion/cancel', '{}').catch(() => {});
+  chatAbort?.abort();
 });
 
 // Center of the screen as a bookmark-able view.

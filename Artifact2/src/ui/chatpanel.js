@@ -61,7 +61,17 @@ export function createChatPanel(root, { onShowPlace, onClearPlace }) {
   send.textContent = 'Send';
   form.append(input, send);
 
-  body.append(list, note, paste, form);
+  const thinking = document.createElement('div');
+  thinking.className = 'chat-thinking';
+  thinking.hidden = true;
+  const thinkingText = document.createElement('span');
+  thinkingText.textContent = 'Thinking…';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel';
+  thinking.append(thinkingText, cancel);
+
+  body.append(list, thinking, note, paste, form);
   root.append(head, body);
 
   const setOpen = (open) => {
@@ -130,10 +140,18 @@ export function createChatPanel(root, { onShowPlace, onClearPlace }) {
     pasteBox.value = '';
   });
 
+  function addError(text) {
+    const item = addMessage('assistant', text);
+    item.classList.add('chat-failed');
+    return item;
+  }
+
   return {
-    element: root, form, input, send, list, note,
-    setOpen, addMessage, addReply,
+    element: root, form, input, send, list, note, cancel,
+    setOpen, addMessage, addReply, addError,
     setNote(text) { note.textContent = text; note.hidden = !text; },
     setSending(on) { input.disabled = on; send.disabled = on; },
+    setThinking(on, text = 'Thinking…') { thinking.hidden = !on; thinkingText.textContent = text; },
+    disable(text) { input.disabled = true; send.disabled = true; note.textContent = text; },
   };
 }

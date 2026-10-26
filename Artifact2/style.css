@@ -248,6 +248,9 @@ select:disabled { opacity: 0.45; }
 .chat-chip { padding: 1px 8px; border-radius: 999px; border-color: var(--place-line); }
 .chat-chip.is-flagged { border-color: var(--place-flagged); color: var(--place-flagged); }
 .chat-error { color: var(--warning); margin-top: 4px; }
+.chat-failed .chat-text { color: var(--warning); }
+.chat-thinking { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.chat-thinking[hidden] { display: none; }
 .chat-note { margin: 0; }
 .chat-note:empty { display: none; }
 .chat-paste summary { cursor: pointer; color: var(--muted); }

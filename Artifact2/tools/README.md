@@ -260,6 +260,34 @@ tile mode.
 Tests (canned answers and streams, no model):
 `py -B -m unittest tools/test_companion_ask.py`
 
+## Live chat in the app (step D, local only)
+
+`py serve.py` also runs a small bridge (`bridge.py`) under `/companion/`.
+The **Companion** panel at the top-left of the map uses it to chat with
+Claude about the current map.
+
+- **Each message** runs `claude -p` with the same restrictions as
+  `--ask`: no built-in tools and only the three read-only map tools. It
+  runs without `--safe-mode`, because the map tool doesn't load under it.
+- **History:** the last 6 exchanges are resent each turn.
+- **Places:** the reply's places come back with chips. Flagged places
+  keep their chip, with a ⚠ and the reasons.
+- **The map** is sent to the bridge once (again only if it changes). It
+  stays in the OS temp folder and is deleted when the server stops.
+- **Security:**
+  - The bridge answers only `http://127.0.0.1:8000`: exact Host and
+    Origin.
+  - A random token per server start.
+  - No CORS headers.
+  - One run at a time.
+  - Size limits.
+  - A metadata-only request log in `tool-log/bridge-*.jsonl`.
+- **Where it works:** on GitHub Pages, or any address other than
+  `http://127.0.0.1:8000`, the panel says it needs the local server and
+  sends nothing.
+- **Tests:** `py -B -m unittest tools/test_bridge.py` uses the stand-in
+  `fake_claude.py`, so no model is called.
+
 ## Example
 
 [examples/](examples/) has a real pair from the first run (2026-10-25):

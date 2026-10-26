@@ -26,6 +26,9 @@ const VARIABLES = {
   boundarySnow: '--boundary-snow',
   boundaryPermafrost: '--boundary-permafrost',
   boundaryHalo: '--boundary-halo',
+  placeLine: '--place-line',
+  placeFill: '--place-fill',
+  placeFlagged: '--place-flagged',
 };
 
 export function readTheme(el = document.documentElement) {

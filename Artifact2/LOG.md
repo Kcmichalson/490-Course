@@ -4831,6 +4831,66 @@ Hard stop 23:00.
 
 ---
 
+## 2026-10-25 — Step D: live companion chat panel (local only; in progress)
+
+Your request (Session 11 Prompt 9); plan: plans/companion-chat-plan.md.
+Hard stop 22:30 (demo video); unfinished parts carry to a later session.
+
+**Status**
+- D1 place display: **done**, awaiting your by-eye check.
+- D2 bridge in serve.py: not started.
+- D3 wiring: not started.
+- Future steps (from the plan): the rainfall check (Climate inputs
+  Phase C) and checking climate claims in prose.
+
+### D1: place display
+
+**Changed**
+- src/ui/places.js (new, pure):
+  - `parsePlaces`: fenced ```json lists; a place with a bad radius is
+    kept, flagged, and clamped; a place without a usable lat/lon is
+    reported, not drawn.
+  - `placeEllipse`: km to source px, wider east-west by 1/cos(lat), via
+    coords.js `latLonToPixel`.
+  - `placeScale`: the circle fills about 40% of the view, within the zoom
+    limits.
+- src/ui/chatpanel.js (new): the collapsible top-left panel.
+  - A message list with place chips; a flagged chip shows ⚠ in the
+    warning color, with its reasons in the tooltip.
+  - "Clear highlight", and a "Paste sample reply" box.
+  - The input and Send are present, but sending says it arrives in D3.
+  - Nothing is persisted.
+- src/render/mapview.js: `draw` takes `places` and `drawPlace` draws the
+  ellipse, marker, and label in screen space (dashed and in the warning
+  color when flagged). `picture()` never draws them, so Export Map
+  Picture leaves them out.
+- src/main.js:
+  - `showPlace` (centers and zooms with the existing `zoomToScale` and
+    `centerOn`; a place outside the map gets a message).
+  - `chatPlace` is view state only: not saved, not in undo.
+  - The panel is added to `reservedRects()`, so graticule labels avoid
+    it.
+- style.css: `--place-line`, `--place-fill`, `--place-flagged` in `:root`
+  and the panel's styles (theme variables only); theme.js reads the three
+  colors. index.html: `#chat-panel`.
+- tests/places.test.js (4 tests).
+
+**Verification checks**
+- Node 271/271.
+- In the app (preview pane, 800 px wide): I pasted a sample reply with 3
+  places.
+  - The text showed without the JSON block.
+  - There were 3 chips, the 5 km one flagged with "radius_km must be
+    25–1,000".
+  - Clicking Frostwardens (66°N 130°E, 300 km) centered and zoomed the
+    map and drew a wide ellipse, a marker, and the label; "Clear
+    highlight" appeared.
+  - The panel sits top-left, clear of the overlay control and legend. No
+    console errors.
+- The by-eye check at about 1280 px is yours.
+
+---
+
 ## 2026-10-25 — Session 11 prompt log (Artifact 3: climate companion)
 
 ### Prompt 1
@@ -4941,6 +5001,26 @@ Hard stop 23:00.
   - Your run's checks (attempt 1).
   - My comparison of the 7 placements with the server's call log.
   - Python 55/55 and Node 267/267, rerun this turn.
+  - The tool log has every call.
+
+### Prompt 9 (step D: live companion chat)
+* **User Prompt:**  
+  > *[Step C is committed. New step D: a live companion chat panel, local only. Hard stop 10:30 PM (wrap up: tests passing, LOG and prompt log, unfinished parts in progress, a commit message), for a demo video. The rainfall check stays a later item; add it to the plan's future steps. Plan first. (1) A local bridge in serve.py, recorded in SPEC and LOG as a deliberate local-only exception, endpoints under /companion/ only: bound to 127.0.0.1; exact Origin http://127.0.0.1:8000 and Host 127.0.0.1:8000; a random per-start token fetched same-origin and sent on every request; one run at a time ("busy"); a message size limit; no CORS headers; every request logged to tool-log/. (2) The app sends the map data once per session; stored in the OS temp folder, deleted on exit. (3) Each message runs claude -p with --ask's restrictions, no --safe-mode; history resent, last N turns (propose N); places as a JSON list {name, lat, lon, radius_km 25–1,000}, checked (on land; Köppen and °C match); return text, places passed or flagged, and the map-tool call count. (4) A collapsible panel: messages, input, "thinking…" with cancel, errors (server not running, not logged in, busy, run failed); clickable place chips that pan, zoom, highlight, and mark; flagged chips warned; "Chat needs the local server (py serve.py)" when not on 127.0.0.1:8000. (5) Display only; markers left out of Export Map Picture. Build order: place display (paste a sample reply), the bridge with a fake claude, the real wiring. Tests: Node for parsing and place logic; Python for the bridge's security checks. At the end: real-claude steps (cmd.exe), a by-eye check at ~1280 px, a demo script, a commit message.]*
+* **What the AI Provided:**  
+  The plan in chat (the ~/.claude plan file is blocked), with 6 ambiguities and D3 marked as likely unfinished by 22:20.
+
+### Prompt 10 (my reply to the plan-approval prompt)
+* **User Prompt:**  
+  > *"Approved as written. Save the plan to plans/companion-chat-plan.md and start D1. Keep the by-eye check and a commit message after each of D1, D2, and D3 so I can commit each part separately. If you reach 22:20, wrap up as planned; I'll continue in a later session."*
+* **What the AI Provided:**  
+  - Saved the plan.
+  - Built D1 and checked it in the app.
+  - The LOG entry, a by-eye check, and a commit message.
+* **Where the Model Misread Me:**  
+  Not a misreading: my first in-app probe ran before the page's module had loaded and found no panel. The second probe, with no code change, found it.
+* **How It Was Verified:**  
+  - Node 271/271.
+  - The paste-and-click check in the app.
   - The tool log has every call.
 * **How It Was Verified:**  
   - Python 55/55; Node 267/267.

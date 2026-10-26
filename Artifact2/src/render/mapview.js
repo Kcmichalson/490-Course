@@ -180,7 +180,9 @@ export class MapView {
   // overlay labels avoid.
   // brush: { x, y, radius } in source px (Sculpt tool cursor), or null.
   // planet: the planet settings (tropics/polar circles follow the tilt).
-  draw({ map, view, mode, store, overlays, selected, reserved = [], brush = null, planet = null }) {
+  // places: companion chat highlights [{ x, y, rx, ry (source px), name,
+  // flagged }] — screen-space only, never in picture().
+  draw({ map, view, mode, store, overlays, selected, reserved = [], brush = null, planet = null, places = [] }) {
     const { ctx, dpr, theme, cssWidth: viewW, cssHeight: viewH } = this;
     const reliefOn = Boolean(overlays['shaded-relief']);
     this.ensureBase(map, mode, store, reliefOn);
@@ -232,7 +234,49 @@ export class MapView {
       if (overlays[id]) drawOverlay(ctx, env);
     }
     if (selected) this.drawSelection(env, selected);
+    for (const p of places) this.drawPlace(env, p);
     if (brush) this.drawBrush(env, brush);
+  }
+
+  // A companion chat place: its highlight circle (an ellipse on this
+  // projection) and a small labeled marker, on every visible wrapped copy.
+  drawPlace({ map, view, viewW, theme }, p) {
+    const { ctx } = this;
+    const mapW = map.sourceWidth * view.scale;
+    const y = view.offsetY + p.y * view.scale;
+    const color = p.flagged ? theme.placeFlagged : theme.placeLine;
+    ctx.save();
+    ctx.font = '12px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    for (const k of visibleCopies(view, map.sourceWidth, viewW, map.wraps)) {
+      const x = view.offsetX + k * mapW + p.x * view.scale;
+      ctx.beginPath();
+      ctx.ellipse(x, y, Math.max(3, p.rx * view.scale), Math.max(3, p.ry * view.scale), 0, 0, Math.PI * 2);
+      ctx.fillStyle = theme.placeFill;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = theme.labelHalo;
+      ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash(p.flagged ? [6, 4] : []);
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = theme.labelHalo;
+      ctx.stroke();
+      const label = p.flagged ? `⚠ ${p.name}` : p.name;
+      ctx.lineWidth = 3;
+      ctx.strokeText(label, x + 8, y);
+      ctx.fillStyle = color;
+      ctx.fillText(label, x + 8, y);
+    }
+    ctx.restore();
   }
 
   // The brush footprint, on every visible wrapped copy.

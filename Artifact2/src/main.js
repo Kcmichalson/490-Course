@@ -63,6 +63,8 @@ import { latestOnly } from './ui/debounce.js';
 import { sampleWind } from './render/windarrows.js';
 import { tileSummary, summaryFileName } from './io/tilesummary.js';
 import { encodeMapData, mapDataFileName, MAP_DATA_LAYERS, KOPPEN_WATER } from './io/mapdata.js';
+import { createChatPanel } from './ui/chatpanel.js';
+import { placeEllipse, placeScale } from './ui/places.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -208,7 +210,7 @@ function requestDraw() {
 // Screen rects of controls that sit on the map, so overlay labels avoid them.
 function reservedRects() {
   const c = canvas.getBoundingClientRect();
-  return [$('overlay-control'), $('legend')]
+  return [$('overlay-control'), $('legend'), $('chat-panel')]
     .filter((el) => el && !el.hidden)
     .map((el) => {
       const r = el.getBoundingClientRect();
@@ -229,6 +231,7 @@ function frame() {
     reserved: reservedRects(),
     brush: brushCursor(),
     planet: state.tiltPreview == null ? state.planet : { ...state.planet, tiltDeg: state.tiltPreview },
+    places: chatPlace ? [{ ...placeEllipse(state.map, chatPlace), name: chatPlace.name, flagged: chatPlace.flagged }] : [],
   });
   toolbar.setZoom(zoomPercent(state.view));
   updateHover();
@@ -1377,6 +1380,32 @@ function goTo(text) {
   selectAt(p.x, p.y);
   return true;
 }
+
+// ---- Companion chat (step D): display only. The highlighted place is
+// view state like the selection: not saved, not undoable, and never in
+// Export Map Picture. ----
+let chatPlace = null;
+
+function showPlace(place) {
+  const e = placeEllipse(state.map, place);
+  if (!pixelToLatLon(state.map, e.x, e.y)) {
+    contextbar.flash(`${place.name} (${place.lat}, ${place.lon}) is outside this map.`);
+    return;
+  }
+  chatPlace = place;
+  userMoved = true;
+  const zoomed = zoomToScale(state.view, placeScale(e, viewW, viewH, limits()), viewW / 2, viewH / 2, limits());
+  setView(centerOn(zoomed, e.x, e.y, viewW, viewH));
+}
+
+const chatPanel = createChatPanel($('chat-panel'), {
+  onShowPlace: showPlace,
+  onClearPlace: () => { chatPlace = null; requestDraw(); },
+});
+chatPanel.form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  chatPanel.setNote('Sending arrives with the local bridge (step D3). For now, use "Paste sample reply".');
+});
 
 // Center of the screen as a bookmark-able view.
 function currentView() {

@@ -42,6 +42,9 @@
   --label-halo: rgba(0, 0, 0, 0.55);
   --selection: #ffd34d;
   --selection-halo: rgba(0, 0, 0, 0.6);
+  --place-line: #ff8a3d;              /* companion chat: highlight circle and marker */
+  --place-fill: rgba(255, 138, 61, 0.14);
+  --place-flagged: #ffd34d;           /* a place the checks flagged */
   --brush-outline: rgba(255, 255, 255, 0.9);
   --brush-halo: rgba(0, 0, 0, 0.55);
   --palette-unmatched: #ff00ff;
@@ -220,6 +223,40 @@ select:disabled { opacity: 0.45; }
 .map-canvas.is-panning { cursor: grabbing; }
 
 .overlay-control { position: absolute; top: 8px; right: 8px; z-index: 5; }
+/* Companion chat (step D): top-left, clear of the overlay control
+   (top-right) and legend (bottom-right). */
+.chat-panel {
+  position: absolute; top: 8px; left: 8px; z-index: 6;
+  width: min(340px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  display: flex; flex-direction: column;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.chat-panel:has(.chat-body[hidden]) { width: auto; }
+.chat-head { display: flex; gap: 6px; align-items: center; padding: 4px; }
+.chat-toggle { font-weight: 600; }
+.chat-clear { margin-left: auto; }
+.chat-body { display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 0 8px 8px; }
+.chat-body[hidden] { display: none; }
+.chat-list { overflow-y: auto; min-height: 0; max-height: 46vh; display: flex; flex-direction: column; gap: 8px; }
+.chat-msg { padding: 6px 8px; border-radius: var(--radius); background: var(--panel-2); }
+.chat-user { background: var(--panel-3); align-self: flex-end; max-width: 90%; }
+.chat-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chat-chip { padding: 1px 8px; border-radius: 999px; border-color: var(--place-line); }
+.chat-chip.is-flagged { border-color: var(--place-flagged); color: var(--place-flagged); }
+.chat-error { color: var(--warning); margin-top: 4px; }
+.chat-note { margin: 0; }
+.chat-note:empty { display: none; }
+.chat-paste summary { cursor: pointer; color: var(--muted); }
+.chat-paste textarea, .chat-form textarea {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.chat-paste button { margin-top: 4px; }
+.chat-form { display: flex; gap: 6px; align-items: flex-end; }
 .overlay-button { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-translucent); }
 .popover {
   position: absolute;

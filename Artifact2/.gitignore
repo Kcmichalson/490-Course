@@ -2,3 +2,4 @@
 test-maps/private/
 tool-log/*.jsonl
 tool-log/current-session.txt
+__pycache__/

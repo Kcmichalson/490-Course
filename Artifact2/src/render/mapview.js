@@ -139,6 +139,36 @@ export class MapView {
     return c;
   }
 
+  // Export Map Picture: the current mode's base layer (and Shaded Relief
+  // when on) scaled to `width` px, with the graticule and its latitude
+  // labels on top (always, drawn at 2× so they stay legible). → a canvas,
+  // or null before the base layer exists.
+  picture(width, { map, mode, store, overlays, planet = null }) {
+    const reliefOn = Boolean(overlays['shaded-relief']);
+    this.ensureBase(map, mode, store, reliefOn);
+    if (!this.base) return null;
+    const out = document.createElement('canvas');
+    out.width = Math.round(width);
+    out.height = Math.round((map.sourceHeight * width) / map.sourceWidth);
+    const g = out.getContext('2d', { alpha: false });
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(this.base, 0, 0, out.width, out.height);
+    if (reliefOn && this.relief) {
+      g.globalCompositeOperation = 'overlay';
+      g.globalAlpha = RELIEF_ALPHA;
+      g.drawImage(this.relief, 0, 0, out.width, out.height);
+      g.globalCompositeOperation = 'source-over';
+      g.globalAlpha = 1;
+    }
+    const k = 2; // label and line scale
+    g.setTransform(k, 0, 0, k, 0, 0);
+    drawGraticule(g, {
+      map, view: { scale: width / map.sourceWidth / k, offsetX: 0, offsetY: 0 }, viewW: out.width / k, viewH: out.height / k, dpr: k, theme: this.theme, planet,
+    });
+    return out;
+  }
+
   // Re-reads the CSS color variables (for theme switching in M11).
   refreshTheme() {
     this.theme = readTheme();

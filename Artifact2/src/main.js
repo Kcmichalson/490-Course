@@ -17,7 +17,7 @@ import {
   curveStats, growingDays, freezingDegreeDays, frostClass, FROST_LABELS, MONTH_NAMES,
 } from './sim/climatestats.js';
 import {
-  pixelToLatLon, latLonToPixel, sourcePixel, sourceToSimCell, formatLatLon, parseLatLon, wrapX,
+  pixelToLatLon, latLonToPixel, sourcePixel, sourceToSimCell, formatLatLon, parseLatLon, wrapX, simCellBounds,
 } from './sim/coords.js';
 import {
   fitView, scaleLimits, zoomAt, zoomToScale, panBy, centerOn, clampView, screenToSource, zoomPercent,
@@ -62,6 +62,7 @@ import { createPlanetPanel } from './ui/planetpanel.js';
 import { latestOnly } from './ui/debounce.js';
 import { sampleWind } from './render/windarrows.js';
 import { tileSummary, summaryFileName } from './io/tilesummary.js';
+import { encodeMapData, mapDataFileName, MAP_DATA_LAYERS, KOPPEN_WATER } from './io/mapdata.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -529,6 +530,104 @@ async function exportClimateSummary() {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   contextbar.flash(`Exported ${name}`);
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'), { href: url, download: name }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Export Map Data (map-wide companion): every sim cell's climate as one
+// gzip file for tools/mapquery.py. Each cell is sampled at its center
+// source pixel with the tile export's functions (pixelMonths, koppenAt,
+// Köppen's land-only rain weights, the current wind). No new sim logic.
+async function exportMapData() {
+  if (!worker) return;
+  const c = store.climate;
+  const req = climateRequest();
+  const hydro = c?.thermal && req.thermalKey ? hydros.get(req.thermalKey) : null;
+  const ctx = hydro ? koppenCtx(state.map, store.terrain, { ...c, hydro }) : null;
+  if (!ctx) {
+    contextbar.flash('Open Köppen mode (Q) once to compute rainfall, then export again.', 6000);
+    return;
+  }
+  contextbar.flash('Exporting map data…', 60000);
+  const { months } = await worker.request('rainMonths', { hydroKey: req.thermalKey });
+  await new Promise((r) => setTimeout(r, 30)); // let the message paint
+  const map = state.map;
+  const terrain = store.terrain;
+  const { width: W, height: H } = simGridSize(map);
+  const values = Object.fromEntries(MAP_DATA_LAYERS.map((l) => [l.name, new Float32Array(W * H)]));
+  const temps = MAP_DATA_LAYERS.filter((l) => l.name.startsWith('temp_')).map((l) => values[l.name]);
+  const rains = MAP_DATA_LAYERS.filter((l) => l.name.startsWith('rain_')).map((l) => values[l.name]);
+  const windClimate = currentClimate();
+  const idx = new Int32Array(4);
+  const w = new Float64Array(4);
+  const t = new Float64Array(12);
+  for (let j = 0; j < H; j++) {
+    for (let i = 0; i < W; i++) {
+      const b = simCellBounds(map, i, j);
+      const px = Math.min(terrain.width - 1, Math.floor((b.x0 + b.x1) / 2));
+      const py = Math.min(terrain.height - 1, Math.floor((b.y0 + b.y1) / 2));
+      const k = j * W + i;
+      const p = py * terrain.width + px;
+      values.elevation[k] = terrain.elevation[p];
+      values.category[k] = terrain.category[p];
+      pixelMonths(ctx, px, py, t);
+      for (let m = 0; m < 12; m++) temps[m][k] = t[m];
+      if (isLand(terrain, p)) {
+        values.koppen[k] = koppenAt(ctx, px, py).cls;
+        landWeights(ctx, px, py, idx, w);
+        for (let m = 0; m < 12; m++) rains[m][k] = w[0] * months[m][idx[0]] + w[1] * months[m][idx[1]] + w[2] * months[m][idx[2]] + w[3] * months[m][idx[3]];
+      } else {
+        values.koppen[k] = KOPPEN_WATER;
+        for (let m = 0; m < 12; m++) rains[m][k] = months[m][k];
+      }
+      if (windClimate) {
+        const wind = sampleWind(windClimate, map, px + 0.5, py + 0.5);
+        values.wind_u[k] = wind.u;
+        values.wind_v[k] = wind.v;
+      }
+    }
+  }
+  const header = {
+    width: W,
+    height: H,
+    source_width: map.sourceWidth,
+    source_height: map.sourceHeight,
+    lat_top: map.latTop,
+    lat_bottom: map.latBottom,
+    lon_west: map.lonWest,
+    lon_span: map.lonSpan,
+    wraps: map.wraps,
+    radius_km: map.radiusKm,
+    cell_sample: 'center source pixel of each cell',
+    wind_season: windClimate ? (windClimate.result.meta.annual ? 'Annual Mean' : `day ${windClimate.season.day}`) : null,
+    categories: CATEGORY_LABELS,
+    koppen_codes: KOPPEN_CODES,
+    koppen_names: KOPPEN_NAMES,
+    months: MONTH_NAMES,
+  };
+  const bytes = encodeMapData(header, values);
+  const gz = await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
+  const name = mapDataFileName(W, H);
+  downloadBlob(gz, name);
+  contextbar.flash(`Exported ${name} (${(gz.size / 1e6).toFixed(1)} MB)`);
+}
+
+// Export Map Picture: the current mode at up to 2048 px wide, with the
+// graticule and latitude labels, as a PNG.
+const PICTURE_WIDTH = 2048;
+async function exportMapPicture() {
+  const canvas = mapView.picture(Math.min(PICTURE_WIDTH, state.map.sourceWidth), {
+    map: state.map, mode: getMode(state.modeId), store, overlays: state.overlays, planet: state.planet,
+  });
+  if (!canvas) return;
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const name = `fcm-map-${state.modeId}.png`;
+  downloadBlob(blob, name);
+  contextbar.flash(`Exported ${name} (${canvas.width} × ${canvas.height})`);
 }
 
 // The Distance from Coast layer for the current land/sea layout: the mode's
@@ -1369,6 +1468,8 @@ createMenuBar($('menubar'), [
       { label: 'Load Project…', milestone: 11 },
       { separator: true },
       { label: 'Export PNG…', milestone: 11 },
+      { label: 'Export Map Data', action: () => exportMapData().catch((err) => contextbar.flash(`Map data export failed: ${err.message}`, 8000)) },
+      { label: 'Export Map Picture', action: () => exportMapPicture().catch((err) => contextbar.flash(`Map picture export failed: ${err.message}`, 8000)) },
     ],
   },
   {

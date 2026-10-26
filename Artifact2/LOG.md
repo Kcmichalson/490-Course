@@ -4831,7 +4831,7 @@ Hard stop 23:00.
 
 ---
 
-## 2026-10-25 — Step D: live companion chat panel (local only; in progress)
+## 2026-10-25 — Step D: live companion chat panel (local only; done)
 
 Your request (Session 11 Prompt 9); plan: plans/companion-chat-plan.md.
 Hard stop 22:30 (demo video); unfinished parts carry to a later session.
@@ -4841,8 +4841,12 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
   it.
 - D2 bridge in serve.py: **done**; your checks passed and you committed
   it.
-- D3 wiring: **done** with the stand-in; **in progress until your first
-  real `claude -p` chat** (I can't run the real claude from my session).
+- D3 wiring: **done**. Your real `claude -p` chat worked (Session 11
+  Prompt 14).
+- Known limit: **distance claims are unchecked.** The checks cover
+  radius, on land, and Köppen/°C. Distances the model states in its text
+  (for example "300 km from the coast" or "two days' sail apart") aren't
+  checked, and you saw two wrong ones. That is a future step.
 - Future steps (from the plan): the rainfall check (Climate inputs
   Phase C) and checking climate claims in prose.
 
@@ -5020,6 +5024,22 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
 - Not checked by me: a real claude reply, real map-tool calls through the
   bridge, and Cancel during a real run. Cancel during a run is covered by
   the bridge test with the stand-in. The real-claude steps are yours.
+- **Your real run (Session 11 Prompt 14):**
+  - 3 messages in one chat, from your own `py serve.py` at
+    http://127.0.0.1:8000.
+  - Two replies made 11 and 3 map-tool calls.
+  - Chips panned and highlighted.
+  - One place, the Confederation, was flagged ⚠. You're checking its
+    reason; it isn't recorded here yet.
+  - The Köppen-first error appeared before Köppen had run.
+  - Cancel during a real run wasn't reported, so it stays covered only by
+    the stand-in test.
+- **Limit seen in the real run:** distance claims in the reply text
+  aren't checked, and you saw two wrong ones. Neither the chat checks
+  (radius, on land, Köppen and °C in paragraphs naming the place) nor
+  `--ask` mode look at distances. Recorded as a future step: check stated
+  distances between places, or to the coast, against the map (for
+  example with the coast-distance layer and great-circle distance).
 
 ---
 
@@ -5181,6 +5201,26 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
   - Node 277/277; Python 68/68.
   - The in-app stand-in trials listed in the D3 entry.
   - The tool log has every call.
+
+### Prompt 13
+* **User Prompt:**  
+  > *"Stop the dev server you started; I'll run my own."*
+* **What the AI Provided:**  
+  Confirmed every server I started is stopped: the three preview servers (`preview_stop`) and the two stand-in background servers (`TaskStop`, during D3).
+* **How It Was Verified:**  
+  - The preview server list shows none running.
+  - Nothing is listening on port 8000 (`Get-NetTCPConnection` found no listener).
+
+### Prompt 14 (my real chat results)
+* **User Prompt:**  
+  > *"Real chat worked: 3 messages, 11 and 3 map-tool calls, chips pan and highlight, one ⚠ on the Confederation (I'll check its reason), the Köppen-first error worked. Mark D3 done in LOG; note that distance claims are unchecked (two errors seen)."*
+* **What the AI Provided:**  
+  - Marked D3 and Step D done.
+  - Recorded your results.
+  - Recorded distance claims as an unchecked limit with your two observed errors, and added a future step to check them.
+* **How It Was Verified:**  
+  - By you, in your browser, with the real claude.
+  - No code changed this turn.
 * **How It Was Verified:**  
   - Node 271/271.
   - The paste-and-click check in the app.

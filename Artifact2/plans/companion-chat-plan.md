@@ -68,4 +68,6 @@ server-side code".
 - The rainfall check (Climate inputs Phase C: Phoenix rain split, C2,
   retiming).
 - Checking climate claims in prose and hooks (from step C).
-- D3 if not finished tonight.
+- Distance claims: check distances the model states (between places, or
+  to the coast) against the map. They're unchecked now, and the first
+  real chat showed two wrong ones.

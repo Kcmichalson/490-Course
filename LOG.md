@@ -361,3 +361,24 @@ Session numbers continue from Artifact2/LOG.md. This entry is here, not in Artif
     - the modal closes with ×, a backdrop click and Esc
     - About Me and Inspect still work
   - After stopping the server, http://127.0.0.1:8001/ no longer answers.
+
+### Prompt 8 (sent, interrupted, then restated)
+* **User Prompt:**  
+  > *"Remind me how this system works so I can present the system the companion uses."* [interrupted by you, then:] *"Remind me how the AI companion works so I can present the system the companion uses to a class"*
+* **What the AI Provided:**  
+  - An explanation in chat of the Artifact 3 climate companion's three modes:
+    - tile advice (`companion.py`)
+    - map-wide `--ask` (`mapquery.py` as an MCP server)
+    - the live chat panel (the bridge in `serve.py`)
+  - For each mode: what the model may do, what code checks, what is sent, the security around the bridge, and the known limits.
+  - An inline diagram of the live chat loop.
+  - No code changed.
+* **How It Was Verified:**  
+  - Facts taken from Artifact2/tools/README.md, Artifact2/LOG.md's Artifact 3 entries, and the current code: bridge.py's limits and chat prompt, and companion.py's `map_command`, `child_env` and `check_chat_places`.
+  - The 4,000-character limit still applies to every resent message, including Claude's own earlier replies (bridge.py:143). So the "too long" bug seen in the demo recording is still open.
+
+### Prompt 9 (answer to Claude's question: make a slide deck?)
+* **User Prompt:**  
+  > *"No thanks"*
+* **What the AI Provided:**  
+  No deck. Recorded this answer; nothing else changed.

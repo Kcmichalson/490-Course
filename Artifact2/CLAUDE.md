@@ -116,3 +116,4 @@ the main branch at https://kcmichalson.github.io/490-Course/Artifact2/
   tool-log/ (timestamp and tool name); report any missing call before
   continuing.
 - One purpose per command: don’t append extra commands (especially git) to a check
+- If an edit is denied, stop and tell me. Don’t use Python or any other route to write the file.”

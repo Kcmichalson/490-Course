@@ -318,6 +318,9 @@ select:disabled { opacity: 0.45; }
 }
 .ctx-message { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ctx-message.is-flash { color: var(--warning); }
+.ctx-message > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ctx-message > button { flex: 0 0 auto; }
+.ctx-export { padding: 2px 8px; }
 .ctx-tool { flex: 0 1 auto; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ctx-tool.has-controls { flex: 0 1 auto; color: var(--text); overflow: hidden; }
 .sculpt-panel { display: flex; align-items: center; gap: 4px 12px; min-width: 0; }

@@ -3,7 +3,7 @@
 import {
   DEFAULT_MAP, createMapConfig, simGridSize, newMapConfig, importConfig, settingsConfig,
 } from './sim/mapconfig.js';
-import { blankTerrain, makeTerrain, isOceanCategory, isLand } from './sim/terrain.js';
+import { blankTerrain, makeTerrain, isOceanCategory, isLand, CATEGORY_LABELS } from './sim/terrain.js';
 import { ruggednessAt } from './sim/slope.js';
 import { downsampleTerrain, downsampleRegion, cloneSim } from './sim/downsample.js';
 import { createEdits, cloneEdits, writableTerrain, composeRect, addDirty, isEmptyEdits } from './sim/edits.js';
@@ -31,7 +31,7 @@ import { precipCtx, hydroCtx } from './render/modes/precipitation.js';
 import { pixelPrecip, pixelAnnualMm, seasonalityClassAt, aridityAt } from './sim/precipfield.js';
 import { SEASONALITY_LABELS, SEASONALITY_TOO_DRY, ARIDITY_LABELS, ARIDITY_COLD } from './sim/hydrostats.js';
 import { koppenCtx, setKoppenSettings, onKoppenSettings } from './render/modes/koppen.js';
-import { koppenAt } from './sim/koppenfield.js';
+import { koppenAt, landWeights } from './sim/koppenfield.js';
 import { KOPPEN_CODES, KOPPEN_NAMES } from './sim/koppen.js';
 import { setClimateRasterListener, climateCtx } from './render/climateraster.js';
 import { TOOLS, getTool, DEFAULT_TOOL_ID, getBrush, DEFAULT_BRUSH_ID } from './ui/tools.js';
@@ -61,6 +61,7 @@ import { createConfirmDialog } from './ui/confirmdialog.js';
 import { createPlanetPanel } from './ui/planetpanel.js';
 import { latestOnly } from './ui/debounce.js';
 import { sampleWind } from './render/windarrows.js';
+import { tileSummary, summaryFileName } from './io/tilesummary.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -374,16 +375,27 @@ function temperatureModeReadout({ px, py }) {
 
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
-// "Wind from ENE (68°) · 0.82" (SPEC 13.5): the direction the wind blows
-// from; in Annual Mean, the prevailing wind. '' while no wind data is loaded.
-function windReadout(src) {
+// The wind at a source point: { fromDeg, compass, speed, season } (the
+// direction it blows from; in Annual Mean, the prevailing wind), or
+// { variable, meanSpeed, season } when the Annual Mean is near calm; null
+// while no wind data is loaded.
+function windAt(src) {
   const c = currentClimate();
-  if (!c) return '';
+  if (!c) return null;
   const w = sampleWind(c, state.map, wrapX(state.map, src.x), src.y);
   const mag = Math.hypot(w.u, w.v);
-  if (c.result.meta.annual && mag < 0.05) return `Wind variable (mean speed ${w.speed.toFixed(2)})`;
+  const season = c.result.meta.annual ? 'Annual Mean' : `day ${c.season.day}`;
+  if (c.result.meta.annual && mag < 0.05) return { variable: true, meanSpeed: w.speed, season };
   const from = ((Math.atan2(-w.u, -w.v) * 180) / Math.PI + 360) % 360;
-  return `Wind from ${COMPASS[Math.round(from / 22.5) % 16]} (${Math.round(from) % 360}°) · ${mag.toFixed(2)}`;
+  return { fromDeg: Math.round(from) % 360, compass: COMPASS[Math.round(from / 22.5) % 16], speed: mag, season };
+}
+
+// "Wind from ENE (68°) · 0.82" (SPEC 13.5). '' while no wind data is loaded.
+function windReadout(src) {
+  const w = windAt(src);
+  if (!w) return '';
+  if (w.variable) return `Wind variable (mean speed ${w.meanSpeed.toFixed(2)})`;
+  return `Wind from ${w.compass} (${w.fromDeg}°) · ${w.speed.toFixed(2)}`;
 }
 
 // An extra tooltip line for the current mode, or ''.
@@ -465,6 +477,68 @@ function clearSelection() {
   state.selected = null;
   contextbar.setSelection(null);
   requestDraw();
+}
+
+// Export climate summary (Artifact 3): the selected land tile's climate as a
+// small JSON download for tools/companion.py. Reads only what the sim has
+// already computed (no new sim logic): the Köppen class and monthly
+// temperatures at the pixel, the worker's cached monthly rain (Köppen's
+// land-only weights), the tooltip's wind, and the Distance from Coast job.
+async function exportClimateSummary() {
+  const sel = state.selected;
+  if (!sel || !worker) return;
+  const px = sourcePixel(state.map, sel.x, sel.y);
+  const i = px.py * store.terrain.width + px.px;
+  if (!isLand(store.terrain, i)) {
+    contextbar.flash('Climate summary is for land tiles.');
+    return;
+  }
+  const c = store.climate;
+  const req = climateRequest();
+  const hydro = c?.thermal && req.thermalKey ? hydros.get(req.thermalKey) : null;
+  const ctx = hydro ? koppenCtx(state.map, store.terrain, { ...c, hydro }) : null;
+  if (!ctx) {
+    contextbar.flash('Open Köppen mode (Q) once to compute rainfall, then export again.', 6000);
+    return;
+  }
+  const ll = pixelToLatLon(state.map, sel.x, sel.y);
+  const kp = koppenAt(ctx, px.px, px.py);
+  const code = KOPPEN_CODES[kp.cls];
+  const temps = Array.from(pixelMonths(ctx, px.px, px.py));
+  const wind = windAt(sel);
+  const idx = new Int32Array(4);
+  const w = new Float64Array(4);
+  landWeights(ctx, px.px, px.py, idx, w);
+  const { monthly } = await worker.request('tileRain', { hydroKey: req.thermalKey, idx: Array.from(idx), w: Array.from(w) });
+  const coast = await currentCoast();
+  const summary = tileSummary({
+    lat: ll.lat,
+    lon: ll.lon,
+    elevationM: store.terrain.elevation[i],
+    category: CATEGORY_LABELS[store.terrain.category[i]],
+    koppenCode: code,
+    koppenName: KOPPEN_NAMES[code],
+    temps,
+    rain: monthly,
+    wind,
+    coastKm: coast.data[i],
+  });
+  const name = summaryFileName(ll.lat, ll.lon);
+  const url = URL.createObjectURL(new Blob([`${JSON.stringify(summary, null, 2)}\n`], { type: 'application/json' }));
+  const link = Object.assign(document.createElement('a'), { href: url, download: name });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  contextbar.flash(`Exported ${name}`);
+}
+
+// The Distance from Coast layer for the current land/sea layout: the mode's
+// result when it is current, else the same worker job run now (not kept).
+async function currentCoast() {
+  const cur = store.coast;
+  if (cur && !coastJob.stale && !coastJob.pending && cur.width === state.map.sourceWidth && cur.height === state.map.sourceHeight) return cur;
+  contextbar.flash('Measuring distance from the coast…');
+  const category = store.terrain.category.slice();
+  return worker.request('coastDistance', { category, cfg: { ...state.map } }, [category.buffer]);
 }
 
 // ---------- Actions ----------
@@ -1360,6 +1434,7 @@ const contextbar = createContextBar($('contextbar'), {
   planetPanel: $('planet-panel'),
   planetClose: $('planet-close'),
   onClearSelection: clearSelection,
+  onExportSummary: () => exportClimateSummary().catch((err) => contextbar.flash(`Export failed: ${err.message}`, 8000)),
 });
 
 const statusbar = createStatusBar($('statusbar'));

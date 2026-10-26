@@ -4,6 +4,7 @@
 // Messages in:  { type: 'ping', id }
 //               { type: 'build', id, kind, rgba, maskRgba?, settings, cfg }
 //               { type: 'coastDistance', id, category, cfg }
+//               { type: 'tileRain', id, hydroKey, idx[4], w[4] }  (Artifact 3)
 //               { type: 'climate', id, grid, planet, season }  (M3 wind)
 //                 + M4 temperature: terrain { category, elevation } (sim
 //                 cells), thermalKey, boundaryKey, needContinentality
@@ -105,6 +106,18 @@ self.addEventListener('message', (e) => {
     } catch (err) {
       self.postMessage({ type: 'error', id: msg.id, message: err.message || String(err) });
     }
+    return;
+  }
+  if (msg.type === 'tileRain') {
+    // Export climate summary (Artifact 3): one tile's 12 monthly totals
+    // (mm), read from the cached monthly layers with the caller's cell
+    // weights (Köppen's land-only weights). Reads only; nothing is rerun.
+    if (lastHydro.key !== msg.hydroKey || !lastHydro.value) {
+      self.postMessage({ type: 'error', id: msg.id, message: 'monthly rainfall for this map is not computed yet' });
+      return;
+    }
+    const monthly = lastHydro.value.months.map((layer) => msg.idx.reduce((sum, k, c) => sum + msg.w[c] * layer[k], 0));
+    self.postMessage({ type: 'done', id: msg.id, result: { monthly } });
     return;
   }
   if (msg.type === 'coastDistance') {

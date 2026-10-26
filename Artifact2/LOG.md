@@ -4316,15 +4316,6 @@ choice): PASS.**
 - C1 (the monsoon wind term) is recorded for M8 as a known limitation; the
   milestone order is unchanged.
 
-Recommended order (before your decision):
-- Measure C1 alone (the summer supply), then C2 on top of it, one round
-  each.
-- For each: Köppen at the 24 points, rain at the 12, the M5 SPEC checks,
-  timings.
-- Your approval before anything is applied.
-- Alternatively, record 1–3 as limitations and go on to M6b, leaving them
-  to M7/M8 as SPEC planned.
-
 ---
 
 ## 2026-10-24 — Session 10 prompt log (checks, M6a)
@@ -4552,6 +4543,153 @@ Recommended order (before your decision):
   - The preview server list shows the server stopped.
   - The tool log has every call this turn.
   - The encoding check passed on LOG.md and the plan file.
+
+---
+
+## 2026-10-25 — Artifact 3: climate companion
+
+Your course's Artifact 3 (due 2026-10-25, 11:59 PM): a model doing real
+work every time the thing runs. Climate inputs Phase C is parked; its
+notes above are unchanged. Plan: plans/artifact3-plan.md.
+
+**Planned**
+- In the app: "Export climate summary" for the clicked tile. It
+  downloads a small JSON of what the sim already knows there; no new sim
+  logic; works locally and on GitHub Pages.
+- tools/companion.py (standard library only): sends that JSON to Claude
+  Code headless (`claude -p`, not the paid API) with a fixed prompt, with
+  no tools and no project context. It writes advice.md (settlements,
+  crops, trade, cultures, real-world parallels).
+- Checks in code:
+  - the sections are present
+  - Köppen codes and °C values match the JSON (or a Köppen threshold)
+  - the parallels are labeled
+  - on a failure, one retry with the failures sent back; then
+    advice.raw.md and exit 1
+- tools/README.md, an example pair in tools/examples/, and a code-written
+  header on advice.md (tile, date, model, checks).
+
+**Changed**
+- src/io/tilesummary.js (new, pure): `tileSummary` (JSON shape, rounding,
+  warmest/coldest/mean/annual) and `summaryFileName`
+  (`fcm-tile-48.86N_2.35E.json`).
+- src/worker.js: the read-only `tileRain` message. It reads one tile's 12
+  monthly totals from the cached monthly layers, with the caller's
+  weights, and errors if the cached set isn't the current one.
+- src/main.js:
+  - `exportClimateSummary`: land only; asks for Köppen mode first if the
+    12-month rain isn't computed; Blob download.
+  - `currentCoast`: the Distance from Coast job, run when its result
+    isn't current.
+  - The tooltip's wind math moved into `windAt`, shared by both;
+    `windReadout` gives the same text as before.
+- src/ui/contextbar.js and style.css: the "Export climate summary" button
+  beside "Selected … ×". The selection text now ellipsizes so the button
+  stays visible.
+- tools/companion.py, tools/test_companion.py (20 tests), tools/README.md.
+- tools/examples/: the Paris tile JSON and its advice.md.
+- tests/tilesummary.test.js (6 tests).
+
+**Decisions** (your defaults, Session 11 Prompt 2):
+- a context-bar button only
+- land tiles only
+- no automatic rain run
+- monthly rain uses Köppen's land-only weights, so it agrees with the
+  code (it can differ slightly from the tooltip's annual rain at coasts)
+- the current season's wind; speed unitless
+- advice.md written next to the JSON
+- the CLI's default model unless `--model`
+
+**Problems**
+- `claude` isn't on PATH on this PC. The script falls back to the desktop
+  app's bundled 2.1.308, which needed its own one-time `auth login`
+  (yours).
+- From inside my session the run fails with "Not logged in". The
+  session's environment sets `CLAUDE_CODE_SIMPLE`, which the help ties to
+  `--bare` mode (no saved login). Per your rule I didn't work around it;
+  you ran the real run.
+- `py -m unittest` writes tools/__pycache__ (an underscore folder). The
+  documented command uses `py -B`.
+
+**Verification checks**
+- CLI flags: all 10 used are listed in `claude --help` for `2.1.308
+  (Claude Code)`; none replaced.
+- Export: Paris exported through the app's button (Earth map, Köppen,
+  Go to 48.86, 2.35): Dfb, warmest 15.4 °C, coldest −0.5 °C, mean 7.3 °C,
+  720 mm/yr, wind from SW (232°) 0.59, 126 km inland. That matches
+  Session 10's Paris (Dfb, −0.5 °C winter).
+- End to end (your run): `py tools/companion.py
+  tools/examples/fcm-tile-48.86N_2.35E.json` → "All checks passed
+  (attempt 1)", model claude-opus-5-5. I compared the advice to the JSON:
+  - only Dfb
+  - temperatures copied from the JSON
+  - "only May through August pass 10 °C" is right (Sep 9.9)
+  - the dry June (30.5 mm) is right
+  - all four parallels labeled
+- Node suite 261/261; Python 20/20, covering:
+  - each check failing on a canned reply
+  - the retry fixing a reply
+  - the retry failing (advice.raw.md, exit 1, no advice.md)
+  - a bad JSON (exit 2)
+  - the real advice.md passing
+- The by-eye check is yours.
+
+**Next**
+Your by-eye check; then back to Climate inputs Phase C or M6b, your call.
+
+---
+
+## 2026-10-25 — Session 11 prompt log (Artifact 3: climate companion)
+
+### Prompt 1
+* **User Prompt:**  
+  > *[Read CLAUDE.md, SPEC.md, LOG.md; start a "Session 11 prompt log". New priority, due tonight 11:59 PM: Artifact 3 for my course: a model doing real work every time the thing runs, plus a log of plans and changes. No Claude API (separate billing); use Claude Code headless (claude -p), which my professor confirmed runs without billing (an in-browser assistant would need the paid API, hence export + script). Park Climate inputs Phase C; delete the stale "Recommended order (before your decision)" paragraph from its "Next session" note in LOG.md and plans/climate-inputs-plan.md (C1 is deferred to M8). Plan first, short, in chat; save it to plans/artifact3-plan.md after approval. Build: (1) "Export climate summary" for the clicked tile: a small JSON with lat/lon, elevation, category, Köppen code and name, 12 monthly temperatures and rain, wind, distance to coast; no new sim logic; works locally and on GitHub Pages. (2) tools/companion.py (standard library only): runs claude -p with a fixed prompt, writes advice.md (settlements, crops, trade, cultures, real-world historical parallels); text only, no tools or file access (check the CLI docs), not loading this project's CLAUDE.md. (3) Checks: required sections; Köppen codes and temperatures match the JSON; parallels labeled as parallels; on failure, report which check failed and keep the raw output. (4) tools/README.md. (5) LOG entry "Artifact 3: climate companion" and the prompt log. Usual rules; test it myself on one exported tile if claude -p runs, else say so and stop. Finish with a by-eye check and a commit message.]*
+* **What the AI Provided:**  
+  - Read the three files and the inspector, context bar, worker, Köppen, and coast-distance code (read-only, Plan mode).
+  - Found `claude` isn't on PATH on this PC; the desktop app bundles one (2.1.308). Read its `--help` for the restriction flags.
+  - The plan in chat (the ~/.claude plan file is blocked by your deny rule, as in Session 10), with 10 ambiguities.
+* **Where the Model Misread Me:**  
+  Not a misreading: the "Recommended order" paragraph was only in LOG.md, not in plans/climate-inputs-plan.md, so only LOG.md changed.
+
+### Prompt 2 (my reply to the plan-approval prompt)
+* **User Prompt:**  
+  > *[Approved with changes. (1) Before step 2, run claude --help and --version and confirm every flag exists in this version; show the output; replace any that don't; no unconfirmed restriction flag. (2) Keep the bundled claude.exe as a fallback, but prefer claude on PATH; the README says which was used and how to install the CLI. (3) Temperature check also allows the Köppen thresholds (0, −3, 10, 18, 22 °C). (4) On a failed check, retry once with the failures sent back; if the retry fails, save advice.raw.md and exit 1; test the retry path with canned replies. (5) Commit one example pair in tools/examples/ (a Paris tile JSON and its advice.md). (6) Yes to suggestion 10: a code-written header with tile, date, model, checks passed. All other defaults as proposed. Priority: one full export → companion.py → advice.md run end to end first, then tests and polish. Save the plan and go.]*
+* **What the AI Provided:**  
+  - Saved the plan to plans/artifact3-plan.md.
+  - Deleted the stale paragraph from LOG.md.
+  - Confirmed the CLI flags: `claude --version` → `2.1.308 (Claude Code)` (the desktop app's bundled copy; `claude` isn't on PATH on this PC). `--help` lists every flag the script uses: `-p`, `--tools` ("" disables all tools), `--safe-mode`, `--strict-mcp-config`, `--disable-slash-commands`, `--no-session-persistence`, `--permission-prompts`, `--system-prompt`, `--output-format`, `--model`. None replaced.
+  - Built the export: src/io/tilesummary.js (pure), a read-only `tileRain` worker message, the context-bar button, and `exportClimateSummary` in main.js (the tooltip's wind math moved into `windAt`, shared by both).
+  - Exported Paris from the app (Load Earth Map, Köppen, Go to 48.86, 2.35, the button): Dfb, warmest 15.4, coldest −0.5 °C, 720 mm/yr, wind from SW, 126 km inland. Saved as tools/examples/fcm-tile-48.86N_2.35E.json.
+  - Wrote tools/companion.py.
+* **Where the Model Misread Me:**  
+  - My first error message cut the CLI's JSON at 500 characters and hid its reason. I fixed the script to print the CLI's own `result` message.
+* **Root Cause Discovered:**  
+  - **The end-to-end run is blocked: the CLI says "Not logged in · Please run /login".**
+  - This session's environment has `CLAUDE_CODE_SIMPLE` set (variable names checked, no values read). The CLI's help ties that to `--bare` mode, which never reads a saved login.
+  - The bundled CLI may also never have been logged in on its own: the desktop app supplies the login to its sessions.
+  - Getting past this from inside this session would mean changing auth or session variables: the workaround you told me not to do. Stopped for your run.
+* **How It Was Verified:**  
+  - The export: in the app, through the button. The download was captured in the preview pane instead of being saved, so the app's own code path ran.
+  - Node suite 255/255 after the app changes.
+  - companion.py: run twice. Both runs reached the CLI and stopped on the login error (exit 2).
+
+### Prompt 3 (my run results)
+* **User Prompt:**  
+  > *"I ran it." + [pasted terminal: `auth status` → `"loggedIn": false`; `auth login` → "Login successful."; `py tools/companion.py tools/examples/fcm-tile-48.86N_2.35E.json` → "All checks passed (attempt 1). Wrote …\tools\examples\advice.md"]*
+* **What the AI Provided:**  
+  - Read advice.md and compared it with the JSON by hand: it agrees.
+  - tools/test_companion.py (20 tests, including the retry path with canned replies); tests/tilesummary.test.js (6).
+  - tools/README.md; the "Artifact 3: climate companion" entry; the by-eye check and a commit message.
+* **Where the Model Misread Me:**  
+  - My login commands used PowerShell's `&` call operator, but you ran them in cmd.exe, which rejects `&` ("& was unexpected at this time"). You dropped the `&` yourself. The README now gives the cmd.exe form.
+  - In my last chat message I said "all 11 CLI flags"; the script uses 10. The LOG entry has the right count.
+  - My first fix for tools/__pycache__ (`sys.dont_write_bytecode` inside the test file) didn't work, because unittest compiles the test module before that line runs. I removed it and documented `py -B` instead.
+* **Root Cause Discovered:**  
+  The bundled CLI had never been signed in on its own (`"loggedIn": false`). Your `auth login` fixed the run.
+* **How It Was Verified:**  
+  - Your end-to-end run passed the checks on attempt 1.
+  - Node 261/261; Python 20/20.
+  - With bytecode writing on, `py -B` left no tools/__pycache__; the one my earlier run made was deleted with Python.
 
 ---
 

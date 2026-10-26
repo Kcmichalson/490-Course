@@ -6,8 +6,8 @@ import { getTool } from './tools.js';
 
 export const STARTUP_HINT = 'Import a map or paint land to begin.';
 
-// opts: { planetPanel, planetClose, onClearSelection }
-export function createContextBar(root, { planetPanel, planetClose, onClearSelection }) {
+// opts: { planetPanel, planetClose, onClearSelection, onExportSummary }
+export function createContextBar(root, { planetPanel, planetClose, onClearSelection, onExportSummary }) {
   const message = document.createElement('div');
   message.className = 'ctx-message';
   message.setAttribute('aria-live', 'polite');
@@ -52,7 +52,14 @@ export function createContextBar(root, { planetPanel, planetClose, onClearSelect
     clear.title = 'Clear selection';
     clear.setAttribute('aria-label', 'Clear selection');
     clear.addEventListener('click', onClearSelection);
-    message.append(text, clear);
+    // Artifact 3: the selected tile's climate as JSON for tools/companion.py.
+    const exportBtn = document.createElement('button');
+    exportBtn.type = 'button';
+    exportBtn.className = 'ctx-export';
+    exportBtn.textContent = 'Export climate summary';
+    exportBtn.title = 'Download this land tile\'s climate as JSON (for tools/companion.py)';
+    exportBtn.addEventListener('click', onExportSummary);
+    message.append(text, exportBtn, clear);
   }
   renderMessage();
 

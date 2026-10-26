@@ -488,13 +488,13 @@
         <div class="sleeve">Artifact 2</div>
       </div>
 
-      <!-- Artifact 3: Placeholder -->
+      <!-- Artifact 3: Climate Companion -->
       <div class="artifact-slot" data-bg="idea3">
         <div class="card">
-          <div class="card-title">TITLE</div>
+          <div class="card-title">Climate Companion</div>
           <div class="card-subtitle">Artifact 3: AI Inside It</div>
           <div class="card-desc">
-            A system where an AI model acts as an active component every time the application runs. Maybe something that can read my current position in a strategy game and give advice?
+            A model in my climate simulator that gives worldbuilding advice and places realms and campaign hooks.
           </div>
           <button class="card-btn inspect-trigger" data-artifact="3">Inspect</button>
         </div>
@@ -839,7 +839,8 @@
         <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-top: 18px; margin-bottom: 6px; color: var(--card-orange);">Reflection & Takeaways</h3>
         <p id="inspectReflection" style="white-space: pre-line;"></p>
         <div style="margin-top: 24px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);">
-          <a id="inspectAppLink" href="#" target="_blank" rel="noopener" class="nav-btn" style="display: none; text-decoration: none; margin-right: 8px;">Open App &rarr;</a>
+          <a id="inspectVideoLink" href="#" target="_blank" rel="noopener" class="nav-btn" style="display: none; text-decoration: none; margin-right: 8px;">Watch Demo &rarr;</a>
+          <a id="inspectAppLink"href="#" target="_blank" rel="noopener" class="nav-btn" style="display: none; text-decoration: none; margin-right: 8px;">Open App &rarr;</a>
           <a id="inspectLink" href="#" target="_blank" rel="noopener" class="nav-btn" style="display: inline-block; text-decoration: none;">Open Repository &rarr;</a>
         </div>
       </div>
@@ -960,7 +961,8 @@
 
     // Centralized artifact details and reflections.
     // Fields: title, desc, reflection, link (repository; '#' hides it),
-    // and optional appLink (live app; adds an "Open App" button).
+    // optional appLink (live app; adds an "Open App" button),
+    // and optional videoLink (demo video; adds a "Watch Demo" button).
     const ARTIFACT_DATA = {
       1: {
         title: "Artifact 1: Portfolio",
@@ -977,9 +979,10 @@
       },
       3: {
         title: "Artifact 3: AI Inside It",
-        desc: "A system where an AI model acts as an active component every time the application runs. Maybe something that can read my current position in a strategy game and give advice?",
-        reflection: "Placeholder idea.",
-        link: "#"
+        desc: "Extends Artifact 2 with Claude as an active component: it turns simulated climate into worldbuilding advice and, in a live chat, explores the map with read-only tools to place realms and campaign hooks. Code checks every claim against the simulation.",
+        reflection: "A model works inside my fantasy climate simulator in two ways: it writes worldbuilding advice for a given climate, and in a live chat it explores the whole map, placing realistic civilizations and suggesting campaign hooks. Every place and climate claim it makes is checked by code against the simulation, and it is made to be as accurate as possible to help campaign makers make their setting believable. It runs through Claude Code on my own machine rather than the paid API, which is why the live site’s chat panel asks for the local server. The model is good at reading data and reasoning about it, and weaker at arithmetic on top of it (it got distances wrong routinely and would often cut corners, leading to questionable data), which is exactly where plain code should check its work.",
+        link: "https://github.com/Kcmichalson/490-Course/tree/main/Artifact2/tools",
+        videoLink: "https://drive.google.com/file/d/12D-iaqDRBOu0JhyVPqZVNWN1NLrmvbpR/view?usp=sharing"
       },
       4: {
         title: "Artifact 4: For Someone Else",
@@ -1026,6 +1029,10 @@
                         const appLinkElement = document.getElementById('inspectAppLink');
                         appLinkElement.href = artifactRecord.appLink || '#';
                         appLinkElement.style.display = artifactRecord.appLink ? 'inline-block' : 'none';
+
+                        const videoLinkElement = document.getElementById('inspectVideoLink');
+                        videoLinkElement.href = artifactRecord.videoLink || '#';
+                        videoLinkElement.style.display = artifactRecord.videoLink ? 'inline-block' : 'none';
 
                         modalElement.classList.add('open');
                     }

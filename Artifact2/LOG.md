@@ -5221,6 +5221,78 @@ Hard stop 22:30 (demo video); unfinished parts carry to a later session.
 * **How It Was Verified:**  
   - By you, in your browser, with the real claude.
   - No code changed this turn.
+
+### Prompt 15 (2026-10-26; demo video prep)
+* **User Prompt:**  
+  > *"Help me prepare a video demonstrating this capability. It will be done on a fantasy map. Give me a prompt to ask it and steps"*
+* **What the AI Provided:**  
+  - A recording plan in chat: setup before recording, a scene-by-scene script, two chat prompts plus an optional "flagged place" prompt, talking points, and what to avoid on camera.
+  - No code changed.
+* **Where the Model Misread Me:**  
+  Not a misreading: I don't know your fantasy map's continents, so the prompts are written to work on any map rather than naming its places.
+
+### Prompt 16 (2026-10-26; demo video editing)
+* **User Prompt:**  
+  > *[Video editing task, outside the normal project rules: you may read and write in C:\Users\Kc\Videos\demo\ only (record this exception in the Session 11 prompt log). Never touch the original file; write new files next to it. Don't put any video or frames in the repo. Recording: C:\Users\Kc\Videos\demo\demo.mp4. With ffmpeg (check `ffmpeg -version` first): (1) find the long static "Thinking…" waits with freeze detection and extract one frame every 5 s into a frames\ subfolder; (2) propose an edit before cutting: keep / cut / speed up (~8× for waits, not cut entirely), a one-line reason each; (3) after approval, produce demo-edited.mp4 (H.264, AAC, under 3 minutes), then delete the frames folder. Give the exact commands and the final length.]*
+* **Exception recorded (your instruction):** for this task only, I may read and write in `C:\Users\Kc\Videos\demo\`, outside Artifact2/.
+  - demo.mp4 is read only, never modified.
+  - New files go next to it.
+  - No video or frames go in the repo.
+* **What the AI Provided:**  
+  - Recorded the exception.
+  - Confirmed demo.mp4 is there (100,922,012 bytes, untouched).
+  - **Stopped:** `ffmpeg` isn't installed or isn't on PATH (`ffmpeg -version` → "command not found" in Bash; `Get-Command ffmpeg, ffprobe` found nothing in PowerShell).
+  - I didn't search other folders for it, since that would go outside the one folder you allowed.
+  - Installing it is your call (my settings deny `winget install`).
+  - Waiting for you to install it or give me its path.
+* **How It Was Verified:**  
+  The two commands above; a listing of `C:\Users\Kc\Videos\demo\` shows only demo.mp4.
+
+### Prompt 17 (2026-10-26; ffmpeg's path)
+* **User Prompt:**  
+  > *[`where ffmpeg` output: C:\Users\Kc\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0.2-full_build\bin\ffmpeg.exe]*
+* **What the AI Provided:**  
+  - Ran ffmpeg 9.0.2 and ffprobe by that path, reading demo.mp4 only:
+    - 377.8 s, 1920×1080, 60 fps
+    - silent audio (−91 dB)
+  - Ran freeze detection.
+  - Extracted 76 frames (one every 5 s), plus 7 contact sheets, into `C:\Users\Kc\Videos\demo\frames\`.
+  - Proposed an edit; nothing is cut until you approve.
+  - Nothing was written in the repo except this log.
+* **Root Cause Discovered (a bug, not fixed in this task):**  
+  - In the recording, the follow-up chat question failed twice with "That message is too long (4,000 characters at most)".
+  - The bridge (`tools/bridge.py` `chat`) applies the 4,000-character limit to every resent history message. That includes Claude's own previous reply, which was long (28 map-tool calls, with the JSON places list).
+  - A fix needs your go-ahead: limit only the user's messages, and trim long assistant replies in the resent history.
+* **How It Was Verified:**  
+  - The frame at 340 s, read at full size, shows both errors under the follow-up question.
+  - The freeze log and the contact sheets give the timings in the proposal.
+
+### Prompt 18 (2026-10-26; edit approved, crop added)
+* **User Prompt:**  
+  > *[Approved, plus: crop out the browser's title bar and the Windows taskbar, measured from the frames, one crop for the whole video, fit into 1920×1080 with dark bars (no stretching). Before encoding, show one cropped preview frame around 4:30 so I can check the panel, legend, and chips are inside it. Then encode as planned, check the length, delete frames, and give every command. Leave the bridge bug for the next session.]*
+* **What the AI Provided:**  
+  - Measured the crop on a full-resolution frame at 4:30 (top and bottom strips): the browser chrome ends at about y = 104 and the taskbar starts at about y = 1036.
+  - One crop for the whole video: 1920 × 928 from y = 105 (even height for H.264), padded to 1920 × 1080 with 76 px dark bars (0x101216), not scaled.
+  - Sent you `frames\preview270.png` to check.
+  - Waiting for your OK before encoding.
+  - The bridge bug is left for the next session, as you asked.
+
+### Prompt 19 (2026-10-26; encode)
+* **User Prompt:**  
+  > *"The preview looks right. Encode demo-edited.mp4 as planned, check the length, delete frames, and give me every command."*
+* **What the AI Provided:**  
+  - Encoded `C:\Users\Kc\Videos\demo\demo-edited.mp4`: H.264 1920×1080 30 fps (CRF 20) and silent AAC 48 kHz stereo, 37.3 MB.
+  - The edit: 0–20 s at 2×, 20–70 s at 1×, 70–175 s at 8× (typing), 175–235.6 s at 8× (Thinking), 235.6–296 s at 1×; 296 s to the end cut.
+  - The crop: 1920×928 from y = 105, padded to 1080.
+  - Deleted `frames\`.
+  - Listed every command in chat.
+* **How It Was Verified:**  
+  - ffprobe: 141.1 s (2:21.1), exactly the planned total.
+  - Six frames sampled across the edit, tiled into one sheet and checked by eye: each part is in order, with the crop and bars.
+  - demo.mp4 is unchanged (100,922,012 bytes, same timestamp).
+  - The demo folder now holds only demo.mp4 and demo-edited.mp4.
+  - A search of Artifact2/ found no video or frame files.
+  - Still open: the bridge "too long" bug, for the next session.
 * **How It Was Verified:**  
   - Node 271/271.
   - The paste-and-click check in the app.

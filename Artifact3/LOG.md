@@ -567,6 +567,24 @@ as prompts. Each fix lists how it was verified.
   `materials/`. I didn't run git, so this doesn't check what GitHub Desktop
   will actually stage.
 
+### Prompt 24
+* **User Prompt:**  
+  > *"Start the server please and tell me how to demonstrate it"*
+* **What the AI Provided:**
+  - Found the bridge not running: the app had stopped it at 00:10 UTC, so
+    my earlier "still running" had gone stale. Restarted it in the
+    background.
+  - `/health` → 200, schema 2, `latest_seq` 20.
+  - The last payload was from exporter 0.2, so 0.3 isn't pasted yet and
+    the Grid size rule is still unconfirmed.
+  - Gave a demo script: live with TTS (recommended), or without TTS
+    through the test suite. Warned not to POST fixtures to the live
+    bridge, because they share `snapshots/` with the real table.
+* **Where the Model Misread Me:** n/a. Correction to Prompts 22–23: I said
+  the bridge was still running, but the app had stopped it at 00:10 UTC.
+* **How It Was Verified:** preview_list (not running), preview_start, GET
+  /health, and a read of `last_payload.json`'s `exporter` field.
+
 ### Decisions (M1)
 Recorded before implementing. "Unconfirmed" means I chose a default because
 the question wasn't answered yet; each is one constant or one function to

@@ -4646,9 +4646,9 @@ plans/map-companion-plan.md. The tile companion's behavior is unchanged.
 Hard stop 23:00.
 
 **Status**
-- (A) Export Map Data and Export Map Picture: **done**, awaiting your
-  by-eye check.
-- (B) the query tool: not started.
+- (A) Export Map Data and Export Map Picture: **done**; your by-eye check
+  passed and you committed it.
+- (B) the query tool: **done**, awaiting your by-hand check.
 - (C) `--ask` mode: not started.
 
 ### (A) Export Map Data, Export Map Picture
@@ -4697,6 +4697,51 @@ Hard stop 23:00.
     and the tropic labels.
 - Both downloads were captured in the preview pane rather than saved. The
   by-eye check is yours.
+
+### (B) Query tool: tools/mapquery.py
+
+**Changed**
+- tools/mapquery.py (new, standard library only, read-only).
+  - It reads the gzip file, or an uncompressed one.
+  - Three queries: `point`, `region`, `overview`. All areas are spherical
+    on the map's radius.
+  - Also `serve`: a stdio MCP server. It is newline-delimited JSON-RPC
+    with `initialize`, `ping`, `tools/list`, and `tools/call`; it sends no
+    reply to notifications, and `--log` appends one JSONL line per call.
+- tools/test_mapquery.py (16 tests).
+  - A synthetic 36 × 18 map: a landmass across the date line; another
+    with a 2,000 m range and a lake.
+  - Covers: point (land, ocean, lake, wrap, outside, a non-wrapping map);
+    region (across the date line, area-weighted land share, mixed
+    climates, a bad box); overview (extents, including across the date
+    line; the range; largest first).
+  - The server is tested in process and as a real stdio subprocess; the
+    CLI exit codes; a file written by the app's Node encoder.
+- tools/README.md: a "Map query tool" section.
+
+**Decisions** (from the approved plan):
+- landmasses are 8-neighbour, with lakes joined to the land around them
+- `is_land` means Land or Land ice
+- mountain ranges are ≥ 1,500 m and ≥ 20,000 km²
+
+**Problems**
+- Before the first test run I caught two bugs of my own:
+  - `lon_extent` took the wrong edge for the east longitude. The
+    across-the-date-line test now covers it: the old code gives east 160
+    instead of −160.
+  - `region` built 24 layer names per cell; the monthly layers are now
+    looked up once.
+- Known behavior, not changed: on Earth, the Antarctic and Greenland ice
+  sheets are above 1,500 m, so the overview lists them as mountain
+  ranges. That follows the approved rule, and it's recorded in the
+  README.
+
+**Verification checks**
+- Python 16/16; Node 267/267 (unchanged).
+- Timing on a synthetic 1024 × 512 file: load 0.04 s, point under 1 ms,
+  whole-map region 0.80 s, overview 0.76 s.
+- I can't read your exported Earth file: it's in your Downloads folder,
+  outside Artifact2/. The by-hand check against it is yours.
 
 ---
 
@@ -4773,6 +4818,19 @@ Hard stop 23:00.
   - Node 267/267.
   - Both exports checked in the app (details in the Map-wide companion
     entry).
+  - The tool log has every call.
+
+### Prompt 6
+* **User Prompt:**  
+  > *"A passes my by-eye check and is committed. Start B."*
+* **What the AI Provided:**  
+  - (B): tools/mapquery.py (three queries plus a stdio MCP server) and its 16 tests.
+  - A README section, timings, and the LOG entry.
+  - Hand-test commands and a commit message.
+  - No model was used.
+* **How It Was Verified:**  
+  - Python 16/16, including a stdio subprocess and a Node-written file; Node 267/267.
+  - Timings on a synthetic full-size grid.
   - The tool log has every call.
 * **Where the Model Misread Me:**  
   Not a misreading: your reply begins with ". (2)", so an item (1) may have been cut off. I asked you to resend it if so.

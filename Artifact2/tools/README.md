@@ -151,6 +151,43 @@ Exit codes:
 py -B -m unittest tools/test_companion.py
 ```
 
+## Map query tool (map-wide companion, bonus)
+
+`mapquery.py` answers read-only questions about a whole map exported with
+**File > Export Map Data** (`fcm-map-data-1024x512.bin.gz`). It never
+writes to the map file. Standard library only.
+
+```
+py -B tools/mapquery.py point    DATA LAT LON
+py -B tools/mapquery.py region   DATA SOUTH NORTH WEST EAST
+py -B tools/mapquery.py overview DATA
+py -B tools/mapquery.py serve    DATA --log calls.jsonl
+```
+
+- **point:** the cell at LAT/LON. Returns category, `is_land` (Land or
+  Land ice), elevation, the Köppen code, 12 monthly temperatures and rain
+  totals, and wind.
+- **region:** a box. A WEST value greater than EAST means the box crosses
+  the date line. Returns the land share, the main Köppen classes (% of
+  land area), the land elevation range, and mean annual rain and
+  temperature over land. Everything is area-weighted.
+- **overview:**
+  - Landmasses: connected land, with lakes counted as part of the land
+    around them. For each: extent, area in km², and main climates.
+  - Mountain ranges: connected land at or above 1,500 m, covering at
+    least 20,000 km². For each: extent and peak.
+  - Ice sheets on high plateaus (Antarctica, Greenland) count as ranges
+    under this rule.
+- **serve:** the same three queries as a stdio MCP server (tools `point`,
+  `region`, `overview`), for `companion.py --ask`. With `--log`, it
+  appends each call it receives to a JSONL file.
+
+Each cell is sampled at its center pixel. A point lookup can therefore
+differ slightly from the tile export at the same place: Paris is
+−0.6 °C here and −0.5 °C in the tile export.
+
+Tests (synthetic maps, no model): `py -B -m unittest tools/test_mapquery.py`
+
 ## Example
 
 [examples/](examples/) has a real pair from the first run (2026-10-25):

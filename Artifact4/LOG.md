@@ -1233,6 +1233,16 @@ Kc's decision:
     M4 ticked; plans/m4-plan.md notes the result; a commit message.
   - **Misreads / rule breaks:** none found.
   - **How It Was Verified:** n/a (no fixes; tests 125/125).
+- **Prompt:** "Craigslist currently gives a 404 error"
+  - **Provided:** printed the Craigslist links the app builds now, for no
+    city, a city, a city with a ZIP, and a phrase leave-out. All match the
+    forms confirmed in checks 8, 9, 10 and 35, so the app's format hasn't
+    changed. I asked for the exact URL that 404s and the address
+    Craigslist shows after a search by hand. Nothing changed yet.
+  - **Misreads / rule breaks:** none found. Per CLAUDE.md ("when one
+    looks wrong, say so instead of guessing"), I didn't change the adapter
+    without the failing URL. I didn't open Craigslist myself.
+  - **How It Was Verified:** n/a (no fix yet).
 
 ## Entry template
 ### YYYY-MM-DD — Session N: title

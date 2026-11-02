@@ -1,0 +1,8 @@
+# Tool-call logs stay on this machine (they hold commands and paths)
+tool-log/*.jsonl
+# Python bytecode (also breaks the no-leading-underscore rule)
+__pycache__/
+# Secrets never go in the repo
+.env
+.env.*
+secrets/

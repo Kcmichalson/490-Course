@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Price Check</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./src/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <h1 class="brand">Price Check</h1>
+      <form id="search-form" class="search" role="search">
+        <label for="search-words" class="visually-hidden">Search words</label>
+        <input id="search-words" name="words" type="search" required
+               placeholder="e.g. russell wilson foil card" autocomplete="off" enterkeyhint="search">
+        <button type="submit" class="button button-primary">Search</button>
+      </form>
+    </div>
+  </header>
+
+  <div class="layout">
+    <button type="button" id="filters-toggle" class="button filters-toggle"
+            aria-expanded="false" aria-controls="sidebar">Filters</button>
+
+    <aside id="sidebar" class="sidebar" aria-label="Filters">
+      <details class="filter" open>
+        <summary>Stores</summary>
+        <div class="filter-body">
+          <div class="button-row">
+            <button type="button" class="button button-small" data-stores="all">All</button>
+            <button type="button" class="button button-small" data-stores="none">None</button>
+          </div>
+          <div id="store-list" class="check-list"></div>
+        </div>
+      </details>
+
+      <details class="filter" open>
+        <summary>Price</summary>
+        <div class="filter-body">
+          <div class="price-row">
+            <label>Min $ <input id="price-min" type="text" inputmode="decimal" autocomplete="off"></label>
+            <label>Max $ <input id="price-max" type="text" inputmode="decimal" autocomplete="off"></label>
+          </div>
+          <div id="quick-ranges" class="button-row"></div>
+          <p id="price-message" class="field-note" hidden></p>
+        </div>
+      </details>
+
+      <details class="filter" open>
+        <summary>Condition</summary>
+        <fieldset class="filter-body radio-list">
+          <legend class="visually-hidden">Condition</legend>
+          <label><input type="radio" name="condition" value="any" checked> Any</label>
+          <label><input type="radio" name="condition" value="new"> New</label>
+          <label><input type="radio" name="condition" value="used"> Used</label>
+        </fieldset>
+      </details>
+
+      <details class="filter" open>
+        <summary>Buying format</summary>
+        <fieldset class="filter-body radio-list">
+          <legend class="visually-hidden">Buying format</legend>
+          <label><input type="radio" name="format" value="any" checked> Any</label>
+          <label><input type="radio" name="format" value="auction"> Auction</label>
+          <label><input type="radio" name="format" value="buyNow"> Buy now</label>
+          <p class="field-note">Only some stores can filter this.</p>
+        </fieldset>
+      </details>
+
+      <details class="filter" open>
+        <summary>Location</summary>
+        <div class="filter-body field-list">
+          <label>ZIP code <input id="loc-zip" type="text" inputmode="numeric" autocomplete="postal-code" maxlength="10"></label>
+          <p id="zip-message" class="field-note field-warning" hidden></p>
+          <label>Within
+            <select id="loc-radius"></select>
+          </label>
+          <label data-needs-site="craigslist">Craigslist city
+            <input id="loc-craigslist" type="text" autocomplete="off" placeholder="e.g. seattle">
+          </label>
+          <label data-needs-site="facebook">Facebook city
+            <input id="loc-facebook" type="text" autocomplete="off" placeholder="e.g. seattle">
+          </label>
+          <p class="field-note">For local stores. Leave blank to skip.</p>
+        </div>
+      </details>
+
+      <details class="filter" open>
+        <summary>Exclude words</summary>
+        <div class="filter-body">
+          <label for="exclude" class="visually-hidden">Exclude words</label>
+          <input id="exclude" type="text" autocomplete="off" placeholder="e.g. lot, broken, parts">
+          <p class="field-note">Separate words with commas or spaces.</p>
+        </div>
+      </details>
+
+      <details class="filter" open>
+        <summary>Category hint</summary>
+        <div class="filter-body">
+          <label for="category" class="visually-hidden">Category</label>
+          <select id="category"></select>
+          <p id="category-suggestion" class="field-note" hidden></p>
+          <button type="button" id="category-apply" class="button button-small" hidden>Use these</button>
+        </div>
+      </details>
+    </aside>
+
+    <main id="results" class="results" aria-live="polite"></main>
+  </div>
+</body>
+</html>

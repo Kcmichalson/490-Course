@@ -459,14 +459,18 @@ select {
 
 .saved-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 14rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 12rem) minmax(0, 14rem);
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
 
-@media (max-width: 479.98px) {
+@media (max-width: 639.98px) {
   .saved-filters {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .saved-filters input {
+    grid-column: 1 / -1;
   }
 }
 
@@ -549,4 +553,96 @@ select {
 
 .rename-form input {
   flex: 1 1 12rem;
+}
+
+/* Recorded prices on a saved-search card */
+.price-lines {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.price-line,
+.price-checked {
+  margin: 0;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.price-line .badge {
+  margin-right: 0.15rem;
+}
+
+.price-none,
+.price-checked {
+  color: var(--color-muted);
+}
+
+.price-form {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+}
+
+.price-form > label,
+.price-form .price-row label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.price-form input[type="date"] {
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.price-kind {
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.price-kind label,
+.price-form .member-free {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.price-history summary {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.price-history ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.price-history li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem 0.6rem;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
 }

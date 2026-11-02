@@ -10,6 +10,7 @@ import {
   addSearch, updateSearch, renameSearch, deleteSearch,
   serializeSaved, parseSaved, exportText, exportFileName, parseImport, mergeImport,
 } from "./core/saved.js";
+import { addPrice, deletePrice, formatMoney, priceFromForm } from "./core/prices.js";
 import { loadPrefsText, savePrefsText, loadSavedText, saveSavedText } from "./ui/storage.js";
 import { initSearchBar } from "./ui/search-bar.js";
 import { initSidebar } from "./ui/sidebar.js";
@@ -42,6 +43,7 @@ const savedList = initSavedList(document.getElementById("saved-view"), {
     buildSearch({ ...record.input, memberships: sidebar.read().memberships }),
     SITE_IDS.filter((id) => !record.input.storesOff.includes(id)),
   ),
+  membershipsNow: () => sidebar.read().memberships,
   onLoad: loadSaved,
   onRename(id, label) {
     commitSaved(renameSearch(saved, id, label));
@@ -52,6 +54,18 @@ const savedList = initSavedList(document.getElementById("saved-view"), {
   },
   onExport: exportSaved,
   onImport: importSaved,
+  // Returns { ok, message } so the form can show what's wrong.
+  onRecordPrice(searchId, form) {
+    const result = priceFromForm(form, { id: newId("p"), now: new Date().toISOString(), siteIds: SITE_IDS });
+    if (!result.ok) return result;
+    const { price } = result;
+    const site = SITES.find((s) => s.id === price.siteId)?.name ?? "Other";
+    commitSaved(addPrice(saved, searchId, price), `Recorded ${formatMoney(price.amount)} ${price.kind} on ${site}.`);
+    return { ok: true };
+  },
+  onDeletePrice(searchId, priceId) {
+    commitSaved(deletePrice(saved, searchId, priceId), "Price deleted.");
+  },
 });
 
 // Tabs: Search (sidebar + results) and Saved.
@@ -113,9 +127,10 @@ function commitSaved(next, message) {
   return stored;
 }
 
-function newId() {
+// "s-…" for a saved search, "p-…" for a price.
+function newId(prefix = "s") {
   const random = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
-  return `s-${random}`;
+  return `${prefix}-${random}`;
 }
 
 function saveCurrent(mode) {

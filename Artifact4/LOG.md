@@ -420,6 +420,94 @@ Quote him where it matters.)
     console errors.
   - **M2 complete.**
 
+### 2026-11-01 — Session 1 (cont.): M3 recording prices
+- **Planned:** plans/m3-plan.md (approved with Kc's change: import merges
+  prices into already-saved searches by price id, with counts; defaults
+  for the rest).
+- **Changed:**
+  - New `src/core/prices.js`: money as whole cents
+    (`parseMoney` / `formatMoney`), a price from the form with clear
+    messages, add / delete, your total, wording ("$12.50 + $4.00
+    shipping", "+ free shipping (Amazon Prime)", "shipping not
+    entered"), latest sold / asking, last checked, five sort modes, and
+    dates as "Nov 1".
+  - `src/core/saved.js`:
+    - records carry `prices`; bad prices are dropped and the search kept;
+    - `SAVED_VERSION` is 2; version 1 storage and files load with no
+      prices;
+    - `mergeImport` adds new searches with their prices and adds only new
+      price ids to searches already saved, leaving their label and
+      filters alone;
+    - new message "Imported 2 new searches and 5 new prices; 3 already
+      saved."
+  - `src/ui/saved-list.js`:
+    - a Sort select;
+    - each card's Sold / Asking lines and "Last checked" / "Not checked
+      yet";
+    - "Record a price" (inline form with Sold/Asking, store, price,
+      shipping, "Free shipping with Amazon Prime" when it applies, date,
+      note, and an error line);
+    - "Prices (N)" history with Delete, which asks first; the open state
+      survives redraws.
+  - `src/main.js`: record and delete callbacks; ids are "p-…" for prices.
+  - `style.css`: price lines, form and history, using CSS variables only.
+- **Problems:**
+  - Two expectations I'd just written in the new prices.test.js were wrong
+    (my own date-order and tie mistakes). I fixed them; details in the
+    prompt log.
+  - Changing the import wording (Kc's change) and bumping the version
+    broke three M2 tests that asserted the old wording and treated
+    version 2 as "newer". I updated them to the new format and to
+    version 3.
+  - In the browser, one re-import test reused a file list the app had
+    just cleared. That was a test-script slip; a fresh file showed the
+    right message.
+  - One 400 px screenshot came back blank (a pane capture glitch); the DOM
+    measurements are what count.
+- **Checks:**
+  - `node --test "tests/*.test.js"`: 141 tests, 141 pass, 0 fail, 0 todo.
+    New: prices.test.js (11) and 5 more saved tests, including the
+    price-merge test Kc asked for: new prices added, a duplicate skipped,
+    label, filters and updated time unchanged, counts, and a second import
+    adds nothing.
+  - Built-in browser, 1280 px, with clicks and inputs on the page:
+    - saved the three test searches and ticked Prime;
+    - recorded:
+      - an eBay sold price, $12.50 + $4 shipping (Oct 28);
+      - a Mercari sold price, $9, shipping blank, with a note (Nov 1);
+      - an Amazon asking price, $19.99 + $5.99 with "Free shipping with
+        Amazon Prime" ticked (Nov 1);
+      - an eBay sold price, $35 with $0 shipping (Oct 20);
+      - a Craigslist asking price, $150 (Oct 30);
+    - the Prime checkbox showed only for Amazon; the cursor lands in Price;
+      "abc" gave "Enter the price, like 12.50."; each save showed
+      "Recorded … on …";
+    - cards: russell shows Sold $9.00 Mercari Nov 1 (the newest date wins
+      over Oct 28) and Asking $19.99 with free shipping, "Last checked Nov
+      1"; star wars and dresser show "No asking/sold price yet";
+    - sorts: sold low = russell, star, dresser (no sold price last); sold
+      high = star, russell, dresser; asking low = russell, dresser, star;
+      checked longest ago = star (Oct 20), dresser (Oct 30), russell;
+    - history: "Prices (3)", newest first; Delete asked "Delete the $9.00
+      Mercari price from Nov 1?", and the sold line fell back to eBay
+      $16.50 with the list still open;
+    - reload: prices kept;
+    - export (version 2); renamed russell and deleted its eBay price;
+      imported the export → "Imported 1 new price; 3 already saved.",
+      the label stayed "Wilson foil (here)", and the prices went back to 2
+      with no duplicate in storage; the same file again → "Nothing new to
+      import; … already saved."; a version 1 file → "Imported 3 new
+      searches."
+  - 400 px: the list, an open record form (with the Prime checkbox
+    showing) and an open history all have scroll width 400 with no
+    element past the edge; the filter bar ends at 384.
+  - No console errors. The pane's storage was cleared and its viewport
+    reset afterward. No store site was opened.
+  - Not yet: your by-eye check.
+- **Update (Kc's by-eye check):** Kc wrote "I'm a bit confused but I
+  think it worked." M3 is not ticked yet. I asked what was confusing,
+  since it may point to M4 help-text or layout fixes.
+
 ### Session 1 prompt log
 - **Prompt:** "Read CLAUDE.md, SPEC.md, and LOG.md first. Start 'Session 1
   prompt log' in LOG.md. [Step 1: run the M0 checks one at a time and
@@ -654,6 +742,65 @@ Quote him where it matters.)
   - **How It Was Verified:** the new test asserting Prime leaves the Amazon
     URL unchanged (pass); the app's Amazon link with Prime ticked checked
     in the built-in browser (no `p_85`, note shown).
+- **Prompt:** "Plan M3"
+  - **Provided:** reread SPEC M3; wrote the M3 plan (in plan mode) and
+    submitted it.
+  - **Misreads / rule breaks:** plan mode blocked file edits, so this entry
+    was written after approval.
+  - **How It Was Verified:** n/a (no fixes).
+- **Prompt (M3 plan approval, sent from the approval dialog):** "Approved
+  with one change: when an imported search is already saved, merge its
+  prices by price id instead of skipping it. Add prices that aren't there
+  yet, skip duplicates, and report counts ('Imported 2 new searches and 5
+  new prices; 3 already saved'). Add tests for that merge (new prices
+  added, duplicates skipped, the existing search's label and filters
+  unchanged). Accept your defaults for the rest. Save the plan to
+  plans/m3-plan.md and start."
+  - **Provided:** plans/m3-plan.md with the change; M3 built and checked
+    (see the M3 entry); a by-eye checklist.
+  - **Misreads / rule breaks:**
+    - Without stopping to ask, I changed test expectations in two places:
+      - three M2 import tests, to your new message format and the approved
+        version bump;
+      - two expectations in the prices.test.js I had just written:
+        - I had put an Oct 15 price after an Oct 20 one;
+        - I had ignored that two searches were both last checked Nov 1,
+          so their tie keeps the original order.
+
+      Both were my test mistakes; the code was right.
+    - "New prices" in the import message counts every price new to your
+      list, including those on new searches. Tell me if you meant only
+      prices merged into searches already saved.
+  - **How It Was Verified:** the two prices.test.js expectations: worked
+    by hand from the test data (Oct 20 is newer than Oct 15; a and d
+    share Nov 1) and the test passes. The browser showed the same tie
+    rule: two Nov 1 prices listed by entry order.
+- **Prompt:** "I'm a bit confused but I think it worked. When will this
+  actually be able to display live results?"
+  - **Provided:** an answer from SPEC M5 and CLAUDE.md:
+    - live prices in the app need an official store API (eBay's for
+      asking prices) and a key;
+    - a static site can't hide a key, so it needs a small server (proxy),
+      which the current rules (no server-side code, no keys) don't allow;
+    - so it's a separate decision and plan, not scheduled before Nov 8.
+
+    Also asked what was confusing in M3; M3 left unticked.
+  - **Misreads / rule breaks:** none found. No web lookups; nothing built
+    toward M5.
+  - **How It Was Verified:** n/a (no fixes).
+- **Prompt:** "I'm not sure what saving a sold price does, here"
+  - **Provided:** an explanation in chat:
+    - the app can't read prices, so "Record a price" is his notebook;
+    - a sold price is what something actually sold for (the value), an
+      asking price is what sellers want now;
+    - recording one makes the card show the latest value, "Last checked",
+      and the price sorts.
+
+    Offered a one-line explanation on the record form now, or in M4's help
+    text.
+  - **Misreads / rule breaks:** none found. This confusion is a usability
+    finding: nothing on the card says what recording a price is for.
+  - **How It Was Verified:** n/a (no fixes).
 
 ## Entry template
 ### YYYY-MM-DD — Session N: title

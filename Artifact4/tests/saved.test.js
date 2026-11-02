@@ -5,6 +5,7 @@ import {
   addSearch, updateSearch, renameSearch, deleteSearch, filterSearches, summarizeInput,
   serializeSaved, parseSaved, exportText, exportFileName, parseImport, mergeImport, importMessage,
 } from "../src/core/saved.js";
+import { addPrice } from "../src/core/prices.js";
 
 const IDS = ["ebay", "mercari", "craigslist"];
 const T1 = "2026-11-03T10:00:00.000Z";
@@ -134,19 +135,25 @@ test("export, then import into an empty list: everything comes back", () => {
   assert.equal(parsed.ok, true);
   const merged = mergeImport([], parsed.searches, IDS);
   assert.deepEqual(merged.list, list);
-  assert.equal(merged.message, "Imported 3 searches.");
+  assert.equal(merged.message, "Imported 3 new searches.");
 });
 
-test("import merges: ids already saved are skipped and counted", () => {
+test("import: searches already saved are counted; nothing duplicated", () => {
   const list = sample();
   const { searches } = parseImport(exportText(list, T3));
   const partial = deleteSearch(list, "s-2");
   const merged = mergeImport(partial, searches, IDS);
   assert.deepEqual(merged.list.map((r) => r.id), ["s-3", "s-2", "s-1"]);
-  assert.equal(merged.message, "Imported 1 search (2 were already saved).");
-  assert.equal(mergeImport(list, searches, IDS).message, "Nothing new to import (all 3 were already saved).");
-  assert.equal(importMessage(0, 1), "Nothing new to import (it was already saved).");
-  assert.equal(importMessage(2, 1), "Imported 2 searches (1 was already saved).");
+  assert.equal(merged.message, "Imported 1 new search; 2 already saved.");
+  assert.equal(mergeImport(list, searches, IDS).message, "Nothing new to import; 3 already saved.");
+});
+
+test("import message wording (Kc's format)", () => {
+  assert.equal(importMessage(2, 5, 3), "Imported 2 new searches and 5 new prices; 3 already saved.");
+  assert.equal(importMessage(1, 1, 1), "Imported 1 new search and 1 new price; 1 already saved.");
+  assert.equal(importMessage(0, 4, 2), "Imported 4 new prices; 2 already saved.");
+  assert.equal(importMessage(3, 0, 0), "Imported 3 new searches.");
+  assert.equal(importMessage(0, 0, 3), "Nothing new to import; 3 already saved.");
 });
 
 test("bad files are rejected with a clear message", () => {
@@ -158,7 +165,7 @@ test("bad files are rejected with a clear message", () => {
     ['{"searches":[]}', IMPORT_MESSAGES.notExport],
     ['{"app":"other-app","version":1,"searches":[]}', IMPORT_MESSAGES.notExport],
     ['{"app":"price-check","version":1,"searches":"x"}', IMPORT_MESSAGES.notExport],
-    ['{"app":"price-check","version":2,"searches":[]}', IMPORT_MESSAGES.newer],
+    ['{"app":"price-check","version":3,"searches":[]}', IMPORT_MESSAGES.newer],
     ['{"app":"price-check","searches":[]}', IMPORT_MESSAGES.newer],
     [" ".repeat(MAX_IMPORT_BYTES + 1), IMPORT_MESSAGES.tooLarge],
   ];
@@ -173,6 +180,107 @@ test("a valid file with no usable searches changes nothing", () => {
     const result = mergeImport(list, searches, IDS);
     assert.deepEqual(result, { ok: false, list, message: IMPORT_MESSAGES.empty });
   }
+});
+
+// A recorded price, as prices.js stores it.
+const price = (id, extra = {}) => ({
+  id, kind: "sold", siteId: "ebay", amount: 1250, shipping: 400, memberFree: null,
+  date: "2026-11-01", note: "", created: T1, ...extra,
+});
+
+function withPrices() {
+  let list = sample();
+  list = addPrice(list, "s-1", price("p-1"));
+  list = addPrice(list, "s-1", price("p-2", { kind: "asking", siteId: "mercari", shipping: null }));
+  return addPrice(list, "s-3", price("p-3", { siteId: "craigslist", amount: 9000, shipping: 0 }));
+}
+
+test("new searches start with no prices; update and rename keep prices", () => {
+  assert.ok(sample().every((r) => Array.isArray(r.prices) && r.prices.length === 0));
+  let list = withPrices();
+  list = updateSearch(list, "s-1", form("russell wilson foil card", { priceMax: "40" }), { now: T3, siteIds: IDS });
+  list = renameSearch(list, "s-1", "Wilson");
+  assert.deepEqual(list.find((r) => r.id === "s-1").prices.map((p) => p.id), ["p-1", "p-2"]);
+});
+
+test("prices survive browser storage and export/import", () => {
+  const list = withPrices();
+  assert.deepEqual(parseSaved(serializeSaved(list), IDS), list);
+  const { searches } = parseImport(exportText(list, T3));
+  assert.deepEqual(mergeImport([], searches, IDS).list, list);
+  assert.equal(JSON.parse(exportText(list, T3)).version, 2);
+});
+
+test("a version 1 file (from M2, no prices) still imports", () => {
+  const v1 = JSON.stringify({
+    app: "price-check", version: 1, exported: T3,
+    searches: sample().map(({ prices, ...rest }) => rest),
+  });
+  const parsed = parseImport(v1);
+  assert.equal(parsed.ok, true);
+  const merged = mergeImport([], parsed.searches, IDS);
+  assert.equal(merged.list.length, 3);
+  assert.ok(merged.list.every((r) => r.prices.length === 0));
+  assert.equal(parseSaved(JSON.stringify({ version: 1, searches: JSON.parse(v1).searches }), IDS).length, 3);
+});
+
+test("bad prices are dropped; the search is kept", () => {
+  const good = withPrices().find((r) => r.id === "s-1");
+  const stored = JSON.stringify({
+    version: 2,
+    searches: [{
+      ...good,
+      prices: [
+        ...good.prices,
+        price("p-1"),                                  // duplicate id
+        price("p-9", { amount: 0 }),                   // no amount
+        price("p-8", { amount: 12.5 }),                // not whole cents
+        price("p-7", { kind: "maybe" }),
+        price("p-6", { siteId: "myspace" }),
+        price("p-5", { date: "2026-02-30" }),
+        price("p-4", { shipping: -100 }),
+        "junk",
+      ],
+    }],
+  });
+  const [r] = parseSaved(stored, IDS);
+  assert.equal(r.id, "s-1");
+  assert.deepEqual(r.prices.map((p) => p.id), ["p-1", "p-2"]);
+});
+
+test("import merge: new prices added to a saved search, duplicates skipped, label and filters unchanged", () => {
+  // At home: s-1 renamed and its max changed, with prices p-1 and p-2.
+  let home = withPrices();
+  home = renameSearch(home, "s-1", "Wilson (home)");
+  home = updateSearch(home, "s-1", form("russell wilson foil card", { priceMax: "40", category: "cards" }), { now: T3, siteIds: IDS });
+  const homeS1 = home.find((r) => r.id === "s-1");
+
+  // The other browser's file: s-1 with p-1 (duplicate) plus p-10 and p-11,
+  // its old label and filters; s-2 with p-12; and a new search s-4 with p-13.
+  let other = withPrices();
+  other = addPrice(other, "s-1", price("p-10", { date: "2026-11-02" }));
+  other = addPrice(other, "s-1", price("p-11", { kind: "asking", siteId: "ebay" }));
+  other = addPrice(other, "s-2", price("p-12", { siteId: "mercari" }));
+  other = add(other, "pokemon base set charizard", "s-4", T3, { category: "cards" });
+  other = addPrice(other, "s-4", price("p-13"));
+  const { searches } = parseImport(exportText(other, T3));
+
+  const merged = mergeImport(home, searches, IDS);
+  const s1 = merged.list.find((r) => r.id === "s-1");
+  assert.deepEqual(s1.prices.map((p) => p.id), ["p-1", "p-2", "p-10", "p-11"]);
+  assert.equal(s1.label, "Wilson (home)");
+  assert.deepEqual(s1.input, homeS1.input);
+  assert.equal(s1.updated, homeS1.updated);
+  assert.deepEqual(merged.list.find((r) => r.id === "s-2").prices.map((p) => p.id), ["p-12"]);
+  assert.deepEqual(merged.list.find((r) => r.id === "s-3").prices.map((p) => p.id), ["p-3"]);
+  assert.deepEqual(merged.list.find((r) => r.id === "s-4").prices.map((p) => p.id), ["p-13"]);
+  assert.deepEqual(merged.counts, { searches: 1, prices: 4, already: 3 });
+  assert.equal(merged.message, "Imported 1 new search and 4 new prices; 3 already saved.");
+
+  // Importing the same file again adds nothing.
+  const again = mergeImport(merged.list, searches, IDS);
+  assert.deepEqual(again.list, merged.list);
+  assert.equal(again.message, "Nothing new to import; 4 already saved.");
 });
 
 test("special characters survive export and import", () => {

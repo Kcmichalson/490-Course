@@ -8,12 +8,15 @@
 //
 // { id, label, input: { words, priceMin, priceMax, condition, format,
 //   exclude, category, storesOff, location: { zip, radius, craigslistCity,
-//   facebookCity } }, created, updated }
+//   facebookCity } }, prices: [see prices.js], created, updated }
+//
+// Version 2 added prices (M3). Version 1 data loads with prices: [].
 
 import { CONDITIONS, FORMATS, normalizeCity, normalizePrice, normalizeRadius, normalizeZip } from "./query.js";
 import { CATEGORIES, DEFAULT_CATEGORY } from "./categories.js";
+import { cleanPrice } from "./prices.js";
 
-export const SAVED_VERSION = 1;
+export const SAVED_VERSION = 2;
 export const EXPORT_APP = "price-check";
 export const MAX_IMPORT_BYTES = 1_000_000;
 
@@ -65,9 +68,25 @@ function cleanRecord(raw, siteIds) {
     id: raw.id,
     label: text(raw.label, 200) || input.words,
     input,
+    prices: cleanPrices(raw.prices, siteIds),
     created: raw.created,
     updated: isTime(raw.updated) ? raw.updated : raw.created,
   };
+}
+
+// Bad prices are dropped (the search is kept); each price id once.
+function cleanPrices(raw, siteIds) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const prices = [];
+  for (const item of raw) {
+    const price = cleanPrice(item, siteIds);
+    if (price && !seen.has(price.id)) {
+      seen.add(price.id);
+      prices.push(price);
+    }
+  }
+  return prices;
 }
 
 const newestFirst = (list) => [...list].sort((a, b) => b.created.localeCompare(a.created));
@@ -88,7 +107,7 @@ function cleanList(records, siteIds) {
 export function addSearch(list, rawInput, { id, now, siteIds }) {
   const input = cleanInput(rawInput, siteIds);
   if (!input) return list;
-  return newestFirst([{ id, label: input.words, input, created: now, updated: now }, ...list]);
+  return newestFirst([{ id, label: input.words, input, prices: [], created: now, updated: now }, ...list]);
 }
 
 // New filters for an existing search; its label and created time stay.
@@ -180,23 +199,43 @@ export function parseImport(fileText) {
   return { ok: true, searches: data.searches };
 }
 
-// Adds imported searches whose id isn't already saved.
+// Adds imported searches whose id isn't saved yet, with their prices. For a
+// search that is already saved, only its new prices (by price id) are
+// added; its label and filters stay as they are.
 export function mergeImport(list, searches, siteIds) {
   const incoming = cleanList(searches, siteIds);
   if (incoming.length === 0) return { ok: false, list, message: IMPORT_MESSAGES.empty };
-  const have = new Set(list.map((r) => r.id));
-  const added = incoming.filter((r) => !have.has(r.id));
-  const skipped = incoming.length - added.length;
+  const byId = new Map(incoming.map((r) => [r.id, r]));
+  let newPrices = 0;
+  let already = 0;
+  const merged = list.map((r) => {
+    const imported = byId.get(r.id);
+    if (!imported) return r;
+    already += 1;
+    byId.delete(r.id);
+    const have = new Set(r.prices.map((p) => p.id));
+    const fresh = imported.prices.filter((p) => !have.has(p.id));
+    newPrices += fresh.length;
+    return fresh.length ? { ...r, prices: [...r.prices, ...fresh] } : r;
+  });
+  const added = [...byId.values()];
+  newPrices += added.reduce((n, r) => n + r.prices.length, 0);
   return {
     ok: true,
-    list: newestFirst([...list, ...added]),
-    message: importMessage(added.length, skipped),
+    list: newestFirst([...merged, ...added]),
+    message: importMessage(added.length, newPrices, already),
+    counts: { searches: added.length, prices: newPrices, already },
   };
 }
 
-export function importMessage(added, skipped) {
-  const noun = (n) => `${n} ${n === 1 ? "search" : "searches"}`;
-  if (added === 0) return `Nothing new to import (${skipped === 1 ? "it was" : `all ${skipped} were`} already saved).`;
-  const tail = skipped ? ` (${skipped} ${skipped === 1 ? "was" : "were"} already saved)` : "";
-  return `Imported ${noun(added)}${tail}.`;
+// "Imported 2 new searches and 5 new prices; 3 already saved."
+// New prices counts every price new to his list (on new searches too).
+export function importMessage(searches, prices, already) {
+  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const parts = [];
+  if (searches) parts.push(count(searches, "new search", "new searches"));
+  if (prices) parts.push(count(prices, "new price", "new prices"));
+  const tail = already ? `; ${already} already saved` : "";
+  if (parts.length === 0) return `Nothing new to import${tail}.`;
+  return `Imported ${parts.join(" and ")}${tail}.`;
 }

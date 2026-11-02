@@ -4,6 +4,7 @@
 // save this search.
 
 import { VIEW_LABELS } from "../core/sites/index.js";
+import { openAll, openAllMessage } from "../core/open-all.js";
 
 const GROUPS = [
   {
@@ -57,12 +58,36 @@ export function initResults(container, { onSave }) {
     markOpened(links[i].url);
   }
 
+  // window.open with "noopener" always returns null, so it can't tell a
+  // blocked tab from an opened one. Open without it, then cut the link
+  // back to this page by hand: same protection, and null means blocked.
+  function openTab(url) {
+    const tab = window.open(url, "_blank");
+    if (!tab) return false;
+    try {
+      tab.opener = null;
+    } catch {
+      // Some browsers don't allow setting it; the tab is still open.
+    }
+    return true;
+  }
+
+  function openEveryLink() {
+    const result = openAll(links, openTab);
+    for (const url of result.opened) opened.add(url);
+    notice = openAllMessage(result.opened.length, result.blocked.length);
+    draw();
+  }
+
+  let notice = ""; // what Open all reports when tabs were blocked
+
   // save: { loaded: true when a saved search is loaded, status: "Saved." }
   let state = { words: "", selectedCount: 0, save: { loaded: false, status: "" } };
 
   function render(next) {
     state = next;
     links = next.links;
+    notice = "";
     const urls = new Set(links.map((l) => l.url));
     for (const url of [...opened]) if (!urls.has(url)) opened.delete(url);
     draw();
@@ -86,16 +111,20 @@ export function initResults(container, { onSave }) {
     const status = i === -1
       ? `All ${links.length} opened.`
       : `Next: ${links[i].name} (${VIEW_LABELS[links[i].view]}), ${i + 1} of ${links.length}`;
-    const nextButton = el("button", { type: "button", class: "button button-primary" },
+    const nextButton = el("button", { type: "button", class: "button" },
       i === -1 ? "Start over" : "Open next");
     nextButton.addEventListener("click", openNext);
+    const allButton = el("button", { type: "button", class: "button button-primary" }, `Open all (${links.length})`);
+    allButton.addEventListener("click", openEveryLink);
 
     container.append(
       el("div", { class: "results-head" },
         el("h2", { class: "results-title" }, `Results for “${state.words}”`),
         saveControls(),
-        el("div", { class: "open-next" }, nextButton, el("span", { class: "open-next-status" }, status)),
+        el("div", { class: "open-next" },
+          allButton, nextButton, el("span", { class: "open-next-status" }, status)),
       ),
+      notice ? el("p", { class: "open-all-message", role: "alert" }, notice) : null,
     );
 
     for (const group of GROUPS) {

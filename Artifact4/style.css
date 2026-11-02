@@ -428,6 +428,17 @@ select {
   color: var(--color-warning);
 }
 
+/* Open all: shown when the browser blocked some tabs */
+.open-all-message {
+  margin: -0.25rem 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-warning);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+}
+
 /* Save buttons in the results head */
 .save-controls {
   display: flex;

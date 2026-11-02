@@ -166,6 +166,9 @@ export function initSavedList(container, {
     showMember();
 
     const form = el("form", { class: "price-form", "aria-label": `Record a price for ${record.label}` },
+      el("p", { class: "field-note" },
+        "Write down a price you saw on a store page. The app keeps your notes so you can compare later; " +
+        "it doesn't read prices itself."),
       el("fieldset", { class: "price-kind" },
         el("legend", { class: "visually-hidden" }, "Sold or asking"),
         kind("sold", "Sold", true), kind("asking", "Asking", false)),

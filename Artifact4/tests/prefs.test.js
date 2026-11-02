@@ -1,20 +1,33 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { defaultPrefs, parsePrefs, serializePrefs, selectedStores } from "../src/core/prefs.js";
+import { DEFAULT_STORES_ON, defaultPrefs, parsePrefs, serializePrefs, selectedStores } from "../src/core/prefs.js";
 import { suggestionFor } from "../src/core/categories.js";
 
 const IDS = ["ebay", "mercari", "craigslist"];
+const MORE_IDS = ["ebay", "mercari", "facebook", "craigslist", "etsy"];
 
-test("defaults: all stores on, filters at any, location blank", () => {
-  const prefs = defaultPrefs();
-  assert.deepEqual(prefs.storesOff, []);
+// Kc's decision (2026-11-01): with nothing remembered, only eBay, Facebook
+// Marketplace and Mercari are on. (Was: all stores on.)
+test("defaults: eBay, Facebook and Mercari on, filters at any, location blank", () => {
+  assert.deepEqual(DEFAULT_STORES_ON, ["ebay", "facebook", "mercari"]);
+  const prefs = defaultPrefs(MORE_IDS);
+  assert.deepEqual(prefs.storesOff, ["craigslist", "etsy"]);
+  assert.deepEqual(selectedStores(prefs, MORE_IDS), ["ebay", "mercari", "facebook"]);
   assert.equal(prefs.condition, "any");
   assert.equal(prefs.format, "any");
   assert.deepEqual(prefs.location, { zip: "", radius: 25, craigslistCity: "", facebookCity: "" });
   assert.equal(prefs.exclude, "");
   assert.equal(prefs.category, "other");
   assert.deepEqual(prefs.memberships, []);
-  assert.deepEqual(selectedStores(prefs, IDS), IDS);
+});
+
+test("remembered store choices stay as they are under the new default", () => {
+  const allOn = serializePrefs({ ...defaultPrefs(MORE_IDS), storesOff: [] });
+  assert.deepEqual(selectedStores(parsePrefs(allOn, MORE_IDS), MORE_IDS), MORE_IDS);
+  const someOff = serializePrefs({ ...defaultPrefs(MORE_IDS), storesOff: ["ebay"] });
+  assert.deepEqual(parsePrefs(someOff, MORE_IDS).storesOff, ["ebay"]);
+  // Remembered prefs without a storesOff list fall back to the default.
+  assert.deepEqual(parsePrefs('{"condition":"used"}', MORE_IDS).storesOff, ["craigslist", "etsy"]);
 });
 
 test("memberships: kept in list order, unknown ids and duplicates dropped", () => {
@@ -41,7 +54,7 @@ test("round trip keeps every remembered choice", () => {
 
 test("missing, empty or corrupt storage gives defaults", () => {
   for (const text of [null, "", "{not json", "[1,2]", "42", "null"]) {
-    assert.deepEqual(parsePrefs(text, IDS), defaultPrefs(), `input: ${text}`);
+    assert.deepEqual(parsePrefs(text, IDS), defaultPrefs(IDS), `input: ${text}`);
   }
 });
 

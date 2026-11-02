@@ -165,3 +165,7 @@ Last checked Nov 1                     (or "Not checked yet")
 
 Suggested extras (not in M3): edit a price in place; a small price history
 line per store.
+
+**Result (2026-11-01):** M3 complete. Kc found "Record a price" unclear at
+first, so the form now starts with an explanation (plans/refocus-plan.md).
+Per Kc's links-first decision, price recording is an optional notebook.

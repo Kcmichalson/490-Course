@@ -8,7 +8,8 @@ CLAUDE.md describes.
 - [x] M0: Setup (no up-front interview; SPEC section 2 holds Kc's decisions)
 - [x] M1: Search builder (2026-11-01; all ten sites checked by Kc)
 - [x] M2: Saved searches (2026-11-01; Kc's by-eye check passed)
-- [ ] M3: Recording prices
+- [x] M3: Recording prices (2026-11-01; an optional notebook, per Kc's
+  links-first decision)
 - [ ] M4: Hand-over and one round of fixes
 
 ## Decisions so far (before Session 1)
@@ -507,6 +508,94 @@ Quote him where it matters.)
 - **Update (Kc's by-eye check):** Kc wrote "I'm a bit confused but I
   think it worked." M3 is not ticked yet. I asked what was confusing,
   since it may point to M4 help-text or layout fixes.
+- **Update:** what confused Kc was what recording a sold price is for.
+  The record form now starts with an explanation (see the Open all
+  entry). After checking Open all, Kc answered "Yes to both", and M3 is
+  ticked (Kc: "M3 can be ticked after my check"). Kc didn't report the
+  default stores and the record-form hint separately; I checked both in
+  the built-in browser. **M3 complete.**
+
+### 2026-11-01 — Decision: links first; M5 declined
+Kc's decision:
+- **Main function:** the app's main job is translating one search and its
+  filters into correctly filtered links for many resale sites, opened in
+  tabs.
+- **Price recording (M3):** stays as an optional notebook.
+- **Live prices (M5):** considered and declined, because:
+  - eBay's sold-price data is restricted;
+  - Facebook Marketplace and Mercari have no public API;
+  - any API key needs a server to keep it secret, which a static GitHub
+    Pages site can't provide and this project's rules exclude.
+- **Default stores** for a visitor with no remembered choices: eBay,
+  Facebook Marketplace and Mercari on, the other seven off. Remembered
+  choices stay as they are.
+- Recorded in SPEC section 1 (purpose), section 2 (default stores),
+  section 4 (Stores default), section 5 ("Opening many tabs", now with
+  Open all) and section 6 (M5). Plan: plans/refocus-plan.md.
+
+### 2026-11-01 — Session 1 (cont.): Open all, record-form hint, default stores
+- **Planned:** plans/refocus-plan.md (approved; Kc chose eBay, Facebook
+  Marketplace and Mercari as the default stores).
+- **Changed:**
+  - New `src/core/open-all.js`: `openAll(links, openTab)` returns which
+    links opened and which were blocked; `openAllMessage` gives the
+    blocked-tabs wording with the Chrome / Edge steps.
+  - `src/ui/results.js`:
+    - an "Open all (N)" button (now the main button; "Open next" is the
+      plain one);
+    - a blocked-tabs message under the head; tabs that opened are marked
+      "Opened";
+    - Open all calls `window.open(url, "_blank")` without "noopener"
+      (which always returns null, so a block couldn't be detected) and then
+      sets `opener = null`. One difference from Open next: these tabs can
+      see that they came from this page (no "noreferrer").
+  - `src/ui/saved-list.js`: the record form starts with "Write down a
+    price you saw on a store page. The app keeps your notes so you can
+    compare later; it doesn't read prices itself."
+  - `src/core/prefs.js`: `DEFAULT_STORES_ON` (eBay, Facebook, Mercari);
+    `defaultPrefs(siteIds)` turns the other stores off; stored `storesOff`
+    is kept exactly as remembered.
+  - `style.css`: the message box, using CSS variables only.
+- **Tests that assumed the old "all stores on" default** (updated
+  because the default changed, not because code was wrong):
+  - prefs.test.js "defaults: all stores on…" became "defaults: eBay,
+    Facebook and Mercari on…". It had called `defaultPrefs()` with no
+    store list, so it still passed but no longer tested the real
+    default.
+  - "missing, empty or corrupt storage gives defaults" now compares with
+    `defaultPrefs(IDS)`; it failed after the change, as the plan
+    predicted.
+  - New: "remembered store choices stay as they are under the new
+    default". New tests/open-all.test.js (3).
+- **Checks:**
+  - `node --test "tests/*.test.js"`: 145 tests, 145 pass, 0 fail.
+  - Built-in browser, with `window.open` stubbed (no store sites opened):
+    - fresh storage → only eBay, Mercari and Facebook ticked; "russell
+      wilson foil card" → 5 links, "Open all (5)";
+    - every tab allowed → 5 calls with no "noopener", all marked "Opened",
+      "All 5 opened.", no message;
+    - first allowed, rest blocked (as Chrome does by default) → 1 opened,
+      the message "Your browser blocked 4 of 5 tabs…", status "Next:
+      Mercari (Sold), 2 of 5"; Open next still works with
+      "noopener,noreferrer";
+    - remembered `pc:prefs` with `storesOff: []` → all ten stay ticked;
+    - the record-form hint shows;
+    - 400 px: Saved view with the form open, and the Search view with the
+      blocked message (14 links) both have scroll width 400 and nothing
+      past the edge;
+    - no console errors; the pane's storage cleared and viewport reset
+      afterward.
+  - **Open all in Kc's browser (2026-11-01), as Kc reported:**
+    - **Pop-ups blocked** (the default): only one tab opened. As in the
+      stubbed test, the browser lets one tab through per click and blocks
+      the rest.
+    - **Pop-ups allowed:** Kc "had to reopen after allowing pop ups", so
+      allowing didn't take effect on the tab that was already open.
+    - Kc confirmed: the blocked message showed the first time, and after
+      reopening every selected store opened in its own tab.
+    - Not settled: whether "reopen" meant reloading the page or just
+      clicking Open all again. If it was a reload, the message's last step
+      could say so (an M4 candidate).
 
 ### Session 1 prompt log
 - **Prompt:** "Read CLAUDE.md, SPEC.md, and LOG.md first. Start 'Session 1
@@ -800,6 +889,46 @@ Quote him where it matters.)
     text.
   - **Misreads / rule breaks:** none found. This confusion is a usability
     finding: nothing on the card says what recording a price is for.
+  - **How It Was Verified:** n/a (no fixes).
+- **Prompt:** "[Decision: the app's main function is filtered links for
+  many resale sites, opened in tabs; M3 stays as an optional notebook; M5
+  dropped. Record this in SPEC section 1 and LOG.md and mark M5
+  'considered and declined' with reasons. (1) 'Open all' with a pop-up
+  message for Chrome and Edge, Open next as fallback, test blocked and
+  allowed and record both. (2) The one-line explanation on the record
+  form. (3) Default stores [all ten on / eBay, Facebook Marketplace and
+  Mercari on]; keep remembered choices; update tests that assume the old
+  default and say which. Plan first, short; then build, a by-eye
+  checklist and a commit message; M3 can be ticked after my check.]"
+  - **Provided:** asked which default-stores option (the message left both
+    in brackets); the short plan; SPEC and LOG decision entries; Open all,
+    the hint and the new defaults; tests; browser checks; plans/refocus-
+    plan.md.
+  - **Misreads / rule breaks:** none found. Open all tabs don't get
+    "noreferrer" (logged in the entry above). The Open all results in
+    your browser are still to be recorded.
+  - **How It Was Verified:** n/a (new features, not fixes); see the entry
+    above.
+- **Prompt (answer to the default-stores question):** "eBay, FB, Mercari
+  on"
+  - **Provided:** used in the plan and in `DEFAULT_STORES_ON`.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a.
+- **Prompt:** "Just one tab, had to reopen after allowing pop ups."
+  - **Provided:** recorded it under the Open all checks. I read "reopen"
+    as reloading or reopening the page before Open all worked. I asked
+    whether all tabs then opened, whether the message showed, and about
+    the rest of the checklist, before ticking M3.
+  - **Misreads / rule breaks:** none found. "Reopen" could also mean
+    clicking Open all again, so I asked rather than assumed.
+  - **How It Was Verified:** n/a (no fixes).
+- **Prompt (answer to "After reopening, did all tabs open, and did the
+  blocked message show the first time?"):** "Yes to both"
+  - **Provided:** recorded both Open all results; ticked M3; noted M3
+    complete; a commit message.
+  - **Misreads / rule breaks:** I ticked M3 without separate word on the
+    default stores and the record-form hint; both passed in the built-in
+    browser.
   - **How It Was Verified:** n/a (no fixes).
 
 ## Entry template

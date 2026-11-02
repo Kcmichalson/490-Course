@@ -2,7 +2,9 @@
 // localStorage access lives in src/ui/storage.js.
 //
 // Stores are remembered as the ones he turned OFF, so a site added in a
-// later version starts on. Search words and price are not remembered.
+// later version starts on for anyone with remembered choices. With nothing
+// remembered yet, only DEFAULT_STORES_ON are on (Kc's decision, SPEC
+// section 2). Search words and price are not remembered.
 
 import { CONDITIONS, FORMATS, DEFAULT_RADIUS, normalizeCity, normalizeRadius, normalizeZip } from "./query.js";
 import { CATEGORIES, DEFAULT_CATEGORY } from "./categories.js";
@@ -10,10 +12,12 @@ import { cleanMemberships } from "./memberships.js";
 
 export const PREFS_VERSION = 1;
 
-export function defaultPrefs() {
+export const DEFAULT_STORES_ON = ["ebay", "facebook", "mercari"];
+
+export function defaultPrefs(siteIds = []) {
   return {
     version: PREFS_VERSION,
-    storesOff: [],
+    storesOff: siteIds.filter((id) => !DEFAULT_STORES_ON.includes(id)),
     condition: "any",
     format: "any",
     location: { zip: "", radius: DEFAULT_RADIUS, craigslistCity: "", facebookCity: "" },
@@ -26,7 +30,7 @@ export function defaultPrefs() {
 // Any bad or missing field falls back to its default; unknown store ids
 // are dropped. Never throws.
 export function parsePrefs(text, siteIds) {
-  const prefs = defaultPrefs();
+  const prefs = defaultPrefs(siteIds);
   let data;
   try {
     data = JSON.parse(text);

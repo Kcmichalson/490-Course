@@ -15,6 +15,12 @@ questions:
 
 It also keeps his saved searches as a list, with the prices he records.
 
+**Main function (my decision, 2026-11-01):** the app's main job is
+translating one search and its filters into correctly filtered links for
+many resale sites, opened in tabs. Recording prices (M3) stays as an
+optional notebook. Showing live prices inside the app (M5) was considered
+and declined (see M5 in section 6).
+
 Artifact 4 requirements this covers: built for someone outside the team
 (my dad), his needs found out by asking him when he tries it at the M4
 hand-over (section 2 holds my starting decisions), a log of plans and
@@ -32,6 +38,7 @@ his feedback comes at the M4 hand-over.
 | eBay sold links (eBay now asks for sign-in) | Keep them, with the note "Sign in to eBay to see sold prices" |
 | Category hints | Cards: eBay, Mercari, ShopGoodwill; exclude "lot, reprint, custom". Toys: eBay, Mercari, Etsy, ShopGoodwill; exclude "lot, broken". Furniture: Facebook, Craigslist, OfferUp; exclude "parts, broken" |
 | Sites | The ten in section 5 |
+| Default stores (no remembered choices yet) | eBay, Facebook Marketplace and Mercari on; the other seven off. Remembered choices stay as they are |
 
 At the M4 hand-over my dad tries the app; record what he liked, what
 confused him, and what he'd change, in his words, in LOG.md.
@@ -54,7 +61,8 @@ the left (a collapsible panel on phones), and the site results on the right.
 
 **Filter sidebar** (sections collapse, like eBay's):
 - **Stores:** a checkbox per site (section 5), with "All" and "None".
-  Default: all on. His choice is remembered
+  Default: eBay, Facebook Marketplace and Mercari on (section 2). His
+  choice is remembered
 - **Price:** min and max, plus quick ranges (under $20, $20–$50, over $50)
 - **Condition:** any / new / used
 - **Buying format:** any / auction / buy now (only some sites support it)
@@ -110,10 +118,13 @@ its terms allow linking to searches.
 The results area labels each link "Sold" or "Asking," so he never mistakes
 an asking price for a sale price.
 
-**Opening many tabs:** browsers block a page from opening several tabs from
-one click, so "open all" can't open ten tabs at once. Instead the results
-list every site's link, and an "Open next" button walks through them one
-click at a time. M1 tests what his browser allows and records it.
+**Opening many tabs:** an "Open all" button opens every selected link from
+one click. Browsers block a page from opening several tabs at once unless
+pop-ups are allowed for that site, so when tabs are blocked the app says
+how many and explains how to allow pop-ups for this site in Chrome and
+Edge. "Open next" stays as the fallback: it walks through the links one
+click at a time, which browsers always allow. What his browser does with
+pop-ups blocked and allowed is recorded in LOG.md.
 
 ## 6. Milestones
 
@@ -172,12 +183,17 @@ no prices); by eye with his real searches.
 
 Checks: his feedback recorded; fixes logged with how they were verified.
 
-### M5 (later, needs its own decision): prices inside the app
-Showing a quick price summary in the app itself (e.g., the range of current
-eBay listings) would need eBay's official API and somewhere to keep its key,
-which a static site can't do: likely a small proxy service. eBay's sold-price
-API is restricted, so this would cover asking prices only. Not part of the
-two-week plan; record it as a future step unless time and a plan allow.
+### M5: prices inside the app (considered and declined, 2026-11-01)
+Showing live prices in the app itself was considered and declined (my
+decision). The reasons:
+- eBay's sold-price data is restricted, so an eBay API would show asking
+  prices only, not what things sold for.
+- Facebook Marketplace and Mercari have no public API.
+- Any API key needs a server to keep it secret (a static GitHub Pages site
+  can't), which this project's rules exclude.
+
+The app stays a link builder (section 1); he reads prices on each site's
+own page and can note them with M3.
 
 ### Stretch (only if time remains; each needs its own plan)
 - Exclusion presets per category (e.g., furniture: "parts, broken")

@@ -382,3 +382,44 @@ Session numbers continue from Artifact2/LOG.md. This entry is here, not in Artif
   > *"No thanks"*
 * **What the AI Provided:**  
   No deck. Recorded this answer; nothing else changed.
+
+### 2026-11-01 — Prompt log (Artifact 4 card)
+
+No session number: I didn't look up where the numbering stands.
+
+**Exception recorded (your request):** Artifact4/CLAUDE.md keeps work inside Artifact4/. In this root-level session I edited only the root index.html and this LOG.md, because you asked for a portfolio change. I read Artifact4/CLAUDE.md and Artifact4/LOG.md for the facts on the card.
+
+### Prompt 1
+* **User Prompt:**  
+  > *"Please adjust the index.html to include the new artifact 4. Follow the same format as artifact 2."* [with Artifact4/LOG.md and Artifact4/CLAUDE.md attached]
+* **What the AI Provided:**  
+  - Read index.html, Artifact4/CLAUDE.md and Artifact4/LOG.md.
+  - Asked three questions before planning (answered in Prompt 2).
+
+### Prompt 2 (my answers to Claude's three questions)
+* **User Prompt:**  
+  > *Reflection: "Draft from LOG.md (Recommended)". The LANCER note: "Drop that phrase (Recommended)". The prompt log: "Add it to the root directory's log."*
+* **What the AI Provided:**  
+  A plan for the four index.html changes and this entry.
+
+### Prompt 3 (plan approval)
+* **User Prompt:**  
+  > *"Approved. This is a root-level session. Edit only the root index.html and LOG.md, as planned. If any edit is denied, stop and tell me; don't use Python or another route. Leave the reflection as your draft; I'll rewrite it in my own words before committing."*
+* **What the AI Provided:**  
+  - index.html, in Artifact 2's format:
+    - Artifact 4 card: title "Price Check" (the app's working name), the same subtitle, a one-line description.
+    - `ARTIFACT_DATA[4]`: a new desc; a **draft** reflection in your voice, using only facts from Artifact4/LOG.md, for you to rewrite; `link` to the Artifact4 folder on GitHub; `appLink` to https://kcmichalson.github.io/490-Course/Artifact4/; no video link.
+    - Dev Log modal: Artifact 4 is now a link to Artifact4/LOG.md on GitHub; only Artifact 5 is greyed out.
+    - The LANCER note no longer says "(might be reused for Artifact 4)".
+  - No edits were denied. Every edit used the Edit tool.
+  - Started a static server for the repo root at http://127.0.0.1:8001/ (reachable only from this computer) for the checks.
+* **Where the Model Misread Me:**  
+  None found. My first browser checks ran on the pane's copy of the file, which was a snapshot from before my later edits; I discarded those results and rechecked through the server.
+* **How It Was Verified:**  
+  - A read-only check on index.html: 844 lines, all CRLF; every tag balanced; `log-none` is only on Artifact 5.
+  - In the built-in browser at http://127.0.0.1:8001/:
+    - the Artifact 4 card reads "Price Check", and its description isn't clipped
+    - Inspect shows the new title, desc and reflection, with Open App and Open Repository pointing at the links above and no Watch Demo
+    - the Dev Log buttons are Artifacts 1–4 as links and 5 greyed out; the note ends "LANCER Tactical Board Bridge log."
+    - no console errors
+  - By eye: not done yet.

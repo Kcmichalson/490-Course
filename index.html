@@ -526,13 +526,13 @@
         <div class="sleeve">Artifact 3</div>
       </div>
 
-      <!-- Artifact 4: Placeholder -->
+      <!-- Artifact 4: Price Check -->
       <div class="artifact-slot" data-bg="idea4">
         <div class="card">
-          <div class="card-title">TITLE</div>
+          <div class="card-title">Price Check</div>
           <div class="card-subtitle">Artifact 4: For Someone Else</div>
           <div class="card-desc">
-            A collaborative project built with teammates for an external user. Maybe a tool for an RSO or for someone's research?
+            A tool for a family member that turns one search into filtered current or sold listing links on several resale sites.
           </div>
           <button class="card-btn inspect-trigger" data-artifact="4">Inspect</button>
         </div>
@@ -593,13 +593,13 @@
           <a class="nav-btn" href="https://github.com/Kcmichalson/490-Course/blob/main/Artifact2/LOG.md" target="_blank" rel="noopener">Artifact 2</a>
           <!-- Artifact 3 shares the Artifact 2 file, starting at its "Artifact 3: climate companion" entry -->
           <a class="nav-btn" href="https://github.com/Kcmichalson/490-Course/blob/main/Artifact2/LOG.md#2026-10-25--artifact-3-climate-companion" target="_blank" rel="noopener">Artifact 3</a>
-          <span class="nav-btn log-none" title="No log yet">Artifact 4</span>
+          <a class="nav-btn" href="https://github.com/Kcmichalson/490-Course/blob/main/Artifact4/LOG.md" target="_blank" rel="noopener">Artifact 4</a>
           <span class="nav-btn log-none" title="No log yet">Artifact 5</span>
         </div>
         <p class="log-note">
           Shelved alternate for Artifact 3:
           <a href="https://github.com/Kcmichalson/490-Course/blob/main/Artifact3/LOG.md" target="_blank" rel="noopener">LANCER Tactical Board Bridge</a>
-          log (might be reused for Artifact 4).
+          log.
         </p>
       </div>
     </div>
@@ -764,9 +764,10 @@
       },
       4: {
         title: "Artifact 4: For Someone Else",
-        desc: "A collaborative project built with teammates for an external user. Maybe a tool for an RSO or for someone's research?",
-        reflection: "Placeholder idea.",
-        link: "#"
+        desc: "A browser tool for my dad that turns one search into filtered links on 11 resale sites (eBay, Mercari, Facebook Marketplace, Mercari Japan and more) and opens current or sold listings in tabs. Runs entirely in the browser: no scraping and no API keys.",
+        reflection: "Built solo for a family member. They wanted an easier way to see what things are worth on resale sites and how often they sold. I chose links over scraping because eBay's sold-price data is restricted, Facebook Marketplace and Mercari have no public API, and a static GitHub Pages site can't hide an API key anyway. So the app's job is translating one search and its filters into each site's own search URL, that way a user doesn't have to remake their search across several sites with varyingly obtuse UIs. ShopGoodwill took the most rounds (checks 25 and 28–33), because its links often dropped the search term or stalled the page, and even now I'm not certain it searches properly. Midway I cut saved searches and recorded prices to focus on mass search with a Current / Sold switch. When I handed it over, my family member found the category hint useless and the \"opened\" labels confusing, so both were removed, and I added Mercari Japan.",
+        link: "https://github.com/Kcmichalson/490-Course/tree/main/Artifact4",
+        appLink: "https://kcmichalson.github.io/490-Course/Artifact4/"
       },
       5: {
         title: "Artifact 5: The Moonshot",

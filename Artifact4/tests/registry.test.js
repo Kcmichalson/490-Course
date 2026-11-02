@@ -103,8 +103,21 @@ test("buildLinks adds the filter text and notes", () => {
   const links = buildLinks(search, ["ebay", "mercari", "craigslist"]);
   const find = (view, id) => links.find((l) => l.view === view && l.siteId === id);
   assert.equal(find("sold", "ebay").summary, "All filters");
-  assert.equal(find("sold", "ebay").note, "Sign in to eBay to see sold prices");
-  assert.equal(find("asking", "ebay").note, "");
+  assert.deepEqual(find("sold", "ebay").notes, ["Sign in to eBay to see sold prices"]);
+  assert.deepEqual(find("asking", "ebay").notes, []);
   assert.equal(find("asking", "mercari").summary, "No filters applied (can't do exclude words)");
-  assert.equal(find("asking", "craigslist").note, "No Craigslist city set (add one under Location)");
+  assert.deepEqual(find("asking", "craigslist").notes, ["No Craigslist city set (add one under Location)"]);
+});
+
+test("membership notes appear only on their own site's links", () => {
+  const search = buildSearch({ words: "lamp", memberships: ["prime", "walmartplus"] });
+  const links = buildLinks(search, SITE_IDS);
+  for (const link of links) {
+    const prime = link.notes.some((n) => n.startsWith("Prime:"));
+    const walmart = link.notes.some((n) => n.startsWith("Walmart+:"));
+    assert.equal(prime, link.siteId === "amazon", `${link.siteId} prime`);
+    assert.equal(walmart, link.siteId === "walmart", `${link.siteId} walmart+`);
+  }
+  const none = buildLinks(buildSearch({ words: "lamp" }), ["amazon", "walmart"]);
+  assert.ok(none.every((l) => l.notes.length === 0));
 });

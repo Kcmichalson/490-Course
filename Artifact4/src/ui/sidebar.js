@@ -3,6 +3,7 @@
 
 import { QUICK_RANGES, RADII } from "../core/query.js";
 import { CATEGORIES, findCategory, suggestionFor } from "../core/categories.js";
+import { MEMBERSHIPS } from "../core/memberships.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,6 +25,19 @@ export function initSidebar({ sites, prefs, onChange }) {
   }
   const storeBoxes = () => [...sidebar.querySelectorAll('input[name="store"]')];
 
+  // My memberships
+  for (const m of MEMBERSHIPS) {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.name = "membership";
+    box.value = m.id;
+    box.checked = prefs.memberships.includes(m.id);
+    const label = document.createElement("label");
+    label.append(box, ` ${m.label}`);
+    $("membership-list").append(label);
+  }
+  const membershipBoxes = () => [...sidebar.querySelectorAll('input[name="membership"]')];
+
   // Price quick ranges
   for (const range of QUICK_RANGES) {
     const button = document.createElement("button");
@@ -44,15 +58,22 @@ export function initSidebar({ sites, prefs, onChange }) {
     field.hidden = !siteIds.includes(field.dataset.needsSite);
   }
 
-  // Restore remembered choices
-  sidebar.querySelector(`input[name="condition"][value="${prefs.condition}"]`).checked = true;
-  sidebar.querySelector(`input[name="format"][value="${prefs.format}"]`).checked = true;
-  $("loc-zip").value = prefs.location.zip;
-  $("loc-radius").value = String(prefs.location.radius);
-  $("loc-craigslist").value = prefs.location.craigslistCity;
-  $("loc-facebook").value = prefs.location.facebookCity;
-  $("exclude").value = prefs.exclude;
-  $("category").value = prefs.category;
+  // Puts values into the form without firing change events: remembered
+  // choices at start, or a saved search when he loads one.
+  function apply(values) {
+    for (const box of storeBoxes()) box.checked = !values.storesOff.includes(box.value);
+    $("price-min").value = values.priceMin ?? "";
+    $("price-max").value = values.priceMax ?? "";
+    sidebar.querySelector(`input[name="condition"][value="${values.condition}"]`).checked = true;
+    sidebar.querySelector(`input[name="format"][value="${values.format}"]`).checked = true;
+    $("loc-zip").value = values.location.zip;
+    $("loc-radius").value = String(values.location.radius);
+    $("loc-craigslist").value = values.location.craigslistCity;
+    $("loc-facebook").value = values.location.facebookCity;
+    $("exclude").value = values.exclude;
+    $("category").value = values.category;
+    showSuggestion();
+  }
 
   function read() {
     return {
@@ -69,6 +90,7 @@ export function initSidebar({ sites, prefs, onChange }) {
       },
       exclude: $("exclude").value,
       category: $("category").value,
+      memberships: membershipBoxes().filter((b) => b.checked).map((b) => b.value),
     };
   }
 
@@ -122,10 +144,11 @@ export function initSidebar({ sites, prefs, onChange }) {
     toggle.textContent = open ? "Hide filters" : "Filters";
   });
 
-  showSuggestion();
+  apply(prefs);
 
   return {
     read,
+    apply,
     setMessage(id, text) {
       $(id).textContent = text;
       $(id).hidden = !text;

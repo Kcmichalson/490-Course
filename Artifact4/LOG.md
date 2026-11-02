@@ -7,7 +7,7 @@ CLAUDE.md describes.
 ## Milestone status
 - [x] M0: Setup (no up-front interview; SPEC section 2 holds Kc's decisions)
 - [x] M1: Search builder (2026-11-01; all ten sites checked by Kc)
-- [ ] M2: Saved searches
+- [x] M2: Saved searches (2026-11-01; Kc's by-eye check passed)
 - [ ] M3: Recording prices
 - [ ] M4: Hand-over and one round of fixes
 
@@ -331,6 +331,95 @@ Quote him where it matters.)
   - The built-in browser checks for each change are recorded in the
     entries above.
 
+### 2026-11-01 — Session 1 (cont.): M2 saved searches
+- **Planned:** plans/m2-plan.md (approved with all defaults; loading a
+  saved search may change the remembered filters).
+- **Changed:**
+  - New `src/core/saved.js`: saved-search records (the raw form input, so
+    links are rebuilt with today's adapters); add, update, rename, delete,
+    filter, a summary line, storage parse, export text and file name,
+    import parse and merge (skips ids already saved), and the bad-file
+    messages.
+  - New `src/core/memberships.js`: Amazon Prime and Walmart+, each with a
+    note. Prefs remember `memberships`. `buildSearch` carries them. Amazon
+    adds `p_85:2470955011` to `rh` when Prime is ticked (unconfirmed,
+    check 34).
+  - `buildLinks` now returns `notes` (a list) instead of `note`, so a
+    membership note can sit beside a site note.
+  - UI:
+    - Search / Saved tabs in the header;
+    - "Save this search", or "Update saved search" and "Save as new" when
+      one is loaded;
+    - new `src/ui/saved-list.js`: filter box, category select, Export,
+      Import, and cards with Sold/Asking chips, Load, Rename (inline) and
+      Delete (asks first);
+    - a "My memberships" sidebar section;
+    - `sidebar.apply()` and `searchBar.setWords()` for loading;
+    - `storage.js` gained `pc:saved`;
+    - styles for tabs, chips and cards, using CSS variables only.
+  - Tests: new `saved.test.js` (15) and `memberships.test.js` (3); prefs,
+    amazon and registry extended. The registry test's `note` assertions
+    became `notes`, as the approved plan's API change requires.
+- **Problems:**
+  - The export file name first used the UTC date
+    ("…-2026-11-02.json" on the evening of Nov 1). Fixed to the local
+    date; how it was verified is in the prompt log.
+  - One of my browser scripts ran before the page finished reloading.
+    That was a test-script timing slip, not an app bug; I reran it.
+  - One 400 px screenshot was stale; the DOM measurements are what count.
+- **Checks:**
+  - `node --test "tests/*.test.js"`: 126 tests, 125 pass, 0 fail, 1 todo
+    (the Prime golden URL, awaiting check 34).
+  - Built-in browser, 1280 px, all done with clicks and inputs on the page:
+    - saved five searches (the three test searches, "pokemon base set
+      charizard" as an auction, and 'vintage "teddy bear" plush' up to
+      $20); "Saved." each time; count 5, five records stored;
+    - reload: all five there, newest first;
+    - text filter "WILSON" → 1; Toys → 2; "teddy" + Toys → 1; "zzz" →
+      "No saved searches match.";
+    - Rename (focus lands in the box) → label shown, words underneath;
+    - Delete: Cancel keeps it, OK removes it, after asking 'Delete
+      "vintage "teddy bear" plush"?';
+    - Load fills the words, price, category and 14 links, shows "Loaded
+      …", and offers Update / Save as new;
+    - changing max to 40 then Update → "Saved search updated." The stored
+      record has max 40, the same created time and a later updated time;
+    - the furniture card's chips are only Facebook, Craigslist and OfferUp;
+      the Craigslist chip goes to seattle.craigslist.org;
+    - Amazon Prime ticked → the Amazon link gets
+      `rh=p_36%3A500-4000%2Cp_85%3A2470955011` with the Prime note; the
+      saved card's Amazon chip matches; prefs remember `["prime"]`;
+    - Export (download stubbed) → 4 searches, `app: "price-check"`, the
+      message, and a file name with today's local date;
+    - removed `pc:saved`, reloaded → empty state;
+    - imported plain text → the not-JSON message; another app's file → the
+      not-an-export message; the export → "Imported 4 searches." with
+      labels including the rename; the same file again → "Nothing new to
+      import (all 4 were already saved)."; a broken file afterward → the
+      list stays at 4.
+  - 400 px: Saved view, inline rename, Search view with the Filters panel,
+    and a loaded search's head (Update / Save as new / Open next) all have
+    scroll width 400 and no element past the edge.
+  - No console errors. The pane's `pc:prefs` and `pc:saved` were cleared
+    and its viewport reset afterward. No store site was opened.
+  - Not yet: your by-eye check and check 34.
+- **Update (Kc's by-eye check, check 34):** Kc reported the M2 by-eye
+  check looks good. Check 34 couldn't be confirmed: Kc saw no Prime option
+  on Amazon's left side, possibly because of not being signed in.
+  - Following the plan ("if it fails, the Prime filter is dropped and the
+    note stays"), the Amazon link no longer adds `p_85:2470955011`, and
+    Amazon has nothing unconfirmed again.
+  - The Prime note now reads "Prime: free shipping on eligible items, so
+    compare totals." The sidebar note reads "Adds a note on that store's
+    links."
+  - Tests: I replaced the two Prime tests I'd written this session (the
+    filter test and the check 34 todo) with one asserting Prime doesn't
+    change the Amazon link. 125 tests, 125 pass, 0 todo.
+  - Browser: "star wars black series figure", $20–$50, Prime ticked → the
+    Amazon link is `rh=p_36%3A2000-5000` only, with the Prime note. No
+    console errors.
+  - **M2 complete.**
+
 ### Session 1 prompt log
 - **Prompt:** "Read CLAUDE.md, SPEC.md, and LOG.md first. Start 'Session 1
   prompt log' in LOG.md. [Step 1: run the M0 checks one at a time and
@@ -528,6 +617,43 @@ Quote him where it matters.)
     above; a suggested commit message.
   - **Misreads / rule breaks:** none found.
   - **How It Was Verified:** n/a (no fixes).
+- **Prompt:** "Plan M2"
+  - **Provided:** read SPEC M2 and the M1 code it builds on; wrote the M2
+    plan (in plan mode) and submitted it for approval.
+  - **Misreads / rule breaks:** plan mode blocked file edits, so this entry
+    was written after approval.
+  - **How It Was Verified:** n/a (no fixes).
+- **Prompt (M2 plan approval, sent after interrupting the approval
+  dialog):** "Approved as written, with your defaults for all open
+  questions (loading a saved search may change the remembered filters;
+  that's fine). Save the plan to plans/m2-plan.md and start."
+  - **Provided:** plans/m2-plan.md; M2 built and checked (see the M2
+    entry); a by-eye checklist and check 34.
+  - **Misreads / rule breaks:**
+    - I rewrote main.js as a whole file instead of making targeted edits,
+      because most of its wiring changed.
+    - I changed the registry test's `note` assertions to `notes` (the
+      plan's API change), and one assertion of my own new
+      `exportFileName` test after the UTC fix.
+    - parseImport is split into `parseImport` (file checks) plus
+      `mergeImport` (cleaning and merging), a small change from the plan's
+      one function.
+    - I first named a test fixture "Dad's Vader"; I changed it to "Vader
+      figure" so it implies nothing about your dad.
+  - **How It Was Verified:** export file-name fix: a unit test for a late
+    evening date and a January date (pass), plus the app's export in the
+    built-in browser named `…-2026-11-01.json` while the local date was
+    11/1/2026.
+- **Prompt:** "Can't confirm amazon, I dont see anything on the left for
+  prime but maybe that's cause I'm not signed in. Otherwise looks good"
+  - **Provided:** dropped the unconfirmed Prime filter (note kept); tests;
+    a browser check; M2 ticked; a commit message.
+  - **Misreads / rule breaks:** none found. I treated "can't confirm" as
+    the plan's "fails" case and dropped the filter without asking first.
+    It can come back if a signed-in check shows it works.
+  - **How It Was Verified:** the new test asserting Prime leaves the Amazon
+    URL unchanged (pass); the app's Amazon link with Prime ticked checked
+    in the built-in browser (no `p_85`, note shown).
 
 ## Entry template
 ### YYYY-MM-DD — Session N: title

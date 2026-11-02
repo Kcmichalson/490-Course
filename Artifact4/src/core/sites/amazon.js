@@ -5,6 +5,10 @@
 // - Price: rh=p_36:<min cents>-<max cents> (check 18); min only, e.g.
 //   "2000-" (check 23); max only, e.g. "-2000" (check 27)
 // - Sort: s=date-desc-rank newest arrivals
+// - Prime: not used. The researched Prime filter (p_85:2470955011 in rh)
+//   showed no Prime checkbox for Kc when signed out (check 34), so it
+//   couldn't be confirmed and was dropped. Ticking Amazon Prime under My
+//   memberships only adds a note (src/core/memberships.js)
 // - Keyword syntax: no known exclude or exact-phrase support, so exclude
 //   words are skipped and quotes are stripped
 // - Condition: category-specific ids, so none. Format, location: none

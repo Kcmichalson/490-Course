@@ -7,4 +7,10 @@ export function initSearchBar({ onSearch }) {
     event.preventDefault();
     onSearch(input.value);
   });
+  return {
+    // Fills the box, e.g. when a saved search is loaded.
+    setWords(text) {
+      input.value = text;
+    },
+  };
 }

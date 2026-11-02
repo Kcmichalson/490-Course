@@ -1,6 +1,7 @@
 // Results: "Sold for" and "Asking now" groups of site links, each opening
 // in a new tab, plus "Open next" to walk through them one click at a time
-// (browsers block one click from opening many tabs).
+// (browsers block one click from opening many tabs), and the buttons that
+// save this search.
 
 import { VIEW_LABELS } from "../core/sites/index.js";
 
@@ -20,7 +21,7 @@ const GROUPS = [
 ];
 
 // Small DOM helper; text is always set as text, never as HTML.
-function el(tag, attrs = {}, ...children) {
+export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
     if (key === "class") node.className = value;
@@ -30,7 +31,9 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-export function initResults(container) {
+// onSave("new") saves the current search; onSave("update") overwrites the
+// saved search that was loaded.
+export function initResults(container, { onSave }) {
   let links = [];
   const opened = new Set(); // URLs opened since the links last changed
 
@@ -54,7 +57,8 @@ export function initResults(container) {
     markOpened(links[i].url);
   }
 
-  let state = { words: "", selectedCount: 0 };
+  // save: { loaded: true when a saved search is loaded, status: "Saved." }
+  let state = { words: "", selectedCount: 0, save: { loaded: false, status: "" } };
 
   function render(next) {
     state = next;
@@ -89,6 +93,7 @@ export function initResults(container) {
     container.append(
       el("div", { class: "results-head" },
         el("h2", { class: "results-title" }, `Results for “${state.words}”`),
+        saveControls(),
         el("div", { class: "open-next" }, nextButton, el("span", { class: "open-next-status" }, status)),
       ),
     );
@@ -106,6 +111,21 @@ export function initResults(container) {
       }
       container.append(section);
     }
+  }
+
+  function saveControls() {
+    const button = (text, mode, primary) => {
+      const b = el("button", { type: "button", class: primary ? "button button-small button-primary" : "button button-small" }, text);
+      b.addEventListener("click", () => onSave(mode));
+      return b;
+    };
+    const buttons = state.save.loaded
+      ? [button("Update saved search", "update", true), button("Save as new", "new", false)]
+      : [button("Save this search", "new", false)];
+    return el("div", { class: "save-controls" },
+      ...buttons,
+      state.save.status ? el("span", { class: "save-status", role: "status" }, state.save.status) : null,
+    );
   }
 
   function card(link, isNext) {
@@ -127,7 +147,7 @@ export function initResults(container) {
     return el("li", { class: classes.join(" ") },
       anchor,
       el("p", { class: "link-filters" }, link.summary),
-      link.note ? el("p", { class: "link-note" }, link.note) : null,
+      ...link.notes.map((note) => el("p", { class: "link-note" }, note)),
     );
   }
 

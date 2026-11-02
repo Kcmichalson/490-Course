@@ -91,11 +91,13 @@ export function normalizeRadius(value) {
 }
 
 // input: { words, exclude, priceMin, priceMax, condition, format,
-//          location: { zip, radius, craigslistCity, facebookCity } }
+//          location: { zip, radius, craigslistCity, facebookCity },
+//          memberships: ["prime", ...] }
 export function buildSearch(input = {}) {
   const tokens = splitWords(input.words);
   const location = input.location ?? {};
   return {
+    memberships: Array.isArray(input.memberships) ? [...input.memberships] : [],
     words: joinWords(tokens, { quotes: true }),
     tokens,
     exclude: parseExclude(input.exclude),

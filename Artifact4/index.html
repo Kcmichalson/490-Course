@@ -17,6 +17,10 @@
                placeholder="e.g. russell wilson foil card" autocomplete="off" enterkeyhint="search">
         <button type="submit" class="button button-primary">Search</button>
       </form>
+      <nav class="tabs" aria-label="Views">
+        <button type="button" id="tab-search" class="tab" aria-pressed="true">Search</button>
+        <button type="button" id="tab-saved" class="tab" aria-pressed="false">Saved (<span id="saved-count">0</span>)</button>
+      </nav>
     </div>
   </header>
 
@@ -105,9 +109,19 @@
           <button type="button" id="category-apply" class="button button-small" hidden>Use these</button>
         </div>
       </details>
+
+      <details class="filter" open>
+        <summary>My memberships</summary>
+        <div class="filter-body">
+          <div id="membership-list" class="check-list"></div>
+          <p class="field-note">Adds a note on that store's links.</p>
+        </div>
+      </details>
     </aside>
 
     <main id="results" class="results" aria-live="polite"></main>
   </div>
+
+  <main id="saved-view" class="saved-view" aria-label="Saved searches" hidden></main>
 </body>
 </html>

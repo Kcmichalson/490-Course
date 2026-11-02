@@ -1,6 +1,7 @@
 // All ten site adapters, in SPEC section 5 order.
 
 import { filterSummary } from "../query.js";
+import { membershipNotes } from "../memberships.js";
 import ebay from "./ebay.js";
 import mercari from "./mercari.js";
 import facebook from "./facebook.js";
@@ -38,8 +39,12 @@ export function buildLinks(search, selectedIds, today = new Date()) {
         applied: result.applied,
         skipped: result.skipped,
         summary: filterSummary(result.applied, result.skipped),
-        // An adapter may return a note for this link; else the site's note.
-        note: result.note ?? site.notes?.[view] ?? "",
+        // An adapter may return a note for this link, else the site's note;
+        // then any notes for memberships he ticked.
+        notes: [
+          result.note ?? site.notes?.[view] ?? "",
+          ...membershipNotes(site.id, search.memberships ?? []),
+        ].filter(Boolean),
       });
     }
   }

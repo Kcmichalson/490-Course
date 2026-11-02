@@ -6,6 +6,7 @@
 
 import { CONDITIONS, FORMATS, DEFAULT_RADIUS, normalizeCity, normalizeRadius, normalizeZip } from "./query.js";
 import { CATEGORIES, DEFAULT_CATEGORY } from "./categories.js";
+import { cleanMemberships } from "./memberships.js";
 
 export const PREFS_VERSION = 1;
 
@@ -18,6 +19,7 @@ export function defaultPrefs() {
     location: { zip: "", radius: DEFAULT_RADIUS, craigslistCity: "", facebookCity: "" },
     exclude: "",
     category: DEFAULT_CATEGORY,
+    memberships: [],
   };
 }
 
@@ -40,6 +42,7 @@ export function parsePrefs(text, siteIds) {
   if (FORMATS.includes(data.format)) prefs.format = data.format;
   if (typeof data.exclude === "string") prefs.exclude = data.exclude.slice(0, 500);
   if (CATEGORIES.some((c) => c.id === data.category)) prefs.category = data.category;
+  prefs.memberships = cleanMemberships(data.memberships);
 
   const loc = data.location;
   if (loc && typeof loc === "object") {

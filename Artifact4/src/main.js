@@ -38,12 +38,12 @@ update(sidebar.read());
 function update(filters) {
   savePrefsText(serializePrefs({
     version: PREFS_VERSION,
+    knownStores: SITE_IDS,
     storesOff: filters.storesOff,
     condition: filters.condition,
     format: filters.format,
     location: filters.location,
     exclude: filters.exclude,
-    category: filters.category,
     view,
   }));
   for (const button of viewButtons) {

@@ -12,7 +12,8 @@ CLAUDE.md describes.
 - [x] M3: Recording prices (2026-11-01). Removed in the retrofit
 - [x] Retrofit: mass search (two inputs, Current / Sold switch)
   (2026-11-01; Kc's by-eye check and check 35 passed)
-- [ ] M4: Hand-over and one round of fixes
+- [x] M4: Hand-over and one round of fixes (2026-11-01; Dad's feedback
+  recorded and fixed; Kc's by-eye check and checks 36–37 passed)
 
 ## Decisions so far (before Session 1)
 - **Solo project.** I realized late that Artifact 4 is a team project and
@@ -57,6 +58,105 @@ after it in tool-log/). If any one runs, stop and fix settings.json.
 | Read C:\Users\Kc\.ssh\canary.txt | refused |
 | Write ~/.claude/plans/test.md | allowed (plans must work), then deleted |
 | tool-log/(today).jsonl starts with a session_start line | yes |
+
+## M4 hand-over feedback
+**Dad's feedback (relayed by Kc, 2026-11-01, his words):**
+- "category hint seems to be useless."
+- "why does it say when stuff is already opened?"
+
+**Kc's own feedback:** "can this also do JP mercari? Though that will
+likely require a proxy service"
+
+**Kc's decisions:** remove the category hint; remove the opened tracking;
+add Mercari Japan with the English words as typed (no translation). Plan:
+plans/m4-plan.md.
+
+### 2026-11-01 — Session 1 (cont.): M4 fixes
+- **Changed:**
+  - **Category hint removed:**
+    - the sidebar section, `src/core/categories.js` (created this
+      session) and the `category` pref;
+    - old prefs that have `category` load fine, and it is dropped on the
+      next save.
+  - **Opened tracking removed** (results.js, style.css):
+    - no "Opened" labels, highlighted next card or "Next: …, 3 of 10"
+      status, and the `--color-next` variable is gone;
+    - Open next keeps a position and names the next store ("Open next:
+      eBay"), then "Start over"; new links start it over;
+    - Open all marks nothing.
+  - **Mercari Japan**
+    (`src/core/sites/mercarijp.js`, 11th in the registry):
+    - `https://jp.mercari.com/search?keyword=…`, with the words as typed;
+    - current `status=on_sale`, sold `status=sold_out`, both with
+      `sort=created_time&order=desc`;
+    - price, leave-outs, condition, format and location are skipped (its
+      prices are in yen);
+    - note: "Japanese site: English words may find fewer results";
+    - `lastChecked` stays null until checks 36 and 37.
+    - Research: a web search found only third-party scraper docs (Apify
+      actors), treated as data. They agree on those parameter names and
+      on prices in yen; nothing official.
+  - **Stores added later start off** (prefs.js, main.js): prefs now save
+    `knownStores`. A store missing from it starts at its default (on
+    only for eBay, Facebook and Mercari). Prefs saved before this count
+    as knowing the original ten, so Mercari Japan starts off for Kc and
+    his dad. This replaces the M1 rule "a site added later starts on",
+    which would have turned Mercari Japan on for them, against the
+    approved plan.
+  - **"How to use it"** (index.html, style.css): a collapsible section
+    above the results, in six steps. Its code samples don't wrap
+    mid-word.
+  - **Open all message:** it now ends "…then press Open all again (if
+    nothing happens, reload this page first)."
+  - **SPEC:**
+    - section 2 (category hints removed; Mercari Japan; stores added later
+      start off);
+    - section 4 (category bullet removed);
+    - section 5 (Mercari Japan row; Open next names the store; nothing
+      marked as opened);
+    - M4 "Done in M4" list.
+- **Tests changed and why:**
+  - prefs.test.js:
+    - category assertions and the `suggestionFor` test removed (feature
+      removed);
+    - "a site added later starts on" replaced by "a store added later
+      starts at its default" plus a pre-knownStores case (the approved
+      plan says Mercari Japan starts off);
+    - the round trip now covers `view` instead of `category`.
+  - registry.test.js: SPEC order and hosts include `mercarijp`; "eleven
+    adapters"; the Sold list includes Mercari Japan.
+  - open-all.test.js: also checks the reload wording.
+  - New tests/mercarijp.test.js (5, plus 1 todo for the exact URLs after
+    checks 36 and 37).
+- **Checks:**
+  - `node --test "tests/*.test.js"`: 125 tests, 124 pass, 0 fail, 1 todo.
+  - Built-in browser, 1280 px, with old prefs (all ten on, `category`,
+    no `knownStores`):
+    - 11 store boxes, the ten ticked and Mercari Japan not; no category
+      section; "How to use it" closed;
+    - after a search, saved prefs have 11 `knownStores` and no
+      `category`;
+    - Mercari Japan ticked → its link is
+      `jp.mercari.com/search?keyword=pokemon+card&status=on_sale&sort=created_time&order=desc`
+      and its card says "can't do exclude words" plus the Japanese-site
+      note; Sold → `status=sold_out`;
+    - nothing marked opened, no status text;
+    - Open next (stubbed) steps "Open next: eBay" → "Mercari" →
+      "Facebook Marketplace" … → "Start over" → "Open next: eBay";
+    - the blocked message includes the reload wording.
+  - 400 and 380 px with Help and Filters open: no sideways scroll,
+    nothing past the edge, each code sample on one line, no stray "null";
+    no console errors.
+  - The pane's prefs were cleared and its viewport reset afterward.
+  - Not yet: Kc's by-eye check, checks 36 and 37, and ideally Dad trying
+    it once more.
+  - **Kc (2026-11-01): "All pass"** for the by-eye check and checks 36
+    and 37.
+    - Mercari Japan: `lastChecked` 2026-11-01, nothing unconfirmed; the
+      todo became an exact-URL test for both views.
+    - 125 tests, 125 pass, 0 todo.
+    - **M4 complete.** Dad hasn't tried the fixed version yet; whatever he
+      says next goes under "M4 hand-over feedback".
 
 ## Interview with my dad
 (Date, how — in person / call, and his answers go in SPEC.md section 2.
@@ -1087,6 +1187,52 @@ Kc's decision:
     commit message.
   - **Misreads / rule breaks:** none found.
   - **How It Was Verified:** n/a (no fixes; tests 119/119).
+- **Prompt:** "his feedback: category hint seems to be useless. why does
+  it say when stuff is already opened? Also my feedback, can this also do
+  JP mercari? Though that will likely require a proxy service"
+  - **Provided:** recorded both under "M4 hand-over feedback", in the
+    words given; asked questions before planning the M4 fixes.
+  - **Misreads / rule breaks:** I first wrote this entry above the
+    previous one and moved it into order. I added nothing about your dad
+    beyond the two quoted lines.
+  - **How It Was Verified:** n/a.
+- **Prompt (answers):**
+  - Category hint: "Remove it".
+  - "Opened" tracking: "Remove the tracking".
+  - JP Mercari: "Would it be possible to automatically translate a search
+    term into Japanese before searching in Mercari? For reference this is
+    a typical URL https://jp.mercari.com/search?keyword=純銅インゴット1.01kg".
+  - **Provided:** explained that translating in the app needs a
+    translation service (a network call, usually a key), which the
+    project rules rule out; asked how to handle Japanese.
+  - **Misreads / rule breaks:** none found. Kc's URL is used as the
+    starting point for the JP Mercari adapter.
+  - **How It Was Verified:** n/a.
+- **Prompt (answer):** JP Mercari: "English words as typed".
+  - **Provided:** the M4 plan in chat, for approval.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a.
+- **Prompt:** "Approved"
+  - **Provided:** plans/m4-plan.md; the M4 fixes and checks (see "M4
+    fixes"); a by-eye checklist, checks 36 and 37, and a commit message.
+  - **Misreads / rule breaks:**
+    - `knownStores` wasn't in the plan. I added it because the M1 rule
+      would have turned Mercari Japan on for anyone with remembered
+      choices, against the plan's "off by default". It changed an M1
+      test.
+    - I made the other test changes listed in the M4 entry without
+      stopping to ask.
+  - **How It Was Verified:**
+    - help code samples wrapping mid-word: after the fix, each code
+      sample has one line box at 380 px (`getClientRects().length` is 1);
+    - stores added later start off: the new prefs tests pass, and in the
+      built-in browser old prefs show Mercari Japan unticked.
+- **Prompt (answer to "How did the M4 by-eye check and checks 36–37
+  go?"):** "All pass"
+  - **Provided:** Mercari Japan confirmed (`lastChecked`, exact-URL test);
+    M4 ticked; plans/m4-plan.md notes the result; a commit message.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a (no fixes; tests 125/125).
 
 ## Entry template
 ### YYYY-MM-DD — Session N: title

@@ -13,7 +13,6 @@
   --color-sold-bg: #dafbe1;
   --color-asking: #0b5cad;
   --color-asking-bg: #ddf0ff;
-  --color-next: #1f6feb;
   --color-warning: #9a6700;
   color-scheme: light dark;
 }
@@ -33,7 +32,6 @@
     --color-sold-bg: #0f2e1a;
     --color-asking: #79c0ff;
     --color-asking-bg: #0c2440;
-    --color-next: #6ea8fe;
     --color-warning: #e3b341;
   }
 }
@@ -208,6 +206,41 @@ select {
   font-weight: 600;
 }
 
+/* "How to use it" help */
+.help-wrap {
+  max-width: 100rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 0;
+}
+
+.help {
+  padding: 0.6rem 0.9rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.help summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help ol {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.6rem 0 0.2rem;
+  padding-left: 1.4rem;
+}
+
+.help code {
+  padding: 0 0.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  font-size: 0.9em;
+  white-space: nowrap; /* keep "-reprint" together */
+}
+
 /* Layout: sidebar left on wide screens, a panel opened by "Filters" on phones */
 .layout {
   display: grid;
@@ -343,11 +376,6 @@ select {
   gap: 0.5rem 0.75rem;
 }
 
-.open-next-status {
-  color: var(--color-muted);
-  font-size: 0.875rem;
-}
-
 .results-understood {
   margin: -0.5rem 0 1rem;
   color: var(--color-muted);
@@ -380,15 +408,6 @@ select {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
-}
-
-.link-card.is-next {
-  border-color: var(--color-next);
-  box-shadow: 0 0 0 1px var(--color-next);
-}
-
-.link-card.is-opened {
-  opacity: 0.75;
 }
 
 .link-main {
@@ -426,11 +445,6 @@ select {
   color: var(--color-asking);
 }
 
-.link-opened {
-  color: var(--color-muted);
-  font-size: 0.8125rem;
-  font-weight: 400;
-}
 
 .link-filters,
 .link-note {

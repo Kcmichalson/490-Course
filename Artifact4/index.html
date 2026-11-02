@@ -31,6 +31,26 @@
     </div>
   </header>
 
+  <div class="help-wrap">
+    <details class="help">
+      <summary>How to use it</summary>
+      <ol>
+        <li>Type what you're looking for in <strong>Search for</strong>, e.g.
+          <code>russell wilson foil card</code>. Put "quotes" around words that belong together.</li>
+        <li>To leave things out, put a minus in front (<code>-reprint</code>) or list them in
+          <strong>Leave out</strong>, separated by commas (<code>lot, reprint, base set</code>).</li>
+        <li>Pick <strong>Current listings</strong> (for sale now) or <strong>Sold listings</strong>
+          (what things actually sold for; only some stores show these).</li>
+        <li>Press <strong>Search</strong>, then <strong>Open all</strong> to open every store's
+          search in its own tab. Each card says which filters that store could use.</li>
+        <li>If only one tab opens, your browser is blocking pop-ups: follow the message to allow
+          them, or press <strong>Open next</strong> to open the stores one at a time.</li>
+        <li>Choose stores, price, condition and location under <strong>Filters</strong>. Your
+          choices are remembered on this computer.</li>
+      </ol>
+    </details>
+  </div>
+
   <div class="layout">
     <button type="button" id="filters-toggle" class="button filters-toggle"
             aria-expanded="false" aria-controls="sidebar">Filters</button>
@@ -98,15 +118,6 @@
         </div>
       </details>
 
-      <details class="filter" open>
-        <summary>Category hint</summary>
-        <div class="filter-body">
-          <label for="category" class="visually-hidden">Category</label>
-          <select id="category"></select>
-          <p id="category-suggestion" class="field-note" hidden></p>
-          <button type="button" id="category-apply" class="button button-small" hidden>Use these</button>
-        </div>
-      </details>
     </aside>
 
     <main id="results" class="results" aria-live="polite"></main>

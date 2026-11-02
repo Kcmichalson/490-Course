@@ -1,4 +1,4 @@
-// All ten site adapters, in SPEC section 5 order.
+// All site adapters, in SPEC section 5 order (Mercari Japan added in M4).
 
 import { filterSummary } from "../query.js";
 import ebay from "./ebay.js";
@@ -11,10 +11,11 @@ import poshmark from "./poshmark.js";
 import shopgoodwill from "./shopgoodwill.js";
 import amazon from "./amazon.js";
 import walmart from "./walmart.js";
+import mercarijp from "./mercarijp.js";
 
 export const SITES = [
   ebay, mercari, facebook, craigslist, offerup,
-  etsy, poshmark, shopgoodwill, amazon, walmart,
+  etsy, poshmark, shopgoodwill, amazon, walmart, mercarijp,
 ];
 
 export const SITE_IDS = SITES.map((s) => s.id);

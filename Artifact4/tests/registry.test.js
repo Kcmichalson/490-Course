@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { SITES, SITE_IDS, buildLinks, storesWithoutView } from "../src/core/sites/index.js";
 import { buildSearch, FILTER_KEYS } from "../src/core/query.js";
 
+// The ten from M1, then Mercari Japan (added in M4).
 const SPEC_ORDER = [
   "ebay", "mercari", "facebook", "craigslist", "offerup",
-  "etsy", "poshmark", "shopgoodwill", "amazon", "walmart",
+  "etsy", "poshmark", "shopgoodwill", "amazon", "walmart", "mercarijp",
 ];
 
 const HOSTS = {
@@ -19,9 +20,10 @@ const HOSTS = {
   shopgoodwill: /^shopgoodwill\.com$/,
   amazon: /^www\.amazon\.com$/,
   walmart: /^www\.walmart\.com$/,
+  mercarijp: /^jp\.mercari\.com$/,
 };
 
-test("exactly the ten SPEC section 5 adapters, in order", () => {
+test("exactly the eleven SPEC section 5 adapters, in order", () => {
   assert.deepEqual(SITE_IDS, SPEC_ORDER);
 });
 
@@ -101,7 +103,8 @@ test("buildLinks: current listings for every selected store, in SPEC order", () 
 test("buildLinks: sold listings only for stores with a sold view", () => {
   const search = buildSearch({ words: "russell wilson foil card" });
   const sold = buildLinks(search, SITE_IDS, new Date(), "sold");
-  assert.deepEqual(sold.map((l) => l.siteId), ["ebay", "mercari", "poshmark", "shopgoodwill"]);
+  // Mercari Japan (M4) has a sold view too.
+  assert.deepEqual(sold.map((l) => l.siteId), ["ebay", "mercari", "poshmark", "shopgoodwill", "mercarijp"]);
   assert.ok(sold.every((l) => l.view === "sold"));
   assert.deepEqual(storesWithoutView(SITE_IDS, "sold"),
     ["Facebook Marketplace", "Craigslist", "OfferUp", "Etsy", "Amazon", "Walmart"]);

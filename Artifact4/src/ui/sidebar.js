@@ -2,14 +2,12 @@
 // choices, and reports every change through onChange(read()).
 
 import { QUICK_RANGES, RADII } from "../core/query.js";
-import { CATEGORIES, findCategory, suggestionFor } from "../core/categories.js";
 
 const $ = (id) => document.getElementById(id);
 
 export function initSidebar({ sites, prefs, onChange }) {
   const sidebar = $("sidebar");
   const siteIds = sites.map((s) => s.id);
-  const nameOf = (id) => sites.find((s) => s.id === id)?.name ?? id;
 
   // Stores
   for (const site of sites) {
@@ -37,7 +35,6 @@ export function initSidebar({ sites, prefs, onChange }) {
 
   // Selects
   for (const r of RADII) $("loc-radius").append(new Option(`${r} miles`, String(r)));
-  for (const c of CATEGORIES) $("category").append(new Option(c.label, c.id));
 
   // City fields show only once their site's adapter exists.
   for (const field of sidebar.querySelectorAll("[data-needs-site]")) {
@@ -57,8 +54,6 @@ export function initSidebar({ sites, prefs, onChange }) {
     $("loc-craigslist").value = values.location.craigslistCity;
     $("loc-facebook").value = values.location.facebookCity;
     $("exclude").value = values.exclude;
-    $("category").value = values.category;
-    showSuggestion();
   }
 
   function read() {
@@ -75,24 +70,10 @@ export function initSidebar({ sites, prefs, onChange }) {
         facebookCity: $("loc-facebook").value,
       },
       exclude: $("exclude").value,
-      category: $("category").value,
     };
   }
 
-  function showSuggestion() {
-    const id = $("category").value;
-    const { stores, exclude } = suggestionFor(id, siteIds);
-    const hasSuggestion = findCategory(id).id !== "other";
-    const parts = [];
-    if (stores.length) parts.push(`Suggested stores: ${stores.map(nameOf).join(", ")}.`);
-    if (exclude.length) parts.push(`Suggested leave-out words: ${exclude.join(", ")}.`);
-    $("category-suggestion").textContent = parts.join(" ");
-    $("category-suggestion").hidden = !hasSuggestion;
-    $("category-apply").hidden = !hasSuggestion;
-  }
-
   function changed() {
-    showSuggestion();
     onChange(read());
   }
 
@@ -107,15 +88,6 @@ export function initSidebar({ sites, prefs, onChange }) {
     } else if (button.parentElement.id === "quick-ranges") {
       $("price-min").value = button.dataset.min;
       $("price-max").value = button.dataset.max;
-    } else if (button.id === "category-apply") {
-      const { stores, exclude } = suggestionFor($("category").value, siteIds);
-      if (stores.length) {
-        for (const box of storeBoxes()) box.checked = stores.includes(box.value);
-      }
-      // Leave out is a comma list; an item may be a phrase ("base set").
-      const words = $("exclude").value.split(",").map((w) => w.trim()).filter(Boolean);
-      for (const word of exclude) if (!words.includes(word)) words.push(word);
-      $("exclude").value = words.join(", ");
     } else {
       return;
     }

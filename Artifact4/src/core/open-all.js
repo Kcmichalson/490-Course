@@ -19,6 +19,7 @@ export function openAllMessage(openedCount, blockedCount) {
   const total = openedCount + blockedCount;
   return `Your browser blocked ${blockedCount} of ${total} tabs. To allow them in Chrome or Edge: ` +
     "click the blocked pop-up icon at the right end of the address bar, choose " +
-    "“Always allow pop-ups and redirects” for this site, then press Open all again. " +
+    "“Always allow pop-ups and redirects” for this site, then press Open all again " +
+    "(if nothing happens, reload this page first). " +
     "Or use Open next to open them one at a time.";
 }

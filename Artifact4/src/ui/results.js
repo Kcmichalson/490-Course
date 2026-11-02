@@ -20,26 +20,19 @@ function el(tag, attrs = {}, ...children) {
 
 export function initResults(container) {
   let links = [];
-  const opened = new Set(); // URLs opened since the links last changed
-
-  function nextIndex() {
-    return links.findIndex((link) => !opened.has(link.url));
-  }
-
-  function markOpened(url) {
-    opened.add(url);
-    draw();
-  }
+  // Where Open next is in the list. Nothing else is tracked or shown about
+  // which tabs were opened (Dad, M4: "why does it say when stuff is
+  // already opened?").
+  let step = 0;
 
   function openNext() {
-    const i = nextIndex();
-    if (i === -1) {
-      opened.clear();
-      draw();
-      return;
+    if (step >= links.length) {
+      step = 0;
+    } else {
+      window.open(links[step].url, "_blank", "noopener,noreferrer");
+      step += 1;
     }
-    window.open(links[i].url, "_blank", "noopener,noreferrer");
-    markOpened(links[i].url);
+    draw();
   }
 
   // window.open with "noopener" always returns null, so it can't tell a
@@ -58,7 +51,6 @@ export function initResults(container) {
 
   function openEveryLink() {
     const result = openAll(links, openTab);
-    for (const url of result.opened) opened.add(url);
     notice = openAllMessage(result.opened.length, result.blocked.length);
     draw();
   }
@@ -70,11 +62,12 @@ export function initResults(container) {
   let state = { words: "", exclude: [], view: "asking", selectedCount: 0, missing: [] };
 
   function render(next) {
+    // New links (a new search, filter or view) start Open next over.
+    const same = next.links.length === links.length && next.links.every((l, i) => l.url === links[i].url);
+    if (!same) step = 0;
     state = next;
     links = next.links;
     notice = "";
-    const urls = new Set(links.map((l) => l.url));
-    for (const url of [...opened]) if (!urls.has(url)) opened.delete(url);
     draw();
   }
 
@@ -110,18 +103,14 @@ export function initResults(container) {
         el("h2", { class: "results-title" }, `${VIEW_TITLES[state.view]} for “${state.words}”`),
         understood,
         el("p", { class: "intro" }, "None of the selected stores show sold listings by link. " +
-          "Switch to Current listings, or turn on eBay, Mercari, Poshmark or ShopGoodwill."),
+          "Switch to Current listings, or turn on eBay, Mercari, Poshmark, ShopGoodwill or Mercari Japan."),
         missing,
       );
       return;
     }
 
-    const i = nextIndex();
-    const status = i === -1
-      ? `All ${links.length} opened.`
-      : `Next: ${links[i].name}, ${i + 1} of ${links.length}`;
     const nextButton = el("button", { type: "button", class: "button" },
-      i === -1 ? "Start over" : "Open next");
+      step < links.length ? `Open next: ${links[step].name}` : "Start over");
     nextButton.addEventListener("click", openNext);
     const allButton = el("button", { type: "button", class: "button button-primary" }, `Open all (${links.length})`);
     allButton.addEventListener("click", openEveryLink);
@@ -129,34 +118,20 @@ export function initResults(container) {
     show(
       el("div", { class: "results-head" },
         el("h2", { class: "results-title" }, `${VIEW_TITLES[state.view]} for “${state.words}”`),
-        el("div", { class: "open-next" },
-          allButton, nextButton, el("span", { class: "open-next-status" }, status)),
+        el("div", { class: "open-next" }, allButton, nextButton),
       ),
       understood,
       notice ? el("p", { class: "open-all-message", role: "alert" }, notice) : null,
-      el("ul", { class: "links" }, ...links.map((link, index) => card(link, index === i))),
+      el("ul", { class: "links" }, ...links.map(card)),
       missing,
     );
   }
 
-  function card(link, isNext) {
-    const isOpened = opened.has(link.url);
-    const anchor = el("a", {
-      class: "link-main",
-      href: link.url,
-      target: "_blank",
-      rel: "noopener noreferrer",
-    },
-      el("span", { class: `badge badge-${link.view}` }, VIEW_LABELS[link.view]),
-      el("span", { class: "link-site" }, link.name),
-      isOpened ? el("span", { class: "link-opened" }, "Opened") : null,
-    );
-    anchor.addEventListener("click", () => setTimeout(() => markOpened(link.url)));
-    const classes = ["link-card"];
-    if (isOpened) classes.push("is-opened");
-    if (isNext) classes.push("is-next");
-    return el("li", { class: classes.join(" ") },
-      anchor,
+  function card(link) {
+    return el("li", { class: "link-card" },
+      el("a", { class: "link-main", href: link.url, target: "_blank", rel: "noopener noreferrer" },
+        el("span", { class: `badge badge-${link.view}` }, VIEW_LABELS[link.view]),
+        el("span", { class: "link-site" }, link.name)),
       el("p", { class: "link-filters" }, link.summary),
       ...link.notes.map((note) => el("p", { class: "link-note" }, note)),
     );

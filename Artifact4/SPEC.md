@@ -41,9 +41,9 @@ his feedback comes at the M4 hand-over.
 | Test searches for M1 | "russell wilson foil card", "star wars black series figure", "mid century dresser" |
 | Location (ZIP, Craigslist city, Facebook city) | Blank by default; entered by the user and remembered. Seattle is used only for testing |
 | eBay sold links (eBay now asks for sign-in) | Keep them, with the note "Sign in to eBay to see sold prices" |
-| Category hints | Cards: eBay, Mercari, ShopGoodwill; exclude "lot, reprint, custom". Toys: eBay, Mercari, Etsy, ShopGoodwill; exclude "lot, broken". Furniture: Facebook, Craigslist, OfferUp; exclude "parts, broken" |
-| Sites | The ten in section 5 |
-| Default stores (no remembered choices yet) | eBay, Facebook Marketplace and Mercari on; the other seven off. Remembered choices stay as they are |
+| Category hints | Removed in M4 (Dad: "category hint seems to be useless.") |
+| Sites | The ten in section 5, plus Mercari Japan (added in M4 at my request) |
+| Default stores (no remembered choices yet) | eBay, Facebook Marketplace and Mercari on; the others off. Remembered choices stay as they are; a store added later starts off |
 
 At the M4 hand-over my dad tries the app; record what he liked, what
 confused him, and what he'd change, in his words, in LOG.md.
@@ -81,9 +81,6 @@ the left (a collapsible panel on phones), and the site results on the right.
 - **Condition:** any / new / used
 - **Buying format:** any / auction / buy now (only some sites support it)
 - **Location:** ZIP code or city and a radius, for local sites
-- **Category hint:** cards, toys and figures, furniture, other. Only
-  suggests stores and leave-out words (added to the Leave out box); it
-  never changes his search words
 
 **Filters a site can't do:** each site applies only the filters it
 supports. Every site button shows which filters it applied ("eBay: all
@@ -111,6 +108,7 @@ Query formatting rules (per site, in the adapters):
 | 8 | ShopGoodwill | Yes | To verify | Secondhand auctions of everything | No |
 | 9 | Amazon | Yes | No | New retail price as a reference point | No |
 | 10 | Walmart | Yes | No | New retail price as a reference point | No |
+| 11 | Mercari Japan (M4) | Yes | Yes (sold filter, to verify) | Japanese listings; words sent as typed (no translation); off by default | No |
 
 Optional extras by category, off by default: TCGplayer (trading card
 games), Chairish (furniture and decor).
@@ -129,8 +127,11 @@ one click. Browsers block a page from opening several tabs at once unless
 pop-ups are allowed for that site, so when tabs are blocked the app says
 how many and explains how to allow pop-ups for this site in Chrome and
 Edge. "Open next" stays as the fallback: it walks through the links one
-click at a time, which browsers always allow. What his browser does with
-pop-ups blocked and allowed is recorded in LOG.md.
+click at a time, which browsers always allow, and names the next store
+("Open next: eBay"). Since M4 the app doesn't mark which links were
+already opened (Dad: "why does it say when stuff is already opened?").
+What his browser does with pop-ups blocked and allowed is recorded in
+LOG.md.
 
 ## 6. Milestones
 
@@ -186,6 +187,13 @@ Checks: tests for the query parsing, views and phrase leave-outs; check 35
 - Short "How to use it" help on the page
 
 Checks: his feedback recorded; fixes logged with how they were verified.
+
+Done in M4 (plans/m4-plan.md):
+- category hint removed;
+- "opened" tracking removed;
+- Mercari Japan added (my request);
+- "How to use it" help;
+- Open all message mentions reloading.
 
 ### M5: prices inside the app (considered and declined, 2026-11-01)
 Showing live prices in the app itself was considered and declined (my

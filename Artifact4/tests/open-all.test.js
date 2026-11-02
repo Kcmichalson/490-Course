@@ -24,6 +24,7 @@ test("pop-ups blocked: the first opens, the rest are blocked, with a message", (
   assert.ok(message.startsWith(`Your browser blocked ${links.length - 1} of ${links.length} tabs.`), message);
   assert.match(message, /Chrome or Edge/);
   assert.match(message, /Always allow pop-ups and redirects/);
+  assert.match(message, /reload this page first/); // M4: Kc had to reopen after allowing
   assert.match(message, /Open next/);
 });
 

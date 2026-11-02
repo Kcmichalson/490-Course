@@ -12,15 +12,22 @@
     <div class="topbar-inner">
       <h1 class="brand">Price Check</h1>
       <form id="search-form" class="search" role="search">
-        <label for="search-words" class="visually-hidden">Search words</label>
-        <input id="search-words" name="words" type="search" required
-               placeholder="e.g. russell wilson foil card" autocomplete="off" enterkeyhint="search">
-        <button type="submit" class="button button-primary">Search</button>
+        <div class="search-fields">
+          <label class="search-field">Search for
+            <input id="search-words" name="words" type="search" required
+                   placeholder="e.g. russell wilson foil card -reprint" autocomplete="off" enterkeyhint="search">
+          </label>
+          <label class="search-field">Leave out <span class="search-hint">(separate with commas)</span>
+            <input id="exclude" name="exclude" type="text"
+                   placeholder="e.g. lot, reprint, base set" autocomplete="off" enterkeyhint="search">
+          </label>
+          <button type="submit" class="button button-primary search-submit">Search</button>
+        </div>
+        <div class="view-switch" role="group" aria-label="Which listings to open">
+          <button type="button" class="view-option" data-view="asking" aria-pressed="true">Current listings</button>
+          <button type="button" class="view-option" data-view="sold" aria-pressed="false">Sold listings</button>
+        </div>
       </form>
-      <nav class="tabs" aria-label="Views">
-        <button type="button" id="tab-search" class="tab" aria-pressed="true">Search</button>
-        <button type="button" id="tab-saved" class="tab" aria-pressed="false">Saved (<span id="saved-count">0</span>)</button>
-      </nav>
     </div>
   </header>
 
@@ -92,15 +99,6 @@
       </details>
 
       <details class="filter" open>
-        <summary>Exclude words</summary>
-        <div class="filter-body">
-          <label for="exclude" class="visually-hidden">Exclude words</label>
-          <input id="exclude" type="text" autocomplete="off" placeholder="e.g. lot, broken, parts">
-          <p class="field-note">Separate words with commas or spaces.</p>
-        </div>
-      </details>
-
-      <details class="filter" open>
         <summary>Category hint</summary>
         <div class="filter-body">
           <label for="category" class="visually-hidden">Category</label>
@@ -109,19 +107,9 @@
           <button type="button" id="category-apply" class="button button-small" hidden>Use these</button>
         </div>
       </details>
-
-      <details class="filter" open>
-        <summary>My memberships</summary>
-        <div class="filter-body">
-          <div id="membership-list" class="check-list"></div>
-          <p class="field-note">Adds a note on that store's links.</p>
-        </div>
-      </details>
     </aside>
 
     <main id="results" class="results" aria-live="polite"></main>
   </div>
-
-  <main id="saved-view" class="saved-view" aria-label="Saved searches" hidden></main>
 </body>
 </html>

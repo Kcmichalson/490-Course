@@ -3,7 +3,6 @@
 
 import { QUICK_RANGES, RADII } from "../core/query.js";
 import { CATEGORIES, findCategory, suggestionFor } from "../core/categories.js";
-import { MEMBERSHIPS } from "../core/memberships.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -25,19 +24,6 @@ export function initSidebar({ sites, prefs, onChange }) {
   }
   const storeBoxes = () => [...sidebar.querySelectorAll('input[name="store"]')];
 
-  // My memberships
-  for (const m of MEMBERSHIPS) {
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.name = "membership";
-    box.value = m.id;
-    box.checked = prefs.memberships.includes(m.id);
-    const label = document.createElement("label");
-    label.append(box, ` ${m.label}`);
-    $("membership-list").append(label);
-  }
-  const membershipBoxes = () => [...sidebar.querySelectorAll('input[name="membership"]')];
-
   // Price quick ranges
   for (const range of QUICK_RANGES) {
     const button = document.createElement("button");
@@ -58,8 +44,8 @@ export function initSidebar({ sites, prefs, onChange }) {
     field.hidden = !siteIds.includes(field.dataset.needsSite);
   }
 
-  // Puts values into the form without firing change events: remembered
-  // choices at start, or a saved search when he loads one.
+  // Puts remembered choices into the form without firing change events.
+  // ("exclude" is the Leave out box in the header.)
   function apply(values) {
     for (const box of storeBoxes()) box.checked = !values.storesOff.includes(box.value);
     $("price-min").value = values.priceMin ?? "";
@@ -90,7 +76,6 @@ export function initSidebar({ sites, prefs, onChange }) {
       },
       exclude: $("exclude").value,
       category: $("category").value,
-      memberships: membershipBoxes().filter((b) => b.checked).map((b) => b.value),
     };
   }
 
@@ -100,7 +85,7 @@ export function initSidebar({ sites, prefs, onChange }) {
     const hasSuggestion = findCategory(id).id !== "other";
     const parts = [];
     if (stores.length) parts.push(`Suggested stores: ${stores.map(nameOf).join(", ")}.`);
-    if (exclude.length) parts.push(`Suggested exclude words: ${exclude.join(", ")}.`);
+    if (exclude.length) parts.push(`Suggested leave-out words: ${exclude.join(", ")}.`);
     $("category-suggestion").textContent = parts.join(" ");
     $("category-suggestion").hidden = !hasSuggestion;
     $("category-apply").hidden = !hasSuggestion;
@@ -127,7 +112,8 @@ export function initSidebar({ sites, prefs, onChange }) {
       if (stores.length) {
         for (const box of storeBoxes()) box.checked = stores.includes(box.value);
       }
-      const words = $("exclude").value.split(/[\s,;]+/).filter(Boolean);
+      // Leave out is a comma list; an item may be a phrase ("base set").
+      const words = $("exclude").value.split(",").map((w) => w.trim()).filter(Boolean);
       for (const word of exclude) if (!words.includes(word)) words.push(word);
       $("exclude").value = words.join(", ");
     } else {
@@ -148,7 +134,6 @@ export function initSidebar({ sites, prefs, onChange }) {
 
   return {
     read,
-    apply,
     setMessage(id, text) {
       $(id).textContent = text;
       $(id).hidden = !text;

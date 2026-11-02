@@ -27,15 +27,6 @@ test("price in cents, both ends or one (one end: check 23)", () => {
   assert.equal(build({ priceMax: "20" }).params.get("rh"), "p_36:-2000");
 });
 
-// Check 34 couldn't confirm the Prime filter, so Prime only adds a note
-// (tested in registry.test.js) and never changes the link.
-test("Prime membership doesn't change the Amazon link", () => {
-  const plain = build({ priceMin: "20", priceMax: "50" });
-  const prime = build({ priceMin: "20", priceMax: "50", memberships: ["prime"] });
-  assert.equal(prime.url, plain.url);
-  assert.deepEqual([prime.applied, prime.skipped], [["price"], []]);
-});
-
 test("exclude, condition, format and location are skipped", () => {
   const { skipped } = build({
     exclude: "lot", condition: "new", format: "buyNow", location: { zip: "98101" },

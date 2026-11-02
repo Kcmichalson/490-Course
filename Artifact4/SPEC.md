@@ -6,19 +6,24 @@ sites: trading cards, plushies, action figures, furniture, anything. Today
 he has to search each site by hand, retype the search, and remember each
 site's filters (especially "sold").
 
-Price Check lets him type a search once, for example
-"russell wilson foil card", and opens the best search on each site for two
-questions:
-- **Asking now:** what it's listed for right now (active listings)
-- **Sold for:** what people actually paid (sold listings), the better
-  measure of value
+Price Check is a mass-search tool. He types a search once and the app
+opens it on every selected store, each written in that store's own URL
+format, from one click ("Open all"). He can type the search two ways:
+- **in one line, in standard form:** `russell wilson foil card -rerun
+  -reprint` (words must all match, "quoted phrases" stay together, and
+  -words are left out);
+- **or in two boxes:** "Search for" (everything he wants) and "Leave out"
+  (everything that shouldn't appear, separated by commas).
 
-It also keeps his saved searches as a list, with the prices he records.
+A switch picks which listings the links open: **Current listings** (what's
+for sale now) or **Sold listings** (what things actually sold for, on the
+stores that show them).
 
-**Main function (my decision, 2026-11-01):** the app's main job is
+**Main function (my decisions, 2026-11-01):** the app's main job is
 translating one search and its filters into correctly filtered links for
-many resale sites, opened in tabs. Recording prices (M3) stays as an
-optional notebook. Showing live prices inside the app (M5) was considered
+many resale sites, opened in tabs. In the retrofit (later the same day),
+saved searches (M2) and recorded prices (M3) were removed to keep the app
+on that one job. Showing live prices inside the app (M5) was considered
 and declined (see M5 in section 6).
 
 Artifact 4 requirements this covers: built for someone outside the team
@@ -50,14 +55,23 @@ confused him, and what he'd change, in his words, in LOG.md.
   opened in a new tab
 - Site URL formats can change without notice, so each site is one small,
   tested adapter with a "last checked" date
-- His data stays in his browser (localStorage, `pc:` prefix) and can be
-  exported/imported as a JSON file
+- His remembered choices stay in his browser (localStorage, `pc:` prefix).
+  Nothing else is stored
 
 ## 4. Search bar and filter sidebar
 Layout like eBay's results page: a search bar on top, a filter sidebar on
 the left (a collapsible panel on phones), and the site results on the right.
 
-**Search bar:** search words (required), e.g., "russell wilson foil card".
+**Search form** (top of the page):
+- **Search for** (required): e.g., `russell wilson foil card -reprint`.
+  Words must all match; "quoted phrases" stay together; `-word` and
+  `-"a phrase"` are left out
+- **Leave out** (optional): e.g., `lot, reprint, base set`. Separated by
+  commas, so an item with spaces is a phrase. Remembered between visits
+- Leave-outs from both boxes are combined, each once. The results show
+  what was understood: "Searching for … · Leaving out: …"
+- **Current listings / Sold listings** switch, remembered. Sold shows only
+  the stores with a sold view and lists the others as "No sold view"
 
 **Filter sidebar** (sections collapse, like eBay's):
 - **Stores:** a checkbox per site (section 5), with "All" and "None".
@@ -67,29 +81,20 @@ the left (a collapsible panel on phones), and the site results on the right.
 - **Condition:** any / new / used
 - **Buying format:** any / auction / buy now (only some sites support it)
 - **Location:** ZIP code or city and a radius, for local sites
-- **Exclude words:** e.g., lot, broken, parts, reprint, custom
 - **Category hint:** cards, toys and figures, furniture, other. Only
-  suggests stores and exclusions; it never changes his search words
-- **My memberships:** checkboxes for memberships he has (e.g., Amazon
-  Prime, Walmart+), remembered. See "Memberships" below
+  suggests stores and leave-out words (added to the Leave out box); it
+  never changes his search words
 
 **Filters a site can't do:** each site applies only the filters it
 supports. Every site button shows which filters it applied ("eBay: all
 filters" / "Craigslist: price and location only"), so he never assumes a
 filter worked where it didn't.
 
-**Memberships, honestly:** the app doesn't see prices (section 3), so a
-membership can't change a price on screen. It can:
-- apply a site's own member filter where one exists in the search link
-  (for example, Prime-eligible items on Amazon, if the link supports it)
-- show a short note on that site's button (e.g., "Prime: free shipping on
-  eligible items, so compare totals")
-- in M3, when he records a price, add shipping and membership effects to
-  show "your total" next to the listed price
-
 Query formatting rules (per site, in the adapters):
 - Use each site's own exclude, exact-phrase, condition, price, format, and
-  location syntax where it exists
+  location syntax where it exists. Only eBay and Craigslist can leave words
+  out in a link; a phrase is written `-"base set"` there. The other stores
+  say "can't do exclude words"
 - Leave out fields a site handles badly instead of making results worse
 - Sort by "recently sold" or "newest" where the site allows it
 
@@ -115,8 +120,9 @@ a sold view doesn't work by link, that site is "Asking now" only. Rules for
 adding a site: its results open from a link, using it needs no scraping, and
 its terms allow linking to searches.
 
-The results area labels each link "Sold" or "Asking," so he never mistakes
-an asking price for a sale price.
+The results show one link per selected store for the chosen view, each
+labeled "Sold" or "Asking", so he never mistakes an asking price for a sale
+price.
 
 **Opening many tabs:** an "Open all" button opens every selected link from
 one click. Browsers block a page from opening several tabs at once unless
@@ -154,27 +160,25 @@ Checks: tests pass; every "To verify" in section 5 resolved and recorded;
 by eye, the three test searches in section 2: each link opens the right
 search with the filters applied; visual pass at ~1280 and ~400 px.
 
-### M2: Saved searches
-- Save the current search (with its filters) to a list; edit, delete
-- Each saved search has its site buttons, so re-checking is one click
-- Filter the list by text or category
-- "My memberships" in the sidebar: remembered; applies member filters
-  where a site's link supports them and shows the membership notes
-- Export to a JSON file and import it back (clear message for a bad file)
+### M2: Saved searches (built, then removed in the retrofit, 2026-11-01)
+Saved searches, "My memberships" and export/import were built and checked
+(plans/m2-plan.md), then removed when the app was refocused on mass search
+(section 1).
 
-Checks: tests for the data (add, edit, delete, export/import round trip,
-bad file rejected); by eye: save five searches, reload, still there;
-export, clear, import, back again.
+### M3: Recording prices (built, then removed in the retrofit, 2026-11-01)
+Recording prices on saved searches was built and checked
+(plans/m3-plan.md), then removed with M2.
 
-### M3: Recording prices
-- On a saved search, record a price he saw: amount, shipping, sold or
-  asking, site, date, optional note; show "your total" with shipping and
-  membership effects (e.g., Prime free shipping)
-- Each saved search shows its latest sold price, latest asking price, and
-  when it was last checked; sort by price or "checked longest ago"
+### Retrofit: mass search (2026-11-01)
+- Two inputs: "Search for" (understands -words and "phrases") and "Leave
+  out" (commas)
+- Current / Sold switch in place of the two result groups
+- "Open all" plus "Open next"
+- M2 and M3 removed
 
-Checks: tests for latest-price and sorting rules (including searches with
-no prices); by eye with his real searches.
+Checks: tests for the query parsing, views and phrase leave-outs; check 35
+(phrase leave-outs on eBay and Craigslist); by eye at ~1280 and ~400 px
+(plans/retrofit-plan.md).
 
 ### M4: Hand-over and one round of fixes
 - Show it to my dad (in person or a call); watch him use it without help
@@ -193,16 +197,16 @@ decision). The reasons:
   can't), which this project's rules exclude.
 
 The app stays a link builder (section 1); he reads prices on each site's
-own page and can note them with M3.
+own page.
 
 ### Stretch (only if time remains; each needs its own plan)
 - Exclusion presets per category (e.g., furniture: "parts, broken")
-- A printable/shareable summary of saved searches and prices
 - Anything from his M4 hand-over feedback that ranks high
 
 ## 7. Out of scope
 - Scraping or fetching any site's results; alerts for new listings
-- Accounts and syncing between devices (export/import covers moving data)
+- Saved searches, recorded prices and memberships (removed in the retrofit)
+- Accounts and syncing between devices
 
 ## 8. Open questions
 - Which sites he actually uses (ask at the M4 hand-over)
@@ -213,7 +217,7 @@ own page and can note them with M3.
 ## 9. Schedule (due Sunday, November 8, 11:59 PM)
 - Nov 1: check-in card on my portfolio; M0 setup
 - Nov 1–2: M1
-- Nov 3–4: M2
-- Nov 5–6: M3
+- Nov 1: M2 and M3 built, then the retrofit to mass search (M2/M3
+  removed)
 - Nov 6–7: hand-over to my dad, M4 fixes
 - Nov 8: final log, portfolio card, submit

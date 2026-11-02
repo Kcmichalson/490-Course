@@ -23,17 +23,37 @@ export const QUICK_RANGES = [
   { id: "over50", label: "Over $50", min: 50, max: null },
 ];
 
-// Splits search words into tokens, keeping "quoted phrases" together.
 // Phone keyboards type curly quotes, so those count as quotes too.
-export function splitWords(text) {
-  const clean = String(text ?? "").replace(/[“”„‟″]/g, '"');
+const straightQuotes = (text) => String(text ?? "").replace(/[“”„‟″]/g, '"');
+const tidy = (text) => text.replace(/"/g, "").trim().replace(/\s+/g, " ");
+
+// The two search boxes -> { tokens, exclude }.
+// "Search for": words (all must match), "exact phrases", and -word or
+//   -"a phrase" to leave out. A lone "-" is ignored.
+// "Leave out": a comma-separated list; an item with spaces is a phrase.
+// Leave-outs are lowercased and kept once, wherever they were typed.
+//   parseQuery('russell wilson "foil card" -rerun', "reprint, base set")
+//   -> tokens: russell, wilson, "foil card"; exclude: rerun, reprint, base set
+export function parseQuery(searchText, leaveOutText) {
   const tokens = [];
-  for (const match of clean.matchAll(/"([^"]*)"|(\S+)/g)) {
-    const quoted = match[1] !== undefined;
-    const value = (quoted ? match[1] : match[2]).replace(/"/g, "").trim().replace(/\s+/g, " ");
-    if (value) tokens.push({ text: value, quoted });
+  const exclude = [];
+  const leaveOut = (text) => {
+    const value = tidy(tidy(text).replace(/^-+/, "")).toLowerCase();
+    if (value && !exclude.includes(value)) exclude.push(value);
+  };
+  for (const match of straightQuotes(searchText).matchAll(/(-?)"([^"]*)"|(\S+)/g)) {
+    const [, dash, phrase, word] = match;
+    if (phrase !== undefined) {
+      if (dash) leaveOut(phrase);
+      else if (tidy(phrase)) tokens.push({ text: tidy(phrase), quoted: true });
+    } else if (word.startsWith("-")) {
+      leaveOut(word);
+    } else if (tidy(word)) {
+      tokens.push({ text: tidy(word), quoted: false });
+    }
   }
-  return tokens;
+  for (const item of straightQuotes(leaveOutText).split(",")) leaveOut(item);
+  return { tokens, exclude };
 }
 
 // Rebuilds the words for a site: phrases keep their quotes only where the
@@ -42,14 +62,9 @@ export function joinWords(tokens, { quotes }) {
   return tokens.map((t) => (t.quoted && quotes ? `"${t.text}"` : t.text)).join(" ");
 }
 
-// "lot, broken  -parts" -> ["lot", "broken", "parts"]
-export function parseExclude(text) {
-  const words = String(text ?? "")
-    .toLowerCase()
-    .split(/[\s,;]+/)
-    .map((w) => w.replace(/^-+/, "").replace(/["“”]/g, ""))
-    .filter(Boolean);
-  return [...new Set(words)];
+// A leave-out in eBay / Craigslist syntax: -rerun, or -"base set".
+export function excludeTerm(text) {
+  return text.includes(" ") ? `-"${text}"` : `-${text}`;
 }
 
 // Whole dollars, or null for blank/invalid. Decimals round outward
@@ -90,17 +105,16 @@ export function normalizeRadius(value) {
   return RADII.includes(n) ? n : DEFAULT_RADIUS;
 }
 
-// input: { words, exclude, priceMin, priceMax, condition, format,
-//          location: { zip, radius, craigslistCity, facebookCity },
-//          memberships: ["prime", ...] }
+// input: { words (the Search for box), exclude (the Leave out box),
+//          priceMin, priceMax, condition, format,
+//          location: { zip, radius, craigslistCity, facebookCity } }
 export function buildSearch(input = {}) {
-  const tokens = splitWords(input.words);
+  const { tokens, exclude } = parseQuery(input.words, input.exclude);
   const location = input.location ?? {};
   return {
-    memberships: Array.isArray(input.memberships) ? [...input.memberships] : [],
     words: joinWords(tokens, { quotes: true }),
     tokens,
-    exclude: parseExclude(input.exclude),
+    exclude,
     price: normalizePrice(input.priceMin, input.priceMax),
     condition: CONDITIONS.includes(input.condition) ? input.condition : "any",
     format: FORMATS.includes(input.format) ? input.format : "any",

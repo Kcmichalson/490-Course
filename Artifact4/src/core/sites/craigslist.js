@@ -4,7 +4,8 @@
 // - Search: https://<city>.craigslist.org/search/sss?query=<words>
 //   ("sss" = all for sale). With no city: www.craigslist.org (check 8)
 // - Keyword syntax: "exact phrase" and -word excludes, per Craigslist's
-//   own help page on search operators [high]
+//   own help page on search operators [high]; a phrase is left out as
+//   -"base set" (check 35)
 // - Price: min_price / max_price, whole dollars [high]
 // - Condition: condition=<code>, repeated for several: 10 new, 20 like new,
 //   30 excellent, 40 good, 50 fair, 60 salvage (checks 9 and 10)
@@ -12,9 +13,9 @@
 //   (distance needs postal) [high]
 // - Sort: sort=date newest [high]. Format: none
 //
-// Kc's checks 8, 9 and 10 passed on 2026-11-01.
+// Kc's checks 8, 9, 10 and 35 passed on 2026-11-01.
 
-import { joinWords, linkResult } from "../query.js";
+import { excludeTerm, joinWords, linkResult } from "../query.js";
 
 const CONDITION_CODES = {
   new: ["10"],
@@ -45,7 +46,7 @@ export default {
 
     const words = [joinWords(search.tokens, { quotes: true })];
     if (search.exclude.length > 0) {
-      words.push(...search.exclude.map((w) => `-${w}`));
+      words.push(...search.exclude.map(excludeTerm));
       carried.add("exclude");
     }
     p.set("query", words.join(" "));

@@ -7,9 +7,11 @@ CLAUDE.md describes.
 ## Milestone status
 - [x] M0: Setup (no up-front interview; SPEC section 2 holds Kc's decisions)
 - [x] M1: Search builder (2026-11-01; all ten sites checked by Kc)
-- [x] M2: Saved searches (2026-11-01; Kc's by-eye check passed)
-- [x] M3: Recording prices (2026-11-01; an optional notebook, per Kc's
-  links-first decision)
+- [x] M2: Saved searches (2026-11-01; Kc's by-eye check passed). Removed
+  in the retrofit
+- [x] M3: Recording prices (2026-11-01). Removed in the retrofit
+- [x] Retrofit: mass search (two inputs, Current / Sold switch)
+  (2026-11-01; Kc's by-eye check and check 35 passed)
 - [ ] M4: Hand-over and one round of fixes
 
 ## Decisions so far (before Session 1)
@@ -597,6 +599,112 @@ Kc's decision:
       clicking Open all again. If it was a reload, the message's last step
       could say so (an M4 candidate).
 
+### 2026-11-01 — Session 1 (cont.): Retrofit to mass search
+- **Planned:** plans/retrofit-plan.md (approved as written). Kc's
+  decisions:
+  - keep the ten stores;
+  - operators are words, "phrases" and -exclude;
+  - "Search for" and "Leave out" boxes, both always shown;
+  - remove saved searches and recorded prices (M2/M3) and memberships;
+  - a switch to open either sold or current listings.
+- **Changed:**
+  - **Deleted** (all created this session): src/core/saved.js,
+    src/core/prices.js, src/core/memberships.js, src/ui/saved-list.js,
+    tests/saved.test.js, tests/prices.test.js, tests/memberships.test.js.
+  - **src/core/query.js:**
+    - `parseQuery(searchText, leaveOutText)` replaces `splitWords` and
+      `parseExclude`. It takes -words and -"phrases" out of Search for,
+      reads Leave out as a comma list (an item with spaces is a phrase),
+      and keeps each leave-out once, lowercased;
+    - `excludeTerm` writes `-word` or `-"a phrase"`;
+    - `buildSearch` uses both; memberships are gone.
+  - **eBay and Craigslist:** leave-outs go through `excludeTerm`; phrase
+    leave-out is unconfirmed (check 35).
+  - **src/core/sites/index.js:**
+    - `buildLinks(search, ids, today, view)` returns one view only
+      (unknown → current);
+    - new `storesWithoutView` for the "No sold view" line;
+    - membership notes are gone.
+  - **src/core/prefs.js:** `view` ("asking" / "sold") is remembered;
+    `memberships` is gone. `exclude` (the Leave out box) is still
+    remembered, as before.
+  - **index.html:**
+    - the header has "Search for", "Leave out (separate with commas)",
+      Search, and the Current listings / Sold listings switch;
+    - removed: the tabs, the Saved view, the sidebar "Exclude words" and
+      "My memberships" sections.
+  - **results.js:** one list for the chosen view, titled "Current listings
+    for …" / "Sold listings for …"; a "Searching for … · Leaving out: …"
+    line; "No sold view: …"; a message when no selected store has a sold
+    view; the save buttons are gone.
+  - **sidebar.js:** memberships gone. "Use these" adds to Leave out as a
+    comma list (it had split on spaces, which would break "base set"); the
+    suggestion says "leave-out words".
+  - **main.js and storage.js:** saved, price and membership wiring removed;
+    the view switch added. **style.css:** the tab, saved, price and group
+    styles removed; the search form and switch styles added.
+  - **SPEC:** section 1 (mass search, two inputs, the switch), section 3
+    (only choices stored), section 4 (search form; sidebar without
+    exclude and memberships; the memberships text removed), section 5 (one
+    list per view), section 6 (M2 and M3 "built, then removed"; a
+    Retrofit milestone; M5's last line), section 7, section 9.
+- **Tests changed and why:**
+  - query.test.js: the `splitWords` and `parseExclude` tests became
+    `parseQuery` tests. The splitWords cases are the same, read from
+    `.tokens`. The parseExclude case changed meaning on purpose: Leave out
+    now splits on commas only (approved plan).
+  - registry.test.js: "sold group first, then asking" became separate
+    current and sold tests plus an unknown-view test; "filter text and
+    notes" now asks for each view; the membership-notes test was removed.
+  - prefs.test.js: the memberships test was removed, the defaults test
+    checks `view`, and a new test covers remembering the view.
+  - amazon.test.js: the Prime test was removed.
+  - ebay and craigslist tests: new phrase leave-out tests (check 35).
+  - No confirmed golden URL changed.
+- **Problems (both found and fixed in this build):**
+  1. Leave-out items like ", -parts" kept their dash, because the dash was
+     stripped before trimming. My new query test caught it.
+  2. A stray "null" showed above the links: `container.append(null)`
+     prints "null". It was introduced with Open all in the previous change
+     and missed by my DOM checks; a 400 px screenshot showed it.
+  - Note for M4: `pc:saved` and `memberships` left in Kc's browser by
+    M2/M3 are ignored. Nothing deletes his data.
+- **Checks:**
+  - `node --test "tests/*.test.js"`: 119 tests, 119 pass, 0 fail.
+  - Built-in browser, 1280 px, all stores on, `window.open` stubbed:
+    - no tabs, memberships or sidebar exclude; Leave out is in the header;
+    - "russell wilson foil card -rerun -reprint" → "Current listings for
+      …", "Leaving out: rerun, reprint", 10 links, Open all (10);
+      eBay's link has `+-rerun+-reprint`; Mercari says "can't do exclude
+      words";
+    - Leave out "base set, Rerun" → "rerun, reprint, base set";
+      eBay's link adds `+-%22base+set%22`;
+    - Sold → 4 links (eBay, Mercari, Poshmark, ShopGoodwill) with
+      `LH_Sold=1`, and "No sold view: Facebook Marketplace, Craigslist,
+      OfferUp, Etsy, Amazon, Walmart."; Open all → 4 calls, "All 4
+      opened.";
+    - Current with all but the first blocked → "Your browser blocked 9 of
+      10 tabs…";
+    - only Craigslist selected, in Sold → the "None of the selected stores
+      show sold listings" message;
+    - reload keeps Sold and the Leave out text, and clears the words.
+  - 400 px: Search for, Leave out and Search stack (16–384 px); no
+    sideways scroll in Current, Sold or with Filters open; a screenshot
+    after the fix shows no "null". No console errors.
+  - The pane's `pc:prefs` was cleared and its viewport reset afterward.
+  - **Kc's by-eye check and check 35 (2026-11-01): "All pass".** eBay and
+    Craigslist phrase leave-outs (`-"base set"`) are now confirmed; both
+    adapters have nothing unconfirmed. 119 tests, 119 pass. **Retrofit
+    complete.**
+- **For Kc to change (I can't edit CLAUDE.md):**
+  - "It also keeps a list of his saved searches with the prices he
+    records." in the intro;
+  - "Store data as plain JSON. Saved searches must be exportable and
+    importable as a file, since browser storage can be cleared" under
+    Code conventions;
+  - "(site adapters, query formatting, saved searches)" in the
+    src/core/ line.
+
 ### Session 1 prompt log
 - **Prompt:** "Read CLAUDE.md, SPEC.md, and LOG.md first. Start 'Session 1
   prompt log' in LOG.md. [Step 1: run the M0 checks one at a time and
@@ -930,6 +1038,55 @@ Kc's decision:
     default stores and the record-form hint; both passed in the built-in
     browser.
   - **How It Was Verified:** n/a (no fixes).
+- **Prompt:** "Let's retrofit this. I want this to focus on being a mass
+  search thing, so it can open ~20 tabs with the proper formatting and
+  URLs of a single search term (including And / Not etc) which the user
+  can either type in standard form (Russel Wilson Foil Cards -rerun
+  -reprint) or by using a series of text inputs so (Everything the user
+  wants to search:, Everything the user does not want to appear in
+  results (seperated by commas)"
+  - **Provided:** four questions before planning.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a.
+- **Prompt (answers):** "Keep the ten (14 tabs)"; "Words, 'phrases',
+  -exclude"; "Both boxes always shown"; "Remove them" (saved searches and
+  prices).
+  - **Provided:** used in the plan.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a.
+- **Prompt (sent mid-turn):** "We can drop the whole bought / sold price
+  thing"
+  - **Provided:** asked which part was meant.
+  - **Misreads / rule breaks:** none found; I didn't guess.
+  - **How It Was Verified:** n/a.
+- **Prompt (answer):** "I mean the user should be able to open all the
+  links to their search term, and it should be able to open either sold
+  listings or currently listed listings"
+  - **Provided:** a Current / Sold switch in place of the two groups; the
+    retrofit plan (plans/retrofit-plan.md), approved as written; the
+    retrofit built and checked (see the retrofit entry); a by-eye
+    checklist and check 35.
+  - **Misreads / rule breaks:**
+    - I rewrote main.js and search-bar.js as whole files; both are small
+      and created this session.
+    - I changed test expectations without stopping to ask, as listed in
+      the retrofit entry, because the approved plan changes or removes
+      that behavior.
+    - The stray "null" bug came from my earlier Open all change and wasn't
+      caught then.
+  - **How It Was Verified:**
+    - Leave-out dash fix: the new query test (", -parts" → "parts") fails
+      before the fix and passes after.
+    - "null" fix: in the built-in browser, no text node "null" in the
+      results in Current, Sold or the no-sold-stores case, and a 400 px
+      screenshot shows it gone.
+- **Prompt (answer to "How did the retrofit by-eye check and check 35
+  go?"):** "All pass"
+  - **Provided:** check 35 marked confirmed in ebay.js and craigslist.js;
+    the retrofit ticked; plans/retrofit-plan.md notes the result; a
+    commit message.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a (no fixes; tests 119/119).
 
 ## Entry template
 ### YYYY-MM-DD — Session N: title

@@ -7,8 +7,7 @@
 // - Sort: s=date-desc-rank newest arrivals
 // - Prime: not used. The researched Prime filter (p_85:2470955011 in rh)
 //   showed no Prime checkbox for Kc when signed out (check 34), so it
-//   couldn't be confirmed and was dropped. Ticking Amazon Prime under My
-//   memberships only adds a note (src/core/memberships.js)
+//   couldn't be confirmed and was dropped
 // - Keyword syntax: no known exclude or exact-phrase support, so exclude
 //   words are skipped and quotes are stripped
 // - Condition: category-specific ids, so none. Format, location: none

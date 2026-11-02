@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  splitWords,
+  parseQuery,
   joinWords,
-  parseExclude,
+  excludeTerm,
   normalizePrice,
   normalizeZip,
   normalizeCity,
@@ -15,8 +15,12 @@ import {
   QUICK_RANGES,
 } from "../src/core/query.js";
 
-test("splitWords keeps quoted phrases together", () => {
-  assert.deepEqual(splitWords('star wars "black series" figure'), [
+// parseQuery replaced splitWords + parseExclude in the retrofit; the
+// splitWords cases below are the same, now read from .tokens.
+const tokensOf = (text) => parseQuery(text, "").tokens;
+
+test("search words: quoted phrases stay together", () => {
+  assert.deepEqual(tokensOf('star wars "black series" figure'), [
     { text: "star", quoted: false },
     { text: "wars", quoted: false },
     { text: "black series", quoted: true },
@@ -24,34 +28,64 @@ test("splitWords keeps quoted phrases together", () => {
   ]);
 });
 
-test("splitWords treats phone curly quotes as quotes", () => {
-  assert.deepEqual(splitWords("“black series” figure"), [
+test("search words: phone curly quotes count as quotes", () => {
+  assert.deepEqual(tokensOf("“black series” figure"), [
     { text: "black series", quoted: true },
     { text: "figure", quoted: false },
   ]);
 });
 
-test("splitWords drops stray quotes, empty phrases and extra spaces", () => {
-  assert.deepEqual(splitWords('  mid   century "" dresser 5"  '), [
+test("search words: stray quotes, empty phrases and extra spaces are dropped", () => {
+  assert.deepEqual(tokensOf('  mid   century "" dresser 5"  '), [
     { text: "mid", quoted: false },
     { text: "century", quoted: false },
     { text: "dresser", quoted: false },
     { text: "5", quoted: false },
   ]);
-  assert.deepEqual(splitWords(""), []);
-  assert.deepEqual(splitWords(undefined), []);
+  assert.deepEqual(parseQuery("", ""), { tokens: [], exclude: [] });
+  assert.deepEqual(parseQuery(undefined, undefined), { tokens: [], exclude: [] });
 });
 
 test("joinWords keeps or strips quotes", () => {
-  const tokens = splitWords('"black series" figure');
+  const tokens = tokensOf('"black series" figure');
   assert.equal(joinWords(tokens, { quotes: true }), '"black series" figure');
   assert.equal(joinWords(tokens, { quotes: false }), "black series figure");
 });
 
-test("parseExclude splits on commas and spaces, drops dashes and duplicates", () => {
-  assert.deepEqual(parseExclude("lot, Broken  -parts,lot;reprint"), ["lot", "broken", "parts", "reprint"]);
-  assert.deepEqual(parseExclude("  , "), []);
-  assert.deepEqual(parseExclude(undefined), []);
+test("Search for: -word and -\"phrase\" become leave-outs", () => {
+  assert.deepEqual(parseQuery("Russell Wilson Foil Cards -rerun -reprint", ""), {
+    tokens: ["Russell", "Wilson", "Foil", "Cards"].map((text) => ({ text, quoted: false })),
+    exclude: ["rerun", "reprint"],
+  });
+  assert.deepEqual(parseQuery('pokemon card -"Base Set" --promo', "").exclude, ["base set", "promo"]);
+  assert.deepEqual(parseQuery("pokemon -“base set”", "").exclude, ["base set"]);
+});
+
+test("Search for: hyphens inside words and a lone dash are not leave-outs", () => {
+  const { tokens, exclude } = parseQuery("x-men figure - spider-man", "");
+  assert.deepEqual(tokens.map((t) => t.text), ["x-men", "figure", "spider-man"]);
+  assert.deepEqual(exclude, []);
+});
+
+test("Leave out: commas only, so an item with spaces is a phrase", () => {
+  assert.deepEqual(parseQuery("lamp", "lot, Base  Set , -parts,, \"reprint\"").exclude,
+    ["lot", "base set", "parts", "reprint"]);
+  assert.deepEqual(parseQuery("lamp", "  , ").exclude, []);
+});
+
+test("both boxes together: each leave-out once, Search for first", () => {
+  assert.deepEqual(parseQuery("card -Reprint -lot", "reprint, rerun, LOT").exclude, ["reprint", "lot", "rerun"]);
+});
+
+test("special characters in both boxes", () => {
+  const { tokens, exclude } = parseQuery('pokémon "black & white" #25 -réimpression', "café & co");
+  assert.equal(joinWords(tokens, { quotes: true }), 'pokémon "black & white" #25');
+  assert.deepEqual(exclude, ["réimpression", "café & co"]);
+});
+
+test("excludeTerm: -word, or -\"phrase\" for a phrase", () => {
+  assert.equal(excludeTerm("rerun"), "-rerun");
+  assert.equal(excludeTerm("base set"), '-"base set"');
 });
 
 test("normalizePrice: blanks, negatives and junk become null", () => {

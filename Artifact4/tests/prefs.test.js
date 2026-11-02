@@ -18,7 +18,16 @@ test("defaults: eBay, Facebook and Mercari on, filters at any, location blank", 
   assert.deepEqual(prefs.location, { zip: "", radius: 25, craigslistCity: "", facebookCity: "" });
   assert.equal(prefs.exclude, "");
   assert.equal(prefs.category, "other");
-  assert.deepEqual(prefs.memberships, []);
+  assert.equal(prefs.view, "asking");
+  assert.equal("memberships" in prefs, false);
+});
+
+test("view (Current / Sold) is remembered; a bad value falls back to current", () => {
+  const sold = serializePrefs({ ...defaultPrefs(IDS), view: "sold" });
+  assert.equal(parsePrefs(sold, IDS).view, "sold");
+  assert.equal(parsePrefs('{"view":"bought"}', IDS).view, "asking");
+  // Old prefs with memberships (from M2) load; the field is dropped.
+  assert.equal("memberships" in parsePrefs('{"memberships":["prime"]}', IDS), false);
 });
 
 test("remembered store choices stay as they are under the new default", () => {
@@ -28,14 +37,6 @@ test("remembered store choices stay as they are under the new default", () => {
   assert.deepEqual(parsePrefs(someOff, MORE_IDS).storesOff, ["ebay"]);
   // Remembered prefs without a storesOff list fall back to the default.
   assert.deepEqual(parsePrefs('{"condition":"used"}', MORE_IDS).storesOff, ["craigslist", "etsy"]);
-});
-
-test("memberships: kept in list order, unknown ids and duplicates dropped", () => {
-  const text = JSON.stringify({ memberships: ["walmartplus", "costco", "prime", "prime", 3] });
-  assert.deepEqual(parsePrefs(text, IDS).memberships, ["prime", "walmartplus"]);
-  assert.deepEqual(parsePrefs(JSON.stringify({ memberships: "prime" }), IDS).memberships, []);
-  const prefs = { ...defaultPrefs(), memberships: ["prime"] };
-  assert.deepEqual(parsePrefs(serializePrefs(prefs), IDS), prefs);
 });
 
 test("round trip keeps every remembered choice", () => {

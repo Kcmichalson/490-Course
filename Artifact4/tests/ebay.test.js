@@ -23,6 +23,12 @@ test("exclusions become -words in the search", () => {
   assert.deepEqual(applied, ["exclude"]);
 });
 
+test("leave-outs from either box; a phrase is -\"…\" (check 35)", () => {
+  const { url, params } = build({ words: "pokemon card -promo", exclude: "base set" });
+  assert.equal(params.get("_nkw"), 'pokemon card -promo -"base set"');
+  assert.equal(url, "https://www.ebay.com/sch/i.html?_nkw=pokemon+card+-promo+-%22base+set%22&_sop=10");
+});
+
 test("price range, and only one end", () => {
   let { params } = build({ priceMin: "5", priceMax: "50" });
   assert.equal(params.get("_udlo"), "5");

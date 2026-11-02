@@ -27,6 +27,12 @@ test("exclusions and quoted phrases go in the query", () => {
   assert.deepEqual(applied, ["exclude"]);
 });
 
+test("leave-outs from either box; a phrase is -\"…\" (check 35)", () => {
+  const { url, params } = build({ words: "pokemon card -promo", exclude: "base set", location: { craigslistCity: "seattle" } });
+  assert.equal(params.get("query"), 'pokemon card -promo -"base set"');
+  assert.equal(url, "https://seattle.craigslist.org/search/sss?query=pokemon+card+-promo+-%22base+set%22&sort=date");
+});
+
 test("price range", () => {
   const { params } = build({ priceMin: "50" });
   assert.equal(params.get("min_price"), "50");

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SITES, SITE_IDS, buildLinks } from "../src/core/sites/index.js";
+import { SITES, SITE_IDS, buildLinks, storesWithoutView } from "../src/core/sites/index.js";
 import { buildSearch, FILTER_KEYS } from "../src/core/query.js";
 
 const SPEC_ORDER = [
@@ -87,37 +87,42 @@ test("supports matches what buildUrl applies", () => {
   }
 });
 
-test("buildLinks: sold group first, then asking, in SPEC order, only selected stores", () => {
+// Retrofit: one view at a time (Current or Sold) instead of both groups.
+test("buildLinks: current listings for every selected store, in SPEC order", () => {
   const search = buildSearch({ words: "russell wilson foil card", priceMax: "20" });
-  const links = buildLinks(search, ["craigslist", "ebay", "mercari"]);
-  assert.deepEqual(
-    links.map((l) => `${l.view}:${l.siteId}`),
-    ["sold:ebay", "sold:mercari", "asking:ebay", "asking:mercari", "asking:craigslist"],
-  );
-  assert.deepEqual(buildLinks(search, ["craigslist"]).map((l) => l.view), ["asking"]);
-  assert.deepEqual(buildLinks(search, []), []);
+  const all = buildLinks(search, SITE_IDS, new Date(), "asking");
+  assert.deepEqual(all.map((l) => l.siteId), SPEC_ORDER);
+  assert.ok(all.every((l) => l.view === "asking"));
+  const some = buildLinks(search, ["craigslist", "ebay", "mercari"], new Date(), "asking");
+  assert.deepEqual(some.map((l) => l.siteId), ["ebay", "mercari", "craigslist"]);
+  assert.deepEqual(buildLinks(search, [], new Date(), "asking"), []);
+});
+
+test("buildLinks: sold listings only for stores with a sold view", () => {
+  const search = buildSearch({ words: "russell wilson foil card" });
+  const sold = buildLinks(search, SITE_IDS, new Date(), "sold");
+  assert.deepEqual(sold.map((l) => l.siteId), ["ebay", "mercari", "poshmark", "shopgoodwill"]);
+  assert.ok(sold.every((l) => l.view === "sold"));
+  assert.deepEqual(storesWithoutView(SITE_IDS, "sold"),
+    ["Facebook Marketplace", "Craigslist", "OfferUp", "Etsy", "Amazon", "Walmart"]);
+  assert.deepEqual(storesWithoutView(["ebay", "craigslist"], "sold"), ["Craigslist"]);
+  assert.deepEqual(storesWithoutView(SITE_IDS, "asking"), []);
+});
+
+test("buildLinks: no view or an unknown view means current listings", () => {
+  const search = buildSearch({ words: "lamp" });
+  const ids = (view) => buildLinks(search, ["ebay", "craigslist"], new Date(), view).map((l) => `${l.view}:${l.siteId}`);
+  assert.deepEqual(ids(undefined), ["asking:ebay", "asking:craigslist"]);
+  assert.deepEqual(ids("bought"), ["asking:ebay", "asking:craigslist"]);
 });
 
 test("buildLinks adds the filter text and notes", () => {
   const search = buildSearch({ words: "russell wilson foil card", exclude: "lot" });
-  const links = buildLinks(search, ["ebay", "mercari", "craigslist"]);
-  const find = (view, id) => links.find((l) => l.view === view && l.siteId === id);
+  const find = (view, id) => buildLinks(search, ["ebay", "mercari", "craigslist"], new Date(), view)
+    .find((l) => l.siteId === id);
   assert.equal(find("sold", "ebay").summary, "All filters");
   assert.deepEqual(find("sold", "ebay").notes, ["Sign in to eBay to see sold prices"]);
   assert.deepEqual(find("asking", "ebay").notes, []);
   assert.equal(find("asking", "mercari").summary, "No filters applied (can't do exclude words)");
   assert.deepEqual(find("asking", "craigslist").notes, ["No Craigslist city set (add one under Location)"]);
-});
-
-test("membership notes appear only on their own site's links", () => {
-  const search = buildSearch({ words: "lamp", memberships: ["prime", "walmartplus"] });
-  const links = buildLinks(search, SITE_IDS);
-  for (const link of links) {
-    const prime = link.notes.some((n) => n.startsWith("Prime:"));
-    const walmart = link.notes.some((n) => n.startsWith("Walmart+:"));
-    assert.equal(prime, link.siteId === "amazon", `${link.siteId} prime`);
-    assert.equal(walmart, link.siteId === "walmart", `${link.siteId} walmart+`);
-  }
-  const none = buildLinks(buildSearch({ words: "lamp" }), ["amazon", "walmart"]);
-  assert.ok(none.every((l) => l.notes.length === 0));
 });

@@ -1,28 +1,14 @@
-// Results: "Sold for" and "Asking now" groups of site links, each opening
-// in a new tab, plus "Open next" to walk through them one click at a time
-// (browsers block one click from opening many tabs), and the buttons that
-// save this search.
+// Results: one store link per selected store for the chosen view (current
+// or sold listings), each opening in a new tab, plus "Open all" and "Open
+// next" (the fallback when the browser blocks pop-ups).
 
 import { VIEW_LABELS } from "../core/sites/index.js";
 import { openAll, openAllMessage } from "../core/open-all.js";
 
-const GROUPS = [
-  {
-    view: "sold",
-    title: "Sold for",
-    blurb: "What people actually paid.",
-    empty: "None of the selected stores show sold prices by link.",
-  },
-  {
-    view: "asking",
-    title: "Asking now",
-    blurb: "What it's listed for right now.",
-    empty: "None of the selected stores show asking prices.",
-  },
-];
+const VIEW_TITLES = { asking: "Current listings", sold: "Sold listings" };
 
 // Small DOM helper; text is always set as text, never as HTML.
-export function el(tag, attrs = {}, ...children) {
+function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
     if (key === "class") node.className = value;
@@ -32,9 +18,7 @@ export function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-// onSave("new") saves the current search; onSave("update") overwrites the
-// saved search that was loaded.
-export function initResults(container, { onSave }) {
+export function initResults(container) {
   let links = [];
   const opened = new Set(); // URLs opened since the links last changed
 
@@ -81,8 +65,9 @@ export function initResults(container, { onSave }) {
 
   let notice = ""; // what Open all reports when tabs were blocked
 
-  // save: { loaded: true when a saved search is loaded, status: "Saved." }
-  let state = { words: "", selectedCount: 0, save: { loaded: false, status: "" } };
+  // { words, exclude: [...], view: "asking" | "sold", selectedCount,
+  //   missing: [names of selected stores with no link for this view] }
+  let state = { words: "", exclude: [], view: "asking", selectedCount: 0, missing: [] };
 
   function render(next) {
     state = next;
@@ -98,7 +83,8 @@ export function initResults(container, { onSave }) {
     if (!state.words) {
       container.append(
         el("p", { class: "intro" },
-          "Type what you're looking for and press Search. Each store's search opens in a new tab."),
+          "Type what you're looking for and press Search. Put words to leave out after a minus " +
+          "(-reprint) or in the Leave out box. Open all opens every store's search in its own tab."),
       );
       return;
     }
@@ -107,53 +93,49 @@ export function initResults(container, { onSave }) {
       return;
     }
 
+    // What the two boxes were understood as.
+    const understood = el("p", { class: "results-understood" },
+      "Searching for ", el("strong", {}, state.words),
+      state.exclude.length ? " · Leaving out: " : "",
+      state.exclude.length ? el("strong", {}, state.exclude.join(", ")) : null);
+    const missing = state.missing.length
+      ? el("p", { class: "results-missing" }, `No sold view: ${state.missing.join(", ")}.`)
+      : null;
+
+    // append() would print a null as the text "null", so leave those out.
+    const show = (...nodes) => container.append(...nodes.filter(Boolean));
+
+    if (links.length === 0) {
+      show(
+        el("h2", { class: "results-title" }, `${VIEW_TITLES[state.view]} for “${state.words}”`),
+        understood,
+        el("p", { class: "intro" }, "None of the selected stores show sold listings by link. " +
+          "Switch to Current listings, or turn on eBay, Mercari, Poshmark or ShopGoodwill."),
+        missing,
+      );
+      return;
+    }
+
     const i = nextIndex();
     const status = i === -1
       ? `All ${links.length} opened.`
-      : `Next: ${links[i].name} (${VIEW_LABELS[links[i].view]}), ${i + 1} of ${links.length}`;
+      : `Next: ${links[i].name}, ${i + 1} of ${links.length}`;
     const nextButton = el("button", { type: "button", class: "button" },
       i === -1 ? "Start over" : "Open next");
     nextButton.addEventListener("click", openNext);
     const allButton = el("button", { type: "button", class: "button button-primary" }, `Open all (${links.length})`);
     allButton.addEventListener("click", openEveryLink);
 
-    container.append(
+    show(
       el("div", { class: "results-head" },
-        el("h2", { class: "results-title" }, `Results for “${state.words}”`),
-        saveControls(),
+        el("h2", { class: "results-title" }, `${VIEW_TITLES[state.view]} for “${state.words}”`),
         el("div", { class: "open-next" },
           allButton, nextButton, el("span", { class: "open-next-status" }, status)),
       ),
+      understood,
       notice ? el("p", { class: "open-all-message", role: "alert" }, notice) : null,
-    );
-
-    for (const group of GROUPS) {
-      const items = links
-        .map((link, index) => ({ link, index }))
-        .filter(({ link }) => link.view === group.view);
-      const section = el("section", { class: "group", "aria-label": group.title },
-        el("h3", { class: "group-title" }, group.title, el("span", { class: "group-blurb" }, group.blurb)));
-      if (items.length === 0) {
-        section.append(el("p", { class: "group-empty" }, group.empty));
-      } else {
-        section.append(el("ul", { class: "links" }, ...items.map(({ link, index }) => card(link, index === i))));
-      }
-      container.append(section);
-    }
-  }
-
-  function saveControls() {
-    const button = (text, mode, primary) => {
-      const b = el("button", { type: "button", class: primary ? "button button-small button-primary" : "button button-small" }, text);
-      b.addEventListener("click", () => onSave(mode));
-      return b;
-    };
-    const buttons = state.save.loaded
-      ? [button("Update saved search", "update", true), button("Save as new", "new", false)]
-      : [button("Save this search", "new", false)];
-    return el("div", { class: "save-controls" },
-      ...buttons,
-      state.save.status ? el("span", { class: "save-status", role: "status" }, state.save.status) : null,
+      el("ul", { class: "links" }, ...links.map((link, index) => card(link, index === i))),
+      missing,
     );
   }
 

@@ -3,7 +3,8 @@
 // Site features relied on (researched 2026-11-01 from third-party docs and
 // eBay's developer docs; no official URL reference exists):
 // - Search: https://www.ebay.com/sch/i.html?_nkw=<words>
-// - Keyword syntax: -word excludes, "exact phrase" (search box) [medium-high]
+// - Keyword syntax: -word excludes, "exact phrase" (search box) [medium-high];
+//   a phrase is left out as -"base set" (check 35)
 // - Sold view: LH_Sold=1&LH_Complete=1, always both [high]. Since about
 //   Aug 2026 eBay asks signed-out visitors to sign in for sold results [high]
 // - Price: _udlo / _udhi, whole dollars [high]
@@ -18,9 +19,9 @@
 //   link showed "25 miles from 98101" (check 26)
 // - Sort: _sop=10 newly listed; _sop=13 ended recently
 //
-// Kc's by-eye checks 1, 2, 3, 20, 21 and 26 passed on 2026-11-01.
+// Kc's by-eye checks 1, 2, 3, 20, 21, 26 and 35 passed on 2026-11-01.
 
-import { joinWords, linkResult } from "../query.js";
+import { excludeTerm, joinWords, linkResult } from "../query.js";
 
 const BASE = "https://www.ebay.com/sch/i.html";
 
@@ -54,7 +55,7 @@ export default {
 
     const words = [joinWords(search.tokens, { quotes: true })];
     if (search.exclude.length > 0) {
-      words.push(...search.exclude.map((w) => `-${w}`));
+      words.push(...search.exclude.map(excludeTerm));
       carried.add("exclude");
     }
     p.set("_nkw", words.join(" "));

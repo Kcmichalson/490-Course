@@ -14,6 +14,8 @@ CLAUDE.md describes.
   (2026-11-01; Kc's by-eye check and check 35 passed)
 - [x] M4: Hand-over and one round of fixes (2026-11-01; Dad's feedback
   recorded and fixed; Kc's by-eye check and checks 36–37 passed)
+- [x] M5: Shareable search links and a keyword helper (Session 2,
+  2026-11-07; word list approved; Kc's by-eye check passed)
 
 ## Decisions so far (before Session 1)
 - **Solo project.** I realized late that Artifact 4 is a team project and
@@ -1243,6 +1245,252 @@ Kc's decision:
     looks wrong, say so instead of guessing"), I didn't change the adapter
     without the failing URL. I didn't open Craigslist myself.
   - **How It Was Verified:** n/a (no fix yet).
+
+### 2026-11-07 — Session 2: M5 shareable links and keyword helper (part 1)
+- **Planned:** plans/m5-plan.md, approved with Kc's changes:
+  - shared links apply and save like a normal change;
+  - every word-list entry has a real alternate, and Kc sees the table
+    before the chips are built;
+  - no eBay OR chip;
+  - the old M5 renamed.
+- **Changed:**
+  - **New `src/core/share.js`:**
+    - `encodeShare` writes short keys and leaves defaults out:
+      `q`, `x`, `v=s`, `st` (always), `lo` / `hi`, `c`, `f`, plus
+      `z` / `r` / `cl` / `fb` only with "Include my location". Values go
+      through `encodeQuery`, so é & " # can't break the link;
+    - `decodeShare` reads only valid fields and never throws;
+    - `linkSettings`: settings a link leaves out go to their default; the
+      visitor keeps their own location.
+  - **src/main.js:**
+    - `history.replaceState` keeps the link in the address bar after
+      every change;
+    - a link with `q` fills everything on load or when it's pasted into
+      the tab (`hashchange`), and saves as usual;
+    - Copy link uses `navigator.clipboard`, falling back to a selected box
+      with "Press Ctrl+C to copy."
+  - **src/ui/results.js:** a Copy link button, an "Include my location"
+    checkbox (unticked each visit) and a status line under "Searching
+    for …"; `showShare`.
+  - **src/ui/sidebar.js:** `apply()` sets only the fields it's given and
+    is exported. **src/ui/search-bar.js:** `setWords` is back.
+    **style.css:** share-row styles, using variables only.
+  - **New `src/core/keywords.js`:**
+    - 51 entries (cards 13, toys 13, furniture 14, general 11), each with
+      a meaning and at least one alternate or misspelling;
+    - `findSuggestions` (case and punctuation-insensitive; multi-word terms
+      with spaces or hyphens; skips -leave-outs; a longer term wins; at
+      most 4; alternates before misspellings);
+    - `replaceTerm`.
+    - **No chips UI yet:** waiting for Kc's review of the list.
+  - **SPEC:** a new "M5: shareable search links and a keyword helper"
+    section; the old one became "Declined: live prices (formerly M5)", and
+    section 1's reference was updated.
+- **CLAUDE.md lines for Kc to update** (I can't edit it):
+  - line 7–8: "It also keeps a list of his saved searches with the prices
+    he records.";
+  - line 32: "(URL builders, saved-search data)";
+  - line 57–58: "That is a separate, later decision (SPEC.md M5)". It's
+    now "Declined: live prices (formerly M5)";
+  - line 69: "(site adapters, query formatting, saved searches)";
+  - line 73–74: "Store data as plain JSON. Saved searches must be
+    exportable and importable as a file, since browser storage can be
+    cleared".
+- **Problems:**
+  - **Bug (fixed):** a pasted link without `v` kept the visitor's Sold view
+    instead of the sender's Current. The cause: links leave defaults out,
+    so a missing key means "default". My plan wrongly said "keep the
+    visitor's settings"; Kc's request said "falls back to defaults for the
+    rest". Fixed with `linkSettings`.
+  - **Test expectation I changed:** in my new share test, a broken escape
+    (`%E0%A4%A`) decodes to a replacement character, not the original
+    text. The test now checks that it's a string and doesn't throw.
+  - **Test I rewrote:** my first "never adds a word" keyword test was too
+    weak. It now checks each suggestion is the search with that one term
+    swapped.
+  - **Browser slip:** one test script saved the with-location hash under
+    the no-location name. It actually showed the with-location case
+    working; I reran the real no-location case.
+- **Checks:**
+  - `node --test "tests/*.test.js"`: 143 tests, 143 pass, 0 fail. New:
+    share.test.js (8), keywords.test.js (10). No existing expectation
+    changed.
+  - Built-in browser, 1280 px (clipboard stubbed):
+    - a full search ('pokémon "black & white" #25 -reprint', Leave out
+      "lot, base set", Sold, three stores, $5–$50, Used, Buy now, ZIP and
+      Craigslist city) → the hash has q/x/v/st/lo/hi/c/f and no
+      location; "Link copied."; ticking the box adds `z=98101&cl=seattle`;
+      a clipboard failure shows the selected box;
+    - storage cleared (a fresh visitor) and the no-location link opened →
+      every field restored, ZIP and city blank, 2 Sold links, prefs saved;
+    - the with-location link → ZIP and city filled;
+    - pasting `#q=mcm%20dresser&st=craigslist,offerup` after a Sold/New
+      link → Current, Any, those two stores;
+    - a garbage hash → nothing changes, no error.
+  - 380 px: the share row and the manual box fit, scroll width 380; no
+    console errors. Storage cleared and viewport reset afterward.
+  - Not yet: Kc's review of the word list, the chips UI, Kc's by-eye
+    check.
+
+### 2026-11-07 — Session 2 (cont.): M5 part 2, word list revised and chips
+- **Changed:**
+  - **Word list:** revised at Kc's request to 118 entries in 12 groups,
+    with 21 marked "check"; Kc approved it ("List approved"). See the
+    prompt log for the removals and trims.
+  - **New `src/ui/suggestions.js`:** chips (type="button", so they don't
+    submit the form) under the Search for / Leave out row. Clicking one
+    puts its text in Search for and runs the search. The container is
+    hidden when there are no suggestions.
+  - **main.js:** after each change, `findSuggestions(words)` feeds the
+    chips (on the searched words, not each keystroke). A shared link also
+    shows its chips.
+  - **index.html:** `#suggestions`. **style.css:** dashed accent chips
+    that wrap, using variables only.
+- **Checks:**
+  - `node --test "tests/*.test.js"`: 145 tests, 145 pass, 0 fail.
+  - Built-in browser, 1280 px:
+    - no chips before searching;
+    - "russell wilson rc" → "Try: russell wilson rookie card", "Try:
+      russell wilson rookie"; clicking the first sets Search for to
+      "russell wilson rookie card", the title follows, the hash is
+      `q=russell%20wilson%20rookie%20card…`, and the chip offers "Try:
+      russell wilson rc" back;
+    - "mcm dresser" → "mid century modern dresser", "mcm chest of
+      drawers", "mcm bureau";
+    - "lamp" → none (container hidden);
+    - "star wars figure -nib" → none (a leave-out isn't matched).
+  - 380 px, "vtg mid century modern dresser nib": 4 chips wrap, scroll
+    width 380, nothing past the edge (screenshot). No console errors.
+    Storage and address cleared, viewport reset afterward.
+  - **Kc's by-eye check (2026-11-07): "All pass".** That covered:
+    - a link without location in a private window;
+    - a link with location;
+    - chips for "russell wilson rc" and "mcm dresser", and none for
+      "lamp";
+    - ~400 px.
+
+    **M5 complete.**
+
+### Session 2 prompt log
+- **Prompt:** "We're working on a new plan/part now [Read CLAUDE.md,
+  SPEC.md and LOG.md; start a new session prompt log. New milestone M5:
+  (1) shareable search links in the URL hash (Search for, Leave out,
+  view, stores, price, condition, format; location only with 'Include my
+  location'), a Copy link button with 'Link copied.', malformed links fill
+  in what they can and never error, propose whether a shared link changes
+  the remembered defaults, short links; (2) a keyword helper in
+  src/core/keywords.js (no network, no AI): about 40–60 entries of
+  abbreviations, misspellings and synonyms grouped by category, each with
+  a meaning; suggestion chips that replace the term and run the alternate
+  search; eBay OR groups as an unconfirmed option. Tests and checks as
+  listed. Plan first, short, saved to plans/m5-plan.md after approval.
+  Same rules as always.]"
+  - **Provided:** read the three files; the M5 plan (in plan mode).
+  - **Misreads / rule breaks:** none found. Plan mode blocked file edits,
+    so this log was started after approval.
+  - **How It Was Verified:** n/a.
+- **Prompt (plan approval, from the approval dialog):** "Approved with
+  changes. (1) Simplify shared links: opening one applies its search and
+  filters like a normal change and saves them as usual. No visit-only
+  mode, no sessionStorage, no note. (2) Word list: every entry needs at
+  least one alternate that real listings use; drop entries without one
+  (e.g., obo, dovetail, teak, loose). Show me the final list as a table
+  before building the chips. (3) eBay OR chip: left out. (4) Rename the
+  old M5 as you proposed; list the CLAUDE.md lines for me to update.
+  Accept your other defaults. Save the plan to plans/m5-plan.md and
+  start."
+  - **Provided:** plans/m5-plan.md with the changes; shareable links built
+    and checked; keywords.js and its tests; SPEC; the word-list table for
+    review (see the Session 2 M5 entry).
+  - **Misreads / rule breaks:**
+    - My plan said a link's missing fields "keep the visitor's own
+      settings", which contradicted "falls back to defaults for the rest".
+      I caught it in the browser and fixed it.
+    - Plan-file deviations: there's no separate share-bar.js (the controls
+      live in results.js); the word-list entry shape is
+      `{ alternates, misspellings }` instead of a single `kind`; and I
+      added a "mid century modern" entry so the longer term wins.
+    - I changed one expectation in my own new share test, as described in
+      the entry.
+  - **How It Was Verified:** the missing-fields fix: a new `linkSettings`
+    test (passes), and in the built-in browser a pasted Current link now
+    switches a Sold page to Current, Any and its stores.
+- **Prompt (answer to "Is the word list OK to build the chips with?"):**
+  "Changes to the list"
+  - **Provided:** asked which entries to change, add or drop. No edits to
+    the list yet.
+  - **Misreads / rule breaks:** none found. The reply didn't say which
+    changes, so I asked rather than guessed.
+  - **How It Was Verified:** n/a.
+- **Prompt (sent mid-turn):** "Before building the chips, revise the word
+  list. Remove 'lot', 'pokeman', 'funco pop', and 'russell wilson'. Then
+  expand to about 100–120 entries by adding these groups: video games,
+  electronics, clothing and shoes, vinyl records, coins, jewelry, tools,
+  and general collectibles. Rules: an alternate must mean the same thing
+  in listings (abbreviation ↔ full form, true synonyms, common spelling
+  variants); never suggest a term with a different meaning (e.g., gold
+  filled for gold, replica for original, for parts for working). Include
+  a misspelling only if it's common in real listings; mark any entry
+  you're unsure of with 'check' in the table. Show me the full revised
+  table, grouped, before building the chips."
+  - **Provided:**
+    - keywords.js revised to 118 entries in 12 groups, each with a `check`
+      flag (21 marked);
+    - the four removals done;
+    - existing entries re-checked against the "same meaning" rule and
+      trimmed: relic → "memorabilia card" (dropped "jersey card"); moc
+      dropped "carded"; misb dropped "sealed"; funko pop dropped "funko";
+      beanie baby dropped "ty beanie"; loveseat dropped "settee"; chaise
+      longue dropped "chaise"; euc dropped "excellent condition".
+      925/sterling moved to jewelry;
+    - the grouped table in chat. No chips built yet.
+  - **Misreads / rule breaks:**
+    - Without asking first, I changed expectations in keywords.test.js
+      because your list changes required it:
+      - the size range is now 100–120;
+      - "russell wilson rc" no longer offers "russel wilson rc";
+      - the case test lost the same line;
+      - "russell wilson card -rc" now gives no suggestions.
+    - Added tests: misspellings come after alternates (mahogany), and the
+      removed entries stay removed.
+  - **How It Was Verified:** 145 tests, 145 pass.
+- **Prompt (answer to "Is the revised list OK to build the chips
+  with?"):** "List approved"
+  - **Provided:** the chips UI (see "M5 part 2"), a browser check, a
+    by-eye checklist and a commit message.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a (no fixes).
+- **Prompt (answer to "How did the M5 by-eye check go?"):** "All pass"
+  - **Provided:** M5 ticked; plans/m5-plan.md notes the result; a commit
+    message.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a (no fixes; tests 145/145).
+- **Prompt:** "Tell me what you need"
+  - **Provided:** in chat: the three things needed to diagnose the
+    Craigslist 404, and the five CLAUDE.md spots with suggested
+    replacement text. No code changed.
+  - **Misreads / rule breaks:** none found. I read the question as being
+    about the two open items I'd just listed.
+  - **How It Was Verified:** n/a.
+- **Prompt:** "how to get that 404 again?"
+  - **Provided:** confirmed the local server is running; gave step-by-step
+    instructions to bring the Craigslist 404 back (locally and on GitHub
+    Pages, with the city field blank and filled) and what to copy. No code
+    changed.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a.
+- **Prompt:** "no 404 anymore. Also can't edit the claude right now so we
+  can edit it later."
+  - **Provided:**
+    - Craigslist 404 closed as "can't reproduce": the steps no longer give
+      a 404, and the app's Craigslist links still match checks 8, 9, 10
+      and 35. No adapter change.
+    - CLAUDE.md edits are left for later. The five spots and suggested
+      wording stay in this log (the "Tell me what you need" answer and the
+      M5 part 1 entry).
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a (nothing changed; Kc's own re-test showed
+    no 404).
 
 ## Entry template
 ### YYYY-MM-DD — Session N: title

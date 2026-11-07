@@ -9,4 +9,10 @@ export function initSearchBar({ onSearch }) {
     event.preventDefault();
     onSearch(input.value);
   });
+  return {
+    // Fills the box, e.g. when a shared link is opened (M5).
+    setWords(text) {
+      input.value = text;
+    },
+  };
 }

@@ -24,7 +24,7 @@ translating one search and its filters into correctly filtered links for
 many resale sites, opened in tabs. In the retrofit (later the same day),
 saved searches (M2) and recorded prices (M3) were removed to keep the app
 on that one job. Showing live prices inside the app (M5) was considered
-and declined (see M5 in section 6).
+and declined (see "Declined: live prices" in section 6).
 
 Artifact 4 requirements this covers: built for someone outside the team
 (my dad), his needs found out by asking him when he tries it at the M4
@@ -195,7 +195,29 @@ Done in M4 (plans/m4-plan.md):
 - "How to use it" help;
 - Open all message mentions reloading.
 
-### M5: prices inside the app (considered and declined, 2026-11-01)
+### M5: shareable search links and a keyword helper (2026-11-07)
+- **Shareable link:** the app's address holds the current search after "#"
+  (never sent to the server):
+  - Search for, Leave out, Current/Sold, the selected stores, price,
+    condition and buying format;
+  - location only with "Include my location" (unticked each visit).
+  - "Copy link" copies it and shows "Link copied." Opening a link fills in
+    the search and filters and builds the links; they're saved as usual.
+    A broken or partial link fills in what it can.
+- **Keyword helper:** a built-in word list (src/core/keywords.js; no
+  network, no AI) of listing abbreviations, jargon, synonyms and common
+  misspellings, grouped by cards, toys and figures, furniture and general.
+  - Each entry has a meaning and at least one alternate that real listings
+    use.
+  - When the search contains a known term, chips under the search bar
+    offer alternate searches ("Try: russell wilson rookie card"). A chip
+    replaces the term and runs the search; it never adds words.
+
+Checks: tests for the link round trip, garbage links, location only when
+ticked, keyword matching and replacement, and the word list; by eye at
+~1280 and ~400 px (plans/m5-plan.md).
+
+### Declined: live prices (formerly M5; considered and declined, 2026-11-01)
 Showing live prices in the app itself was considered and declined (my
 decision). The reasons:
 - eBay's sold-price data is restricted, so an eBay API would show asking

@@ -1,6 +1,7 @@
 // Results: one store link per selected store for the chosen view (current
 // or sold listings), each opening in a new tab, plus "Open all" and "Open
-// next" (the fallback when the browser blocks pop-ups).
+// next" (the fallback when the browser blocks pop-ups), and "Copy link"
+// with "Include my location" (M5).
 
 import { VIEW_LABELS } from "../core/sites/index.js";
 import { openAll, openAllMessage } from "../core/open-all.js";
@@ -18,7 +19,8 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-export function initResults(container) {
+// onCopyLink() copies the page's address; onIncludeLocation(checked).
+export function initResults(container, { onCopyLink, onIncludeLocation }) {
   let links = [];
   // Where Open next is in the list. Nothing else is tracked or shown about
   // which tabs were opened (Dad, M4: "why does it say when stuff is
@@ -58,8 +60,9 @@ export function initResults(container) {
   let notice = ""; // what Open all reports when tabs were blocked
 
   // { words, exclude: [...], view: "asking" | "sold", selectedCount,
-  //   missing: [names of selected stores with no link for this view] }
-  let state = { words: "", exclude: [], view: "asking", selectedCount: 0, missing: [] };
+  //   missing: [names of selected stores with no link for this view],
+  //   share: { includeLocation, status?, link? } }
+  let state = { words: "", exclude: [], view: "asking", selectedCount: 0, missing: [], share: {} };
 
   function render(next) {
     // New links (a new search, filter or view) start Open next over.
@@ -69,6 +72,33 @@ export function initResults(container) {
     links = next.links;
     notice = "";
     draw();
+  }
+
+  // "Link copied." (or the link to copy by hand) until the next change.
+  function showShare(extra) {
+    state = { ...state, share: { ...state.share, ...extra } };
+    draw();
+    const manual = container.querySelector(".share-link");
+    if (manual) {
+      manual.focus();
+      manual.select();
+    }
+  }
+
+  function shareControls() {
+    const copy = el("button", { type: "button", class: "button" }, "Copy link");
+    copy.addEventListener("click", onCopyLink);
+    const box = el("input", { type: "checkbox" });
+    box.checked = Boolean(state.share.includeLocation);
+    box.addEventListener("change", () => onIncludeLocation(box.checked));
+    const { status, link } = state.share;
+    const manual = link ? el("input", { type: "text", class: "share-link", readonly: "", "aria-label": "Shareable link" }) : null;
+    if (manual) manual.value = link;
+    return el("div", { class: "share" },
+      copy,
+      el("label", { class: "share-location" }, box, " Include my location"),
+      status ? el("span", { class: "share-status", role: "status" }, status) : null,
+      manual);
   }
 
   function draw() {
@@ -102,6 +132,7 @@ export function initResults(container) {
       show(
         el("h2", { class: "results-title" }, `${VIEW_TITLES[state.view]} for “${state.words}”`),
         understood,
+        shareControls(),
         el("p", { class: "intro" }, "None of the selected stores show sold listings by link. " +
           "Switch to Current listings, or turn on eBay, Mercari, Poshmark, ShopGoodwill or Mercari Japan."),
         missing,
@@ -121,6 +152,7 @@ export function initResults(container) {
         el("div", { class: "open-next" }, allButton, nextButton),
       ),
       understood,
+      shareControls(),
       notice ? el("p", { class: "open-all-message", role: "alert" }, notice) : null,
       el("ul", { class: "links" }, ...links.map(card)),
       missing,
@@ -137,5 +169,5 @@ export function initResults(container) {
     );
   }
 
-  return { render };
+  return { render, showShare };
 }

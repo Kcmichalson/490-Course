@@ -41,19 +41,25 @@ export function initSidebar({ sites, prefs, onChange }) {
     field.hidden = !siteIds.includes(field.dataset.needsSite);
   }
 
-  // Puts remembered choices into the form without firing change events.
-  // ("exclude" is the Leave out box in the header.)
+  // Puts values into the form without firing change events: remembered
+  // choices at start, or a shared link's fields (M5). Only the fields given
+  // are set; the rest keep what's there. ("exclude" is the Leave out box in
+  // the header.)
   function apply(values) {
-    for (const box of storeBoxes()) box.checked = !values.storesOff.includes(box.value);
-    $("price-min").value = values.priceMin ?? "";
-    $("price-max").value = values.priceMax ?? "";
-    sidebar.querySelector(`input[name="condition"][value="${values.condition}"]`).checked = true;
-    sidebar.querySelector(`input[name="format"][value="${values.format}"]`).checked = true;
-    $("loc-zip").value = values.location.zip;
-    $("loc-radius").value = String(values.location.radius);
-    $("loc-craigslist").value = values.location.craigslistCity;
-    $("loc-facebook").value = values.location.facebookCity;
-    $("exclude").value = values.exclude;
+    const has = (key) => values[key] !== undefined;
+    if (has("storesOff")) {
+      for (const box of storeBoxes()) box.checked = !values.storesOff.includes(box.value);
+    }
+    if (has("priceMin")) $("price-min").value = values.priceMin;
+    if (has("priceMax")) $("price-max").value = values.priceMax;
+    if (has("condition")) sidebar.querySelector(`input[name="condition"][value="${values.condition}"]`).checked = true;
+    if (has("format")) sidebar.querySelector(`input[name="format"][value="${values.format}"]`).checked = true;
+    const loc = values.location ?? {};
+    if (loc.zip !== undefined) $("loc-zip").value = loc.zip;
+    if (loc.radius !== undefined) $("loc-radius").value = String(loc.radius);
+    if (loc.craigslistCity !== undefined) $("loc-craigslist").value = loc.craigslistCity;
+    if (loc.facebookCity !== undefined) $("loc-facebook").value = loc.facebookCity;
+    if (has("exclude")) $("exclude").value = values.exclude;
   }
 
   function read() {
@@ -106,6 +112,7 @@ export function initSidebar({ sites, prefs, onChange }) {
 
   return {
     read,
+    apply,
     setMessage(id, text) {
       $(id).textContent = text;
       $(id).hidden = !text;

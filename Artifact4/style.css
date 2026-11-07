@@ -178,6 +178,31 @@ select {
   }
 }
 
+/* Keyword suggestion chips (M5) */
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.suggestion {
+  max-width: 100%;
+  padding: 0.25rem 0.7rem;
+  border: 1px dashed var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.suggestion:hover {
+  border-style: solid;
+}
+
 .view-switch {
   display: flex;
   flex-wrap: wrap;
@@ -458,6 +483,34 @@ select {
 
 .link-note {
   color: var(--color-warning);
+}
+
+/* Copy link + Include my location (M5) */
+.share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  margin: -0.25rem 0 1rem;
+}
+
+.share-location {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.share-status {
+  color: var(--color-sold);
+  font-size: 0.9375rem;
+}
+
+.share .share-link {
+  flex: 1 1 100%;
+  font-size: 0.875rem;
 }
 
 /* Open all: shown when the browser blocked some tabs */

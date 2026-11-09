@@ -1,0 +1,158 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "D:\\SteamLibrary\\steamapps\\common\\XCOM 2 War of the Chosen SDK",
+      "D:\\SteamLibrary\\steamapps\\common\\XCOM 2",
+      "C:\\Users\\Kc\\Documents\\My Games\\XCOM2 War of the Chosen\\XComGame\\Logs",
+      "C:\\Users\\Kc\\Desktop\\xcom2-diff"
+    ],
+    "deny": [
+      "Bash(git *)",
+      "Bash(git.exe *)",
+      "PowerShell(git *)",
+      "PowerShell(git.exe *)",
+      "Bash(curl *)",
+      "Bash(curl.exe *)",
+      "Bash(wget *)",
+      "Bash(wget.exe *)",
+      "PowerShell(curl *)",
+      "PowerShell(curl.exe *)",
+      "PowerShell(wget *)",
+      "PowerShell(wget.exe *)",
+      "PowerShell(Invoke-WebRequest *)",
+      "PowerShell(iwr *)",
+      "PowerShell(Invoke-RestMethod *)",
+      "PowerShell(irm *)",
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npm add *)",
+      "Bash(npm ci *)",
+      "Bash(npx *)",
+      "PowerShell(npm install *)",
+      "PowerShell(npm i *)",
+      "PowerShell(npm add *)",
+      "PowerShell(npm ci *)",
+      "PowerShell(npx *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(py -m pip install *)",
+      "Bash(python -m pip install *)",
+      "Bash(python3 -m pip install *)",
+      "PowerShell(pip install *)",
+      "PowerShell(pip3 install *)",
+      "PowerShell(py -m pip install *)",
+      "PowerShell(python -m pip install *)",
+      "PowerShell(python3 -m pip install *)",
+      "Bash(winget install *)",
+      "PowerShell(winget install *)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.claude/settings.local.json)",
+      "Edit(/.claude/hooks/**)",
+      "Edit(/.gitignore)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/tool-log/*.jsonl)",
+      "Read(/.env)",
+      "Read(/.env.*)",
+      "Read(/secrets/**)",
+      "Edit(//c/Users/Kc/Documents/TCSS490-AI-Course/*.*)",
+      "Edit(//c/Users/Kc/Documents/TCSS490-AI-Course/Artifact2/**)",
+      "Edit(//c/Users/Kc/Documents/TCSS490-AI-Course/Artifact3/**)",
+      "Edit(//c/Users/Kc/Documents/TCSS490-AI-Course/Artifact4/**)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/Artifact2/**)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/Artifact3/**)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/Artifact4/**)",
+      "Edit(//d/SteamLibrary/steamapps/common/XCOM 2/**)",
+      "Edit(//d/SteamLibrary/steamapps/common/XCOM 2 War of the Chosen SDK/**)",
+      "Edit(//d/SteamLibrary/steamapps/workshop/**)",
+      "Edit(//d/SteamLibrary/steamapps/*.acf)",
+      "Edit(//c/Users/Kc/Documents/My Games/**)",
+      "Edit(//c/Users/Kc/Desktop/xcom2-diff/**)",
+      "Read(//c/Program Files*/Steam/config/**)",
+      "Edit(//c/Program Files*/Steam/**)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Edit(~/.claude/CLAUDE.md)",
+      "Edit(~/.claude/hooks/**)",
+      "Edit(~/.claude/agents/**)",
+      "Edit(~/.claude/commands/**)",
+      "Edit(~/.claude/skills/**)",
+      "Edit(~/.claude/projects/**)",
+      "Read(~/.claude/projects/**)",
+      "Edit(//c/Users/Kc/.claude/settings.json)",
+      "Edit(//c/Users/Kc/.claude/settings.local.json)",
+      "Edit(//c/Users/Kc/.claude/CLAUDE.md)",
+      "Edit(//c/Users/Kc/.claude/hooks/**)",
+      "Edit(//c/Users/Kc/.claude/agents/**)",
+      "Edit(//c/Users/Kc/.claude/commands/**)",
+      "Edit(//c/Users/Kc/.claude/skills/**)",
+      "Edit(//c/Users/Kc/.claude/projects/**)",
+      "Read(//c/Users/Kc/.claude/projects/**)",
+      "Read(~/.ssh/**)",
+      "Edit(~/.ssh/**)",
+      "Read(//c/Users/Kc/.ssh/**)",
+      "Edit(//c/Users/Kc/.ssh/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py \"$CLAUDE_PROJECT_DIR/.claude/hooks/log-tool-call.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+# Tool-call logs stay on this machine (see tool-log/README.md)
+tool-log/*.jsonl
+
+# Local-only material: copies of game or SDK files, Launch.log copies,
+# decompiled packages, diff output. Never commit Firaxis/2K content.
+local/
+
+# Per-machine Claude Code settings
+.claude/settings.local.json
+
+# Build output and editor state
+*.u
+*.upk
+*.log
+*.suo
+.vs/
+BuildCache/

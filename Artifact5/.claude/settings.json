@@ -90,7 +90,9 @@
       "Read(~/.ssh/**)",
       "Edit(~/.ssh/**)",
       "Read(//c/Users/Kc/.ssh/**)",
-      "Edit(//c/Users/Kc/.ssh/**)"
+      "Edit(//c/Users/Kc/.ssh/**)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/*)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/.git/**)"
     ]
   },
   "hooks": {

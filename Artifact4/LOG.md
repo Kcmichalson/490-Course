@@ -1491,6 +1491,12 @@ Kc's decision:
   - **Misreads / rule breaks:** none found.
   - **How It Was Verified:** n/a (nothing changed; Kc's own re-test showed
     no 404).
+- **Prompt:** "How can I demo the new stuff?"
+  - **Provided:** a step-by-step demo script in chat for the M5 features
+    (keyword chips, shareable links with and without location), plus the
+    live and local addresses. No code changed.
+  - **Misreads / rule breaks:** none found.
+  - **How It Was Verified:** n/a.
 
 ## Entry template
 ### YYYY-MM-DD — Session N: title

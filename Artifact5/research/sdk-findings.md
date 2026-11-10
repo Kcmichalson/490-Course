@@ -336,11 +336,24 @@ so it is probably compiled out of the shipped game (guess).
    mismatch** (hidden from search, or join refused)? All native
    (`Helpers.uc` L94–105). Matters because the co-op mod itself changes
    the installed-mods hash on both machines.
+   **Session 5 (2026-11-10), SDK only:** one comparison is in script.
+   `CheckInviteGameVersionMismatch` (`XComGame\Classes\XComOnlineEventMgr.uc`
+   L3593–3615) compares an invite's four hashes (packages, DLC, mods,
+   INI) with the local ones; any difference is a mismatch. The
+   dev-console flag is not part of that comparison. The cheat
+   `displaympmatchcriteria` (`XComGame\Classes\XComShellCheatManager.uc`
+   L69–86) prints the local values with the same static `Helpers` calls,
+   so a mod can log them the same way (plans/m2-plan.md does).
 7. **Where is `bReviewFlagged` set**, and is `UIFinalShell` really the
    retail menu? (Section 2 guess.)
 8. **`XComShell_Multiplayer.umap`**: does the map still ship in the
    current build? research/build-diff.md says no file exists only in the
    beta, which suggests yes; not checked by name.
+   **Session 5 (2026-11-10): yes, by file listing.** The PC's game folder
+   has `XComGame\CookedPCConsole\XComShell_Multiplayer.upk` (no game was
+   run; build 8270065 as recorded on 2026-11-09). Whether the
+   `open XComShell_Multiplayer.umap…` command (section 2) finds that
+   package is untested.
 
 Added in Session 5, **from the WOTC Co-op Campaign prototype's README (see
 research/prior-art.md), not tested by us**:
@@ -365,12 +378,33 @@ research/prior-art.md), not tested by us**:
     (M4) will create objects on both machines; how does the normal MP
     ruleset avoid this?
 
+Added in Session 5 (2026-11-10). **Kc's hypothesis: a guess, not a
+finding.**
+
+13. **Would the Community Highlander undo the switch-off?** Kc's
+    reasoning: the Highlander replaces XComGame with scripts built from
+    pre-2022 source, so if the shutdown switch is in XComGame's scripts
+    (one candidate in question 1), running with the Highlander might undo
+    it. If the switch is in the executable or the online subsystem, it
+    would not. Order (plans/m2-plan.md): first read the Highlander's
+    source (Kc clones it to `local\refs\`) to check that its multiplayer
+    menu code matches this SDK and whether it merged anything from the
+    2022 build; then, only if the plain M2 test fails, run the test with
+    the Highlander on both machines. Nothing here is checked yet.
+
 ### Candidate hooks for M2's "open the multiplayer screen" button
 In order of preference (all untested against 8270065):
 1. **Screen listener on `UIFinalShell`** that adds a button (or key) and
    calls `XComShellPresentationLayer(Screen.Owner).StartMPShellState()`
    (declared `XComPresentationLayerBase.uc` L1194, implemented
    `XComShellPresentationLayer.uc` L702–712). No class override needed.
+   **Session 5 (2026-11-10), SDK only:** the button should not go inside
+   the menu row. `UIFinalShell.UpdateMenu` (`UIFinalShell.uc` L127–149)
+   clears and rebuilds the row, and runs again after the save list
+   loads (L256) and on a login status change (L340); `ClearMenu`
+   (`UIShell.uc` L248–256) removes every item in the row. A separate
+   button on the screen, like the game's own My2K button
+   (`UIFinalShell.uc` L67–71), is not touched by that.
 2. If `StartMPShellState` is gone or emptied in 8270065: the listener
    runs the same console command itself,
    `open XComShell_Multiplayer.umap?Game=XComGame.XComMPShell` (L706).
@@ -390,6 +424,19 @@ Game." (L1128), "Creating Network Client to join…" (L1161), "Searching
 for online games..." (L1781), "Failed to create online game" (L1048).
 The category may be suppressed by default (guess from the commented-out
 `UnsuppressMP` call in `UIMPShell_MainMenu.uc` L58).
+
+**Session 5 (2026-11-10): the categories are suppressed.** The current
+build's `XComGame\Config\DefaultEngine.ini` (read in place), section
+`[Core.System]` (L120), has `+Suppress=DevNet` and `+Suppress=DevOnline`
+(L163–164), `+Suppress=XCom_Net` (L199) and `+Suppress=XCom_Online`
+(L234). The clean baseline log (LOG.md, "M2 baseline") has no line in
+any of those four categories, which fits. So none of the lines above
+will show in a normal run. What does show: plain `Log:` lines such as
+`LoadMap:` and `Game class is` (baseline L120, L122). plans/m2-plan.md
+therefore adds the mod's own `X2TC` trace lines. The cheat `UnsuppressMP`
+(`XComGame\Classes\XComCheatManager.uc` L4233–4240) turns the categories
+on with `unsuppress` console commands; it is not used, since it needs
+the developer console.
 
 ## For later (M3/M4, noticed in passing only)
 

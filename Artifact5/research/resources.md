@@ -30,7 +30,7 @@ code, and record it in LOG.md.
 | WOTC Co-op Campaign prototype | https://github.com/EvilMask587/xcom2-wotc-coop-campaign | MIT | Network findings on build 8270065 (their claims, untested by us) |
 | Co-op Anything | https://github.com/cranebeaker/coop-anything | not checked | Directory of co-op mods; the prototype's playbook |
 | [WOTC] Modern Multiplayer Mod (Mr.Fear) | https://steamcommunity.com/sharedfiles/filedetails/?id=3066536619 | not checked | Current PvP on the beta branch; the "clean game" rules for MP tests |
-| Community Highlander | planned for `local/refs/` (CLAUDE.md); URL to confirm | not checked | Extra hooks for mods, if a later milestone needs one |
+| Community Highlander | https://github.com/X2CommunityCore/X2WOTCCommunityHighlander (URL confirmed by Kc, 2026-11-10); Kc clones it to `local/refs/` | not checked (read its license file after the clone) | M2 Stage 0: compare its multiplayer menu code with the SDK (Kc's hypothesis, sdk-findings.md question 13). Later: extra hooks for mods, if a milestone needs one |
 
 ## Data sources
 | Source | What it's for |

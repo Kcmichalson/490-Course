@@ -9,7 +9,8 @@ CLAUDE.md describes.
   8270065; the repo-root Read gap is carried over, see Session 5)
 - [x] M1: Read the SDK (Session 3; done before M0 by Kc's decision. SDK
   date from SteamDB added in Session 4)
-- [ ] M2: Reach multiplayer on the current build (decision gate)
+- [ ] M2: Reach multiplayer on the current build (decision gate; plan
+  approved 2026-11-10, plans/m2-plan.md; Stage 0 is next)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -1081,3 +1082,157 @@ and quit.
 - **Carried over (not a table row):** the repo-root Read gap
   (`..\index.html` readable on the PC). Needs a rule that names root files
   one by one, then a re-test.
+
+### 2026-11-10 — Session 5 (continued): M2 plan approved
+On the PC. Kc switched the model to **Claude Fable 5.2** before this
+prompt. No game was run and no mod file changed.
+
+- **Planned:** plan M2 on Kc's five points (the button, the two-machine
+  test, what to look for in Launch.log, the fallbacks in order, the
+  -nohomedir copy and the config restore), then wait for approval.
+- **Changed:**
+  - `plans/m2-plan.md` (new; approved with five notes, worked in).
+  - research/sdk-findings.md: question 6 (a script-side hash comparison),
+    question 8 (the multiplayer shell map package ships), question 13
+    (Kc's Highlander hypothesis, a guess), hook 1 (button outside the
+    menu row), and the suppressed log categories.
+  - research/resources.md: the Community Highlander URL (confirmed by Kc).
+  - The M2 line under "Milestone status".
+- **Found while planning** (SDK and game files read in place; nothing
+  tested in game; details and line numbers in plans/m2-plan.md and
+  research/sdk-findings.md):
+  - The game suppresses its multiplayer log categories
+    (`XComGame\Config\DefaultEngine.ini`, `[Core.System]`: `DevNet`,
+    `DevOnline` L163–164, `XCom_Net` L199, `XCom_Online` L234), and the
+    clean baseline log has no line in them. So M2 needs the mod's own
+    `X2TC` trace lines.
+  - `UIFinalShell.UpdateMenu` rebuilds the menu row (L127–149, again at
+    L256 and L340), so the button goes on the screen, not in the row.
+  - The match hashes can be printed from script (`Helpers.uc` L94–105;
+    `XComShellCheatManager.uc` L69–86).
+  - `XComGame\CookedPCConsole\XComShell_Multiplayer.upk` is in the PC's
+    game folder (file listing only).
+- **Decisions (Kc):**
+  - Do as much as possible on the PC alone; the laptop when needed (the
+    game gets installed there then); major tests with a friend.
+  - One Steam account can't normally play on two PCs at once, and a
+    second account needs its own copy. Stage 3 is a test with a friend who
+    owns XCOM 2 and War of the Chosen; Stage 2 results on a shared account
+    may be ambiguous.
+  - Highlander hypothesis (Kc's, a guess): read its source first, run
+    with it only if the plain test fails. URL confirmed:
+    github.com/X2CommunityCore/X2WOTCCommunityHighlander; Kc clones it
+    into `local\refs\`.
+  - Keep the trace listener.
+  - Option: if Stage 1 fails in a confusing way, do the beta reference
+    run early.
+  - The -nohomedir test copy: not now (the plan's recommendation,
+    approved with the plan). Revisit at direct IP or M3.
+  - This is logged as Session 5.
+- **Problems:**
+  - Plan mode was on, so the draft plan went to
+    `C:\Users\Kc\.claude\plans\pasted-content-id-f031-plan-m2-optimized-dolphin.md`
+    first (outside Artifact5; the path M0 checks row 16 allows). It is
+    still there.
+  - A shell command that ran Python to write `plans/m2-plan.md` failed
+    before Python started (exit 2, "unexpected EOF"); nothing was
+    written. The plan was then written with the Write tool.
+- **Checks:** no game run, so no build ID check today (last recorded:
+  8270065 on 2026-11-09). `tool-log/2026-11-10.jsonl` shows each call as
+  `requested` + `ok`, and the failed shell command as `requested` +
+  `failed`.
+- **Next:** Stage 0 (compare the Highlander's source with the SDK) once
+  Kc has cloned it. The two mod classes are written at Stage 1.
+
+### Session 5 prompt log (continued, 2026-11-10)
+- **Prompt:** "[pasted] Plan M2 (reach multiplayer on the current build).
+  Read SPEC.md M2, research/sdk-findings.md (especially section 6 and the
+  WOTC Co-op Campaign findings) and LOG.md's M2 baseline. The plan should
+  cover: 1. Adding a main-menu button that calls StartMPShellState(),
+  building on the existing listener. 2. The two-machine test: my PC and
+  laptop on LAN, both on build 8270065 with matching DLC, no console, and
+  the same mod set (our mod is now part of the installed-mods check, so
+  both need it). 3. What to look for in Launch.log on both machines at
+  each step, and what each failure point would mean. 4. Fallbacks in
+  order: the Highlander test, direct IP (host address as a decimal
+  integer, per the prototype), then the beta branch. 5. Whether to set up
+  the -nohomedir test copy now, and how to restore the clean config
+  backup before tests. Wait for my approval before writing files."
+  - **Provided:** read SPEC.md, sdk-findings.md, the baseline section and
+    the listener; read the SDK's `UIFinalShell.uc`, parts of `UIShell.uc`,
+    `XComShellPresentationLayer.uc`, `UIMPShell_MainMenu.uc`,
+    `UIMPShell_Lobby.uc`, `XComCheatManager.uc`, `XComOnlineEventMgr.uc`,
+    `XComShellCheatManager.uc`, `Helpers.uc`, `UIScreenListener.uc`;
+    searched the game's `DefaultEngine.ini` and the baseline log; asked
+    three questions; wrote the plan and asked for approval.
+  - **Misreads / rule breaks:**
+    - "The Highlander test" wasn't defined in LOG.md or research/, so I
+      asked instead of guessing.
+    - One check chained `cd` with `file` in a single command; the rule
+      says one purpose per command with nothing appended. Later commands
+      used full paths.
+    - Three tool-log checks piped `tail` into `cut` to shorten the lines
+      (one purpose, two programs).
+    - The draft plan was written outside Artifact5 (see Problems).
+  - **How It Was Verified:** each SDK or game-file claim in the plan has
+    a path and line number read this session; nothing was run in game,
+    and every such claim is labeled untested. tool-log shows the reads.
+- **Prompt (answer to "which Steam accounts will the PC and the laptop
+  run XCOM 2 under?"):** "I can have someone else's account with xcom 2
+  installed to test it with, but most of the time I'd prefer to be able
+  to test it on my own with my PC and laptop and leave major tests to
+  having to get someone else involved."
+  - **Provided:** the plan in stages: Stage 1 on the PC alone, Stage 2
+    with the laptop, Stage 3 as the major test.
+  - **Misreads / rule breaks:** I wrote Stage 3 as "a second Steam
+    account" without saying it has to be someone with their own copy,
+    and treated only part of Stage 2 as ambiguous. Kc corrected both in
+    the approval.
+  - **How It Was Verified:** plans/m2-plan.md, Stages 2 and 3, now say
+    what Kc's note 1 says.
+- **Prompt (answer to "what do you mean by 'the Highlander test'?"):**
+  "It's my hypothesis, not a finding: the Highlander replaces XComGame
+  with scripts built from pre-2022 source, so if the shutdown switch is
+  in XComGame's scripts, running with the Highlander might undo it. Do
+  both, in order: first read the Highlander source (clone to
+  local/refs/) to check its multiplayer menu code matches the SDK and
+  whether it merged anything from the 2022 build; then, only if the plain
+  M2 test fails, run the test with the Highlander on both machines.
+  Record the hypothesis in sdk-findings.md's open questions, labeled as a
+  guess."
+  - **Provided:** Stage 0 (source read) and fallback 1 (the run) in the
+    plan; open question 13 in research/sdk-findings.md.
+  - **Misreads / rule breaks:** none. Limit: I can't run `git log`, so
+    "merged anything from the 2022 build" will be answered from file
+    contents and the changelog only.
+  - **How It Was Verified:** question 13 is in sdk-findings.md, labeled
+    as Kc's hypothesis and a guess.
+- **Prompt (answer to "is XCOM 2: War of the Chosen already installed on
+  the laptop?"):** "I will have it installed when necessary but it is
+  preferable to do as much work on the PC as possible."
+  - **Provided:** Stage 1 needs no laptop; the laptop's prerequisites are
+    listed under Stage 2.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** plans/m2-plan.md, Stage 1 and Stage 2.
+- **Prompt:** "Approved, with notes: 1. Stage 2/3: one Steam account
+  can't normally play on two PCs at once, and a second account needs its
+  own copy of the game. Plan Stage 3 as a test with a friend who owns
+  XCOM 2 and WotC, and note that Stage 2 results on a shared account may
+  be ambiguous. 2. Highlander URL confirmed:
+  github.com/X2CommunityCore/X2WOTCCommunityHighlander. I'll clone it
+  into local\refs\. 3. Keep the trace listener. 4. Add as an option: if
+  Stage 1 fails in a confusing way, do the beta reference run earlier to
+  see what working multiplayer logs look like. 5. Log this as Session 5.
+  Save the plan to plans/m2-plan.md, then start Stage 0 once I've cloned
+  the Highlander."
+  - **Provided:** `plans/m2-plan.md` with the five notes worked in; the
+    sdk-findings.md and resources.md updates; this entry. Stage 0 not
+    started: `local\refs\` was empty when checked earlier this turn. No
+    mod code written (the plan puts it at Stage 1).
+  - **Misreads / rule breaks:** the failed shell command (see Problems).
+    I also added two planning findings to sdk-findings.md that Kc didn't
+    name (question 6 and the hook 1 note); the plan's file list covers
+    sdk-findings.md but not those two items by name.
+  - **How It Was Verified:** tool-log shows the Write of
+    `plans/m2-plan.md`, five Edits of sdk-findings.md and one of
+    resources.md as `ok`. Nothing was built or run.

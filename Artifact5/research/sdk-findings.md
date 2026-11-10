@@ -342,6 +342,29 @@ so it is probably compiled out of the shipped game (guess).
    current build? research/build-diff.md says no file exists only in the
    beta, which suggests yes; not checked by name.
 
+Added in Session 5, **from the WOTC Co-op Campaign prototype's README (see
+research/prior-art.md), not tested by us**:
+
+9. **Direct IP on 8270065 (bears on question 5).** Their README says two
+   instances connected by direct IP on build 8270065, which suggests
+   `CreateServer`/`CreateClient` still work there. But the host had to be
+   given as one decimal integer (for example 127.0.0.1 as 2130706433),
+   because "IpNetDriverSteamworks does not parse a dotted host". Does
+   that hold for us, and between two PCs (they only tested one PC)?
+10. **Joining without the console.** Their join sends the history with
+    `MPSendHistory`, a developer-console command
+    (`XComCheatManager.uc` L4017–4022, which calls `NetworkMgr.SendHistory`).
+    Does calling `SendHistory` from mod script (not the console) work the
+    same, and keep the "console enabled" hash clean?
+11. **Lost bursts.** Their README says the network layer lost frames sent
+    one by one in a burst, so they batch frames (0.2 s), keep one merge in
+    flight and wait for an ack. Does the tactical sync in a normal MP match
+    lose anything, or did that come from their merge-state approach?
+12. **ObjectID collisions.** Their README says two players creating game
+    state objects at once hand out the same ObjectID. Same-turn actions
+    (M4) will create objects on both machines; how does the normal MP
+    ruleset avoid this?
+
 ### Candidate hooks for M2's "open the multiplayer screen" button
 In order of preference (all untested against 8270065):
 1. **Screen listener on `UIFinalShell`** that adds a button (or key) and
@@ -398,3 +421,25 @@ The category may be suppressed by default (guess from the commented-out
   `UIMPShell_Lobby.uc` L665; not read).
 - **Some SDK files are not UTF-8** (the Read tool flagged
   `X2MPShellManager.uc`); only matters if a script parses them.
+
+### From the WOTC Co-op Campaign prototype's README (Session 5)
+**Their claims, not tested by us.** Details and source in
+research/prior-art.md; the matching questions are 9–12 in section 6.
+- **Direct IP:** worked for them on 8270065 with the host as one decimal
+  integer, not a dotted address.
+- **Join:** the host sends the whole history with `MPSendHistory` (a
+  console command that calls `SendHistory`, `XComCheatManager.uc`
+  L4017–4022); the client loads from it.
+- **Lost bursts:** frames sent one by one in bursts were lost, so they
+  batch frames, keep one merge in flight, and wait for an ack (resent
+  after 5 s).
+- **ObjectID collisions:** only the player holding the "baton" may create
+  game state objects; otherwise both sides hand out the same ObjectID.
+  Matters for M4's same-turn actions.
+- **History alignment:** the receiver pads its history with empty frames
+  so merges land at the same frame number; without it the host crashed in
+  5 of 11 runs.
+- **Test copy with `-nohomedir`:** they test on a copy of the game, never
+  the install they play, and run it with `-nohomedir` so saves, config and
+  logs stay inside the copy. (`-nohomedir` isn't in the script source;
+  it's an engine command-line switch, so this is their claim only.)

@@ -63,8 +63,10 @@ mod/
   X2TacticalCoop/X2TacticalCoop.x2proj
   X2TacticalCoop/Config/XComEditor.ini             (declares the script package; added after build 1)
   X2TacticalCoop/Config/XComEngine.ini             (loads the package in game; added after build 1)
+  X2TacticalCoop/Config/XComGame.ini               (DLCIdentifier; added in Session 5, plans/m0-dlcinfo-plan.md)
   X2TacticalCoop/Localization/X2TacticalCoop.int   (placeholder; the build needs the folder)
   X2TacticalCoop/Src/X2TacticalCoop/Classes/X2TC_MainMenuListener.uc
+  X2TacticalCoop/Src/X2TacticalCoop/Classes/X2DownloadableContentInfo_X2TacticalCoop.uc  (added in Session 5)
 ```
 Changes from the plan shown in chat:
 - No `.XCOM_sln`. The build script doesn't read it, and writing one needs
@@ -74,8 +76,12 @@ Changes from the plan shown in chat:
   `BuildCache/` and `*.u`.
 - Added the `Localization` placeholder, because the build seems to need
   that folder.
-- No `X2DownloadableContentInfo` class. Guess: screen listeners in a
-  mod's script package are picked up without one. The PC test will show.
+- ~~No `X2DownloadableContentInfo` class. Guess: screen listeners in a
+  mod's script package are picked up without one. The PC test will show.~~
+  **Changed in Session 5 (Kc approved):** added
+  `X2DownloadableContentInfo_X2TacticalCoop` and `Config/XComGame.ini`
+  to match the SDK's template, with a second log line
+  (plans/m0-dlcinfo-plan.md).
 - ~~No Config files~~ **Corrected after the first build (Kc approved,
   Session 4):** without config, the compiler built only the base
   packages and skipped the mod's (LOG.md, Session 4). Added

@@ -13,10 +13,15 @@ the SDK (see CLAUDE.md, "Legal and community limits").
 .scripts/build.ps1                 build entry point
 .scripts/X2ModBuildCommon/         community build scripts (MIT)
 X2TacticalCoop/X2TacticalCoop.x2proj        title and description
-X2TacticalCoop/Config/                      declares and loads the script package
+X2TacticalCoop/Config/                      declares and loads the script package; DLCIdentifier
 X2TacticalCoop/Localization/                localization (.int) files
-X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes
+X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes (main menu listener, DLC info)
 ```
+
+## Launching
+The 2K launcher doesn't list local mods. Use the Alternative Mod Launcher
+(AML, research/resources.md): tick X2TacticalCoop and launch War of the
+Chosen. Leave `-allowConsole` off.
 
 ## Building
 1. In VS Code's user settings (per machine, not committed), set

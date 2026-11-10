@@ -5,7 +5,8 @@ it). Newest entries at the bottom. Each session also gets a prompt log, as
 CLAUDE.md describes.
 
 ## Milestone status
-- [ ] M0: Setup and toolchain
+- [x] M0: Setup and toolchain (closed in Session 5 on the PC, build
+  8270065; the repo-root Read gap is carried over, see Session 5)
 - [x] M1: Read the SDK (Session 3; done before M0 by Kc's decision. SDK
   date from SteamDB added in Session 4)
 - [ ] M2: Reach multiplayer on the current build (decision gate)
@@ -759,3 +760,324 @@ with /model; same conversation as Session 3, session 1d7f46e3…).
   - **How It Was Verified:** the Glob listed all expected files; the Grep
     found the Session 4 entry, build 2's result, the SPEC.md success test
     and stretch item, and the SteamDB note in sdk-findings.md.
+
+### 2026-11-09 — Session 5: prototype README, PC guardrail rows
+On the **PC** (game and SDK on `D:\SteamLibrary`), Claude Opus 5.5,
+session 8ff75d5b… (the Session 1 conversation, resumed). The "handoff
+document" is plans/m0-toolchain-plan.md (Kc).
+
+- **Planned:** record the WOTC Co-op Campaign README in
+  research/prior-art.md and its findings in research/sdk-findings.md
+  (labeled as theirs, untested); then continue M0's PC steps, with a test
+  copy of the game and `-nohomedir` considered in the launch checklist.
+- **Changed:**
+  - research/prior-art.md: the WOTC Co-op Campaign section (license, how
+    it was made, what its README says).
+  - research/sdk-findings.md: open questions 9–12 and a "From the WOTC
+    Co-op Campaign prototype's README" part in "For later".
+  - LOG.md: this entry.
+- **License (CLAUDE.md asks for it here):** WOTC Co-op Campaign prototype,
+  **MIT**, "Copyright (c) 2026 EvilMask587" (its LICENSE file, downloaded
+  and shared by Kc). Its README credits the Co-op Anything playbook; Kc
+  reports GitHub lists Claude as its only contributor.
+- **Problems:**
+  - **The Session 1 repo-root rule blocked all of Artifact5.** With
+    `Read(//c/Users/Kc/Documents/TCSS490-AI-Course/*)` active, Read of
+    CLAUDE.md and `ls` in Artifact5 were refused. So in these rules `*`
+    matches across folders, not one level as I guessed in Session 1.
+    My suggestion was wrong.
+  - **Then settings.json stopped loading.** Kc commented the line out with
+    `//`, which JSON doesn't allow, so the whole file failed to parse: no
+    deny rules, no tool-log hook, no additional directories. I noticed
+    only after editing two research files (calls listed in the prompt log;
+    **none of them is in tool-log**). Kc deleted the line and restarted;
+    `git status` was refused again and tool-log resumed (05:06:59 UTC).
+  - **Repo-root Read gap open again on the PC:** Read of `..\index.html`
+    is allowed. Needs a pattern that covers only the root's files. Untested
+    option: name the root files one by one (e.g.
+    `Read(//c/.../TCSS490-AI-Course/index.html)`), since `*` crosses
+    folders.
+  - **Build ID not recorded:** `steamapps\appmanifest_268500.acf` is
+    outside the reads CLAUDE.md allows. Kc to read the `buildid` line, or
+    allow me to.
+  - **Mod activation is native.** The game's
+    `XComGame\Config\DefaultModOptions.ini` has only an empty
+    `[Engine.XComModOptions]` section, and no SDK script mentions
+    `ActiveMods` or `ModOptions`. So which mods load is decided by native
+    code from a config file the launcher writes. For a `-nohomedir` test
+    copy, how to turn the mod on without hand-editing a config file is
+    unknown.
+- **Checks** (PC; game build ID: not read, see Problems):
+
+| # | Test | Expected | Result | Log evidence |
+|---|---|---|---|---|
+| — | `git status` (after the restart) | refused | refused | `requested` only |
+| 10 | Write `D:\SteamLibrary\steamapps\common\XCOM 2\canary.txt` | refused | refused | no line |
+| 12 | Write `C:\Users\Kc\Documents\My Games\canary.txt` | refused | refused | no line |
+| 15 | Read the game's Launch.log (lines 1–2) | allowed | allowed (still the 10/08/26 log) | `requested` + `ok` |
+| — | Read `..\index.html` | refused | **allowed** (root rule removed) | `requested` + `ok` |
+
+  Rows 10, 12 and 15 pass on the PC (Session 1 also passed them here).
+  M0 still needs: the build on the PC, loading the mod, the `X2TC` line,
+  the build ID, and a fix for the repo-root gap.
+
+### Session 5 prompt log
+- **Prompt:** "Session 5, on my PC. Read CLAUDE.md, LOG.md and the handoff
+  document. Before the M0 work: record in research/prior-art.md what the
+  WOTC Co-op Campaign README says [pasted], including that it's
+  MIT-licensed and AI-built via the Co-op Anything playbook, and add its
+  findings [direct IP as a decimal integer, MPSendHistory for join, lost
+  burst frames so batching and acks, ObjectID collisions, the -nohomedir
+  test copy] to the 'for later' and open-questions sections of
+  research/sdk-findings.md, labeled as from their README, not tested by
+  us. Then continue with the handoff's PC steps, and in the M0 launch
+  checklist consider a separate test copy of the game with -nohomedir
+  instead of my real install."
+  - **Provided:** `ls` and the Read of CLAUDE.md were refused, so I
+    stopped and named the likely cause (my Session 1 rule). Pointed out
+    that the README doesn't itself say MIT or AI-built.
+  - **Misreads / rule breaks:** none; I stopped on the denial as
+    CLAUDE.md says.
+  - **How It Was Verified:** the denials are quoted in chat. Neither left a
+    line beyond `requested` for the `ls`.
+- **Prompt:** "[LICENSE.txt shared: MIT, Copyright (c) 2026 EvilMask587] I
+  commented out the read rule. The github has only one contributor which
+  is Claude."
+  - **Provided:** Read LOG.md, prior-art.md and parts of sdk-findings.md;
+    searched Artifact5 for a handoff document (none found by that name);
+    checked the SDK for `MPSendHistory` (`XComCheatManager.uc`
+    L4017–4022); wrote the prior-art.md section and the sdk-findings.md
+    additions. Then saw that tool-log had no lines since 21:01 local,
+    found the `//` comment in settings.json, and stopped.
+  - **Misreads / rule breaks:**
+    - **About 17 tool calls ran with no deny rules and no logging**
+      (`ls`, Reads of LOG.md, prior-art.md, sdk-findings.md (twice),
+      settings.json and `XComCheatManager.uc`, Greps and a Glob, the
+      prior-art.md Edit, two sdk-findings.md Edits, two `tail`/`ls` of
+      tool-log). I should have checked tool-log after the first call, as
+      CLAUDE.md says ("after every sub-step"), and would have caught it
+      before writing anything.
+    - I didn't update LOG.md in that turn even though files changed,
+      because logging was off; it's done here instead.
+  - **How It Was Verified:** the research edits are recorded above. Their
+    absence from tool-log is confirmed (`ls tool-log/`: last write 21:01).
+- **Prompt (mid-task):** "the handoff may have been
+  C:\Users\Kc\Documents\TCSS490-AI-Course\Artifact5\plans\m0-toolchain-plan.md"
+  - **Provided:** read it after the restart and used it as the handoff.
+  - **Misreads / rule breaks:** I had searched only for the word
+    "handoff" and didn't ask which file you meant before moving on.
+  - **How It Was Verified:** n/a.
+- **Prompt:** "Done, restarted" (button answer to: delete line 94 and
+  restart?)
+  - **Provided:** checked tool-log was writing and `git status` was
+    refused again; read the plan; ran PC rows 10, 12, 15 and the
+    `..\index.html` re-test; listed mod/ (all files present); checked the
+    VS Code tasks and the game's `DefaultModOptions.ini`; this entry; the
+    M0 launch checklist in chat, with the test-copy question.
+  - **Misreads / rule breaks:** the `..\index.html` Read is outside the
+    folders CLAUDE.md allows; it was the re-test the plan lists. Reading
+    the game's `DefaultModOptions.ini` is inside the game folder (allowed,
+    read only).
+  - **How It Was Verified:** tool-log `tail` after the guardrail rows
+    shows each call (rows 10 and 12 leave no line, as expected). The
+    settings fix is verified by the refused `git status` and tool-log
+    lines resuming.
+- **Prompt:** "The mod built and deployed to the real game folder, but the
+  2K launcher doesn't list local mods. Per the community wiki
+  (https://www.reddit.com/r/xcom2mods/wiki/index/), local mods are launched
+  with the Alternative Mod Launcher. Compare our mod with what that guide's
+  template includes [an X2DownloadableContentInfo class and three config
+  files]. Plan adding them (our own names, no copied SDK text), with a
+  second log line from OnPostTemplatesCreated [...]. Also tell me how to
+  get AML and confirm it only writes the normal mod-options file. Then
+  create research/resources.md [...]. Wait for my OK before changing mod
+  files."
+  - **Provided:**
+    - Two web-fetch subagents: one for the r/xcom2mods wiki (all three
+      reddit URLs refused by the fetch tool: "unable to fetch from
+      www.reddit.com"), one for AML's GitHub source (v1.6.0, commit
+      98ff420).
+    - Listed the SDK's ModBuddy template zip (file names) and read three
+      small files in it in place: its third config file is `XComGame.ini`,
+      which sets `DLCIdentifier` for the mod's DLC info class.
+    - Read `X2DownloadableContentInfo.uc` (`DLCIdentifier` L25,
+      `OnPostTemplatesCreated` L105; no script caller, so native calls it).
+    - Grepped the game's `DefaultEngine.ini`: L1428–1429 list
+      `../../XcomGame/Mods/` as a mod folder, so AML should find our mod.
+    - Wrote research/resources.md and a line for it in research/README.md.
+    - The plan for the new class and config file, and the AML answer, in
+      chat. No mod files changed.
+  - **AML finding (from its source, not run):** it does **not** only
+    write the mod-options file. On each launch it also rewrites the user
+    `XComEngine.ini` in My Games (removes `ModClassOverrides` entries,
+    rewrites `ModRootDirs`), and renames `.XComMod-disabled` files back.
+    License GPL-3.0.
+  - **Misreads / rule breaks:**
+    - The guide itself wasn't read (reddit blocked); the "template"
+      comparison uses the SDK's ModBuddy template instead, which matches
+      your description (one class, three config files).
+    - I first wrote "Session 6" in resources.md without you naming a
+      session; changed to Session 5.
+    - The first zip listing command had a quoting error and failed
+      harmlessly.
+  - **How It Was Verified:** tool-log shows the subagents, the Bash zip
+    reads, the Greps, the Write and Edits as `requested` + `ok`. The AML
+    facts are the subagent's reading of source, not a test.
+- **Prompt:** "Approved, with the conventional class name
+  X2DownloadableContentInfo_X2TacticalCoop instead of X2TC_DLCInfo, so M0
+  doesn't test a naming question. Keep the log-line table. AML managing
+  the My Games mod configs is acceptable: it's the standard launcher, not
+  a hand edit. I've backed up the Config folder to local\. Log that
+  decision, then make the changes and give me the build-and-launch
+  checklist with AML."
+  - **Decisions (Kc):**
+    - DLC info class uses the usual name,
+      `X2DownloadableContentInfo_X2TacticalCoop`.
+    - **AML may manage the My Games mod configs** (`XComModOptions.ini`,
+      and its rewrite of the user `XComEngine.ini`): it's the standard
+      launcher, not a hand edit, so CLAUDE.md's config rule doesn't apply
+      to it. Kc backed up the My Games `Config` folder to
+      `Artifact5\local\config-backup-before-AML\` first (gitignored). Restore it before M2's
+      clean-game multiplayer tests if needed.
+  - **Provided:** saved plans/m0-dlcinfo-plan.md (with the log-line
+    table); wrote `X2DownloadableContentInfo_X2TacticalCoop.uc` and
+    `Config/XComGame.ini`; updated plans/m0-toolchain-plan.md (file tree,
+    struck-out "no DLC info class" note) and mod/README.md (layout,
+    launching with AML); the build-and-launch checklist in chat.
+  - **Misreads / rule breaks:** none. The `.x2proj` was left alone (it
+    has no file lists).
+  - **How It Was Verified:** each Write/Edit returned success and shows
+    `requested` + `ok` in tool-log; a Grep for non-ASCII characters in
+    `mod/X2TacticalCoop/` found none. Not built yet; Kc builds and runs
+    the check in plans/m0-dlcinfo-plan.md.
+- **Prompt:** "[The same approval re-sent: conventional class name, keep
+  the log-line table, AML managing the My Games mod configs is
+  acceptable, log that decision.] Clean baseline done: I launched War of
+  the Chosen once with mods off, went to the main menu and quit. The fresh
+  config is backed up in local\config-backup-before-AML, and that run's log
+  is in local\launch-log-clean-baseline.log. Note both in LOG.md as the
+  baseline for M2. Build ID: [8270065]. [Save the plan, make the changes,
+  give the AML checklist.]"
+  - **Provided:** confirmed the plan and mod changes from the previous
+    prompt are in place (not redone); checked the backup and the log;
+    recorded the baseline below; updated the backup path in the decision
+    above and in plans/m0-dlcinfo-plan.md; the AML checklist in chat.
+  - **Misreads / rule breaks:**
+    - `local\launch-log-clean-baseline.log` **doesn't exist**. The game's
+      current Launch.log (opened 11/09/26 21:28:39) matches the backup's
+      times, so it's very likely the baseline run. I tried to copy it into
+      `local\` with `cp` before the next launch overwrites it; **the copy
+      was refused**, and I stopped there as CLAUDE.md says. Kc copies it.
+    - The earlier decision line said the backup was "to `Artifact5\local\`";
+      corrected to the folder name Kc gave.
+  - **How It Was Verified:** `ls` of `local\` (no log file; 47 .ini files
+    in the backup); Read and Grep of the current Launch.log; tool-log
+    shows the refused `cp` as `requested` only.
+- **Prompt:** "Done. AML didn't list the mod at first because by default it
+  only scans the Steam Workshop folder [...]. I added [the game's
+  XComGame\Mods\ folder] to AML's Mod Directories, and X2TacticalCoop
+  appeared. I ticked only X2TacticalCoop, kept the default arguments
+  [...], ran War of the Chosen, reached the main menu and quit. Read
+  Launch.log and check for both X2TC lines using the table from the plan.
+  Compare it with local\launch-log-clean-baseline.log if that helps.
+  Record the result, the AML mod-folder finding, and the build ID 8270065
+  in LOG.md. If both lines are there, close M0 and suggest a commit
+  message."
+  - **Provided:** Grep and partial Reads of the new Launch.log; Greps of
+    the baseline log (now present) for the same errors and warnings; a
+    Grep and Read of the backup's user `XComEngine.ini` to explain the AML
+    finding; the M0 result entry above; M0 ticked; a commit message in
+    chat.
+  - **Misreads / rule breaks:** none. The "AML wrote `ModRootDirs`" part
+    is labeled a guess, since I can't read My Games\Config.
+  - **How It Was Verified:** the two `X2TC` lines (L104, L137) are in the
+    log Kc's run produced, and absent from the baseline. tool-log shows
+    each Read and Grep as `requested` + `ok`.
+
+### M2 baseline: clean game, mods off (Kc, 2026-11-09)
+- **Build ID 8270065** (Kc, from `appmanifest_268500.acf`).
+- **Run:** Kc launched War of the Chosen once with mods off, went to the
+  main menu and quit (about 21:27–21:29 local).
+- **Config backup:** `local\config-backup-before-AML\` (47 .ini files from
+  My Games, taken before AML's first run). `XComModOptions.ini` has an
+  empty `[Engine.XComModOptions]` section, so no mods were active.
+- **Log:** to be saved as `local\launch-log-clean-baseline.log` (not there
+  yet; see the prompt log). Its first line: `Log file open, 11/09/26
+  21:28:39`. Notable lines:
+  - L88: `Redscreens disabled`.
+  - L89: logged in to Steam.
+  - L90–99: all five DLC folders found and installed.
+  - L100–101: the game also checks `../../XcomGame/Mods/X2TacticalCoop`
+    ("IS INSTALLED : , YES"), because the earlier build deployed our mod
+    there. No `X2TC` lines, so the package didn't run with mods off.
+    **Shown by this run:** a mod folder being found is not the same as the
+    mod being loaded.
+  - Caveat for M2: this baseline still has our mod folder in the game's
+    `Mods` folder. A fully clean multiplayer test may need it removed
+    (the build's Clean task).
+- Use: restore this config before M2's clean-game multiplayer tests, and
+  compare M2's logs with this one.
+- Kc copied the log to `local\launch-log-clean-baseline.log` afterwards
+  (first line `Log file open, 11/09/26 21:28:39`; its command line, L9:
+  `-FROMLAUNCHER -game-61483=-review -game-61483=-noRedscreens`, i.e. the
+  2K launcher).
+
+### 2026-11-09 — Session 5: M0 load check passed (M0 closed)
+On the PC, **game build 8270065** (Kc, from `appmanifest_268500.acf`).
+Kc built the mod (plans/m0-dlcinfo-plan.md), launched War of the Chosen
+with AML v1.6.0 with only X2TacticalCoop ticked, reached the main menu
+and quit.
+
+- **Result: both lines present. M0's load check passes** (table row
+  "Both"). From `My Games\...\Logs\Launch.log`, opened
+  `11/09/26 21:41:35`:
+  - L9: command line `-review -noRedScreens` (AML defaults; no
+    `-allowConsole`).
+  - L100–101: the game checks our mod at its absolute path,
+    `D:\SteamLibrary\steamapps\common\XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods\X2TacticalCoop`,
+    "IS INSTALLED : , YES".
+  - **L104: `X2TC: DLC info loaded (OnPostTemplatesCreated)`** at 6.57 s.
+  - **L137: `X2TC: Main menu listener loaded, screen class: UIFinalShell`**
+    at 15.50 s.
+- **Confirmed by this test:**
+  - The mod package loads when it's active, so
+    `+NonNativePackages=X2TacticalCoop` plus the active-mod entry is enough
+    (Session 4's guess about `XComEngine.ini` held, together with AML's
+    `ActiveMods`).
+  - `X2DownloadableContentInfo_X2TacticalCoop` with
+    `DLCIdentifier="X2TacticalCoop"` is found and `OnPostTemplatesCreated`
+    runs.
+  - The retail main menu is `UIFinalShell`, and a listener with
+    `ScreenClass = none` plus a `UIShell` cast fires on it (answers
+    sdk-findings.md open question 7's second half).
+  - Compared with the clean baseline (mods off, same build), the only
+    difference is the mod working: no `X2TC` lines there. The two `Error:`
+    lines in this run (L81 corrupt texture `borderGradientDashed`, L136
+    `DefaultCharacterPool.bin` not read) and the `SulzDevXPACK` package
+    warning (L105) are in the baseline too, so they don't come from our
+    mod.
+- **AML mod-folder finding (Kc):** AML didn't list the mod at first. By
+  default it only scanned the Workshop folder
+  (`D:\SteamLibrary\steamapps\workshop\content\268500\`). Kc added
+  `D:\SteamLibrary\steamapps\common\XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods\`
+  to AML's Mod Directories and the mod appeared.
+  - Why (consistent with what AML's source does, from the earlier subagent
+    reading): AML takes mod folders from the `ModRootDirs` lines in the
+    **user** `XComEngine.ini` and adds the Workshop folder itself. The
+    game's `DefaultEngine.ini` lists `../../XcomGame/Mods/` (L1428–1429),
+    but in the baseline user file the section is empty
+    (`local\config-backup-before-AML\XComEngine.ini` L2193–2194), so AML
+    didn't see it.
+  - The game now names the mod by absolute path (L100) instead of the
+    relative `../../XcomGame/Mods/` in the baseline. Guess: AML wrote the
+    added folder into `ModRootDirs` in the user `XComEngine.ini`, as its
+    source does. Not checked: My Games\Config is outside the reads
+    CLAUDE.md allows.
+  - For friends later (M6): the setup steps must include adding that
+    folder in AML, or installing through the Workshop.
+- **M0 checks (SPEC.md):** every deny test refused (Session 1 on the PC,
+  rows 10/12/15 again this session); the hello-world line is in
+  Launch.log; build ID recorded. **M0 closed.**
+- **Carried over (not a table row):** the repo-root Read gap
+  (`..\index.html` readable on the PC). Needs a rule that names root files
+  one by one, then a re-test.

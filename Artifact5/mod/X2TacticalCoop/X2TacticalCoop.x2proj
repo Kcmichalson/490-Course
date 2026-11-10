@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  X2TacticalCoop project file. Built with X2ModBuildCommon (mod/.scripts),
+  which reads only the first PropertyGroup: Name (the title shown in the
+  launcher), Description and SteamPublishID. File lists aren't needed.
+  ModBuddy can't open this project as it is (no .XCOM_sln).
+-->
+<Project ToolsVersion="4.0" DefaultTargets="Default" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Name>X2TacticalCoop</Name>
+    <Description>Work in progress: experiments toward two-player networked co-op for XCOM 2: War of the Chosen. Free, unofficial, and not affiliated with or endorsed by Firaxis Games or 2K.</Description>
+    <SteamPublishID>0</SteamPublishID>
+    <AssemblyName>X2TacticalCoop</AssemblyName>
+    <RootNamespace>X2TacticalCoop</RootNamespace>
+  </PropertyGroup>
+</Project>

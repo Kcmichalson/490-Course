@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "shell",
+            "command": "powershell.exe -NonInteractive -ExecutionPolicy Unrestricted -file '${workspaceFolder}\\.scripts\\build.ps1' -srcDirectory '${workspaceFolder}' -sdkPath '${config:xcom.highlander.sdkroot}' -gamePath '${config:xcom.highlander.gameroot}' -config 'default'",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build debug",
+            "type": "shell",
+            "command": "powershell.exe -NonInteractive -ExecutionPolicy Unrestricted -file '${workspaceFolder}\\.scripts\\build.ps1' -srcDirectory '${workspaceFolder}' -sdkPath '${config:xcom.highlander.sdkroot}' -gamePath '${config:xcom.highlander.gameroot}' -config 'debug'",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "powershell.exe -NonInteractive -ExecutionPolicy Unrestricted -file '${workspaceFolder}\\.scripts\\X2ModBuildCommon\\clean.ps1' -modName 'X2TacticalCoop' -srcDirectory '${workspaceFolder}' -sdkPath '${config:xcom.highlander.sdkroot}' -gamePath '${config:xcom.highlander.gameroot}'",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Full rebuild",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Clean", "Build"]
+        }
+    ]
+}

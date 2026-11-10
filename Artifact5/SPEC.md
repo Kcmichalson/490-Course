@@ -13,6 +13,11 @@ is possible, and builds as much of it as five weeks allow. A moonshot can
 fall short; the answer to "is it possible, and what blocks it" is a valid
 result.
 
+**Success test (my decision):** two friends who've played co-op over
+Parsec find this better: each uses their own mouse, keyboard and screen,
+there's no streaming lag, and each controls their own soldiers without
+handing over control.
+
 Artifact 5 requirements this covers: a five-week attempt at something big,
 scaffolded to last (this file, CLAUDE.md, plans/), a log of plans and
 changes (LOG.md), deployed where real users can reach it if it gets that
@@ -131,6 +136,10 @@ Checks: feedback recorded; fixes logged with how they were verified.
 - Shared strategy layer (look at the WOTC Co-op Campaign prototype; check
   its license first)
 - Rejoining after a disconnect
+- Parallel campaigns: each player runs their own campaign; missions start
+  together and each player's soldiers join one combined squad; results go
+  back to each player's own campaign. Far stretch, only after tactical
+  co-op is stable.
 
 ## 7. Out of scope
 - More than two players

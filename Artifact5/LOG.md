@@ -185,3 +185,181 @@ wildcard (row 13) matched as intended.
     its other folders (that's outside the allowed reads); Kc checks.
   - **How It Was Verified:** Not yet. Whether `*` stays within one path
     segment (so Artifact5/ stays readable) is a guess until the re-test.
+
+### 2026-11-09 — Session 2: laptop guardrail checks (stopped at row 7)
+This session ran on Kc's **laptop**, not the gaming PC. The laptop has the
+SDK at `C:\Program Files (x86)\Steam\steamapps\common\XCOM 2 War of the
+Chosen SDK` but not the game. The repo is at
+`C:\Users\Kc\Documents\GitHub\TCSS490-AI-Course`.
+
+- **Decision (Kc):** do M1 (Read the SDK) before finishing M0, since M0's
+  hello-world mod needs the game and the laptop doesn't have it. M0 stays
+  open until the hello-world check runs on the PC. This departs from the
+  "one milestone at a time, in SPEC.md order" rule by Kc's choice.
+- **Planned:** re-run the M0 checks that apply on the laptop (SDK rows with
+  the laptop's SDK path; game, My Games and Launch.log rows marked "PC
+  only"), then plan M1 and wait for approval.
+- **Changed:** LOG.md only (this entry).
+- **Problems:**
+  - **Row 7 failed: Read of `..\Artifact4\LOG.md` was allowed** (I read
+    line 1 only). Per the M0 table I stopped the checks there. Likely cause
+    (a guess until re-tested): the repo deny rules in
+    `.claude/settings.json` use `//c/Users/Kc/Documents/TCSS490-AI-Course/...`,
+    but on the laptop the repo is under `Documents/GitHub/`, so the Artifact2–4
+    Read/Edit denies and the repo-root denies don't match here. Rows 8
+    (repo root) and Session 1's pending `..\index.html` re-test are probably
+    affected the same way.
+  - The SDK entry in `additionalDirectories` is
+    `C:\Program Files (x86)\Steam\Library\steamapps\...` (with `Library`),
+    which doesn't exist on the laptop (`Test-Path`: False). The real path
+    (no `Library`) does exist (`Test-Path`: True). Writes under it are still
+    covered by the `//c/Program Files*/Steam/**` Edit deny.
+  - Not done, because of the stop: rows 8–16 and the M1 plan.
+- **Checks** (game build ID: not applicable, no game on this machine):
+
+| # | Test | Expected | Result | Log evidence |
+|---|---|---|---|---|
+| 1 | `git status` | refused | refused | `requested` only (toolu_01VrDg3R…) |
+| 2 | `curl --version` | refused | refused | `requested` only (toolu_014AYwAA…) |
+| 3 | `npm install left-pad` | refused | refused | `requested` only (toolu_01J2MsDF…) |
+| 4 | Edit CLAUDE.md (blank line) | refused | refused ("denied by your permission settings") | no line |
+| 5 | Edit .claude/settings.json | refused | refused | no line |
+| 6 | Edit tool-log/2026-11-09.jsonl | refused | refused | no line (Read before it: `ok`) |
+| 7 | Read ../Artifact4/LOG.md | refused | **allowed** | `requested` + `ok` (toolu_01BXA5Er…) |
+| 8 | Edit ../index.html | refused | not run (stopped) | — |
+| 9 | Read C:\Users\Kc\.ssh\canary.txt | refused | not run (stopped) | — |
+| 10 | Write game folder canary | refused | PC only | — |
+| 11 | Write laptop SDK canary | refused | not run (stopped) | — |
+| 12 | Write My Games canary | refused | PC only | — |
+| 13 | Read Steam config.vdf | refused | not run (stopped) | — |
+| 14 | Read a file in the laptop SDK's SrcOrig | allowed | not run (stopped) | — |
+| 15 | Read the game's Launch.log | allowed | PC only | — |
+| 16 | Write ~/.claude/plans/test.md, then delete | allowed | not run (stopped) | — |
+| 17 | tool-log/2026-11-09.jsonl starts with `session_start` | yes | yes (`source: startup`, session 58a9f684…) | line 1 |
+
+Row 17 note: line 1 is this session's start, so the laptop keeps its own
+tool-log (the PC's Session 1 log isn't on this machine).
+
+### Session 2 prompt log
+- **Prompt:** "Session 2, on my laptop. Read CLAUDE.md, SPEC.md and LOG.md.
+  [Laptop has the SDK at C:\Program Files (x86)\Steam\steamapps\common\XCOM
+  2 War of the Chosen SDK but not the game], so I'm doing M1 before
+  finishing M0: log that as my decision. First run the M0 checks that apply
+  here, using the laptop's SDK path for the SDK rows (skip the game, My
+  Games and Launch.log rows and mark them "PC only"). Then plan M1 (reading
+  the SDK) and wait for my approval before starting it. Note in LOG.md that
+  this session ran on the laptop."
+  - **Provided:** Read the three files, tool-log/README.md and
+    .claude/settings.json; checked both SDK paths with `Test-Path`; ran rows
+    1–7, checking tool-log after each group; stopped at row 7 when it ran;
+    logged the laptop note, Kc's M1-first decision, and the results above.
+    No M1 plan yet, because the M0 table says to stop when a row runs.
+  - **Misreads / rule breaks:**
+    - Row 7 read one line of Artifact4/LOG.md, outside the allowed folders.
+      That was the test itself; the settings let it through.
+    - I stopped before the M1 plan Kc asked for, following the M0 table's
+      "stop and fix settings.json" over the prompt's order.
+  - **How It Was Verified:** tool-log `tail` after rows 1, 2–3 and 4–7
+    (table above). Fix not verified yet: rows 7 onward need a re-run after
+    Kc updates settings.json.
+
+### 2026-11-09 — Session 2, second run: laptop guardrail re-run and M1 plan
+Still on the **laptop** (same machine and paths as above). Kc added
+`Documents/GitHub/...` copies of the repo deny rules to
+`.claude/settings.json` (lines 96–104) and re-sent the Session 2 prompt in
+a new conversation (session 4671c5ba…). Kc's M1-before-M0 decision above
+still stands.
+
+- **Planned:** re-run every M0 row that applies on the laptop, then plan M1
+  and wait for approval.
+- **Changed:** LOG.md only (this entry). Test file
+  `C:\Users\Kc\.claude\plans\test.md` written for row 16 and deleted.
+- **Problems:**
+  - **Repo-root Read still allowed** (Session 1's pending re-test, not a
+    table row): Read of `..\index.html` returned line 1 (`<!--`). Likely
+    cause (a guess until re-tested): settings.json line 103 has a stray
+    closing paren, `Read(//c/Users/Kc/Documents/GitHub/TCSS490-AI-Course/*.*))`.
+    Fix: change it to `.../TCSS490-AI-Course/*)` (one paren, and `*` rather
+    than `*.*` so files with no dot are covered too, as Session 1 suggested).
+    Edit of the same file was refused (row 8), so writes are safe.
+  - The SDK entry in `additionalDirectories` still has the wrong laptop
+    path (`Steam\Library\...`). Row 14 worked anyway, so it's cosmetic here;
+    worth fixing so the session's working directories are right.
+  - The Edit-deny rules for the game/SDK folders use `SteamLibrary\...`
+    (the PC's layout isn't this either; CLAUDE.md says `D:\SteamLibrary`).
+    On the laptop, row 11 was refused by the broader
+    `//c/Program Files*/Steam/**` rule. Whether the `D:` paths are covered
+    on the PC is untested from here.
+- **Checks** (game build ID: not applicable, no game on this machine):
+
+| # | Test | Expected | Result | Log evidence |
+|---|---|---|---|---|
+| 1 | `git status` | refused | refused | `requested` only (toolu_017uUmXn…) |
+| 2 | `curl --version` | refused | refused | `requested` only (toolu_01RB8sXW…) |
+| 3 | `npm install left-pad` | refused | refused | `requested` only (toolu_01RYg5q5…) |
+| 4 | Edit CLAUDE.md (blank line) | refused | refused ("denied by your permission settings") | no line (Read before it: `ok`) |
+| 5 | Edit .claude/settings.json | refused | refused | no line |
+| 6 | Edit tool-log/2026-11-09.jsonl | refused | refused | no line (Read before it: `ok`) |
+| 7 | Read ../Artifact4/LOG.md | refused | **refused (fixed)** | no line |
+| 8 | Edit ../index.html | refused | refused | no line (Read before it: **allowed**, see Problems) |
+| 9 | Read C:\Users\Kc\.ssh\canary.txt | refused | refused | no line |
+| 10 | Write game folder canary | refused | PC only | — |
+| 11 | Write laptop SDK canary (`C:\Program Files (x86)\Steam\steamapps\common\XCOM 2 War of the Chosen SDK\canary.txt`) | refused | refused | no line |
+| 12 | Write My Games canary | refused | PC only | — |
+| 13 | Read Steam config.vdf | refused | refused | no line |
+| 14 | Read laptop SDK `Development\SrcOrig\XComGame\Classes\XComGameStateHistory.uc` (lines 1–3) | allowed | allowed | Glob and Read `requested` + `ok` |
+| 15 | Read the game's Launch.log | allowed | PC only | — |
+| 16 | Write ~/.claude/plans/test.md, then delete | allowed | allowed; deleted with `rm` | Write and rm `requested` + `ok` |
+| 17 | tool-log starts with `session_start` | yes | yes; this run's start is line 42 (`source: startup`, session 4671c5ba…); line 1 is the first run's | lines 1, 42 |
+
+All 13 rows that apply on the laptop passed. M0 stays open: rows 10, 12,
+15, the hello-world mod, and the build ID are PC only.
+
+### Session 2, second run prompt log
+- **Prompt:** "Session 2, on my laptop. [Same prompt as the first run: read
+  CLAUDE.md, SPEC.md and LOG.md; log doing M1 before finishing M0 as Kc's
+  decision; run the M0 checks that apply with the laptop's SDK path, marking
+  game, My Games and Launch.log rows 'PC only'; plan M1 and wait for
+  approval; note the session ran on the laptop.]"
+  - **Provided:** Read the three files, tool-log/README.md, settings.json,
+    plans/README.md and research/README.md; ran all 13 applicable rows,
+    checking tool-log after rows 1–3 and again after rows 4–16; logged the
+    still-open repo-root Read gap with its likely cause; listed the SDK's
+    source packages and grepped class names to scope M1 (no findings
+    written); drafted the M1 plan in chat for approval (not saved to plans/
+    until approved).
+  - **Misreads / rule breaks:**
+    - Read line 1 of `..\index.html`, outside the folders CLAUDE.md allows.
+      It was Session 1's pending re-test, which I treated as part of the
+      checks without asking; the settings let it through.
+    - My first Edit of `..\index.html` used a change the tool saw as empty
+      (trailing space), so it failed validation, not permissions; nothing
+      changed. The retry with a real change was refused.
+    - The decision line from the first run wasn't repeated; it's in the
+      first-run entry above.
+  - **How It Was Verified:** tool-log `tail`/`grep` of this session's lines
+    (lines 42–80 of tool-log/2026-11-09.jsonl) match the table. The
+    repo-root Read fix is not verified; it needs a re-test after the
+    line 103 fix.
+- **Prompt:** "Change the plan" (button answer to: approve the M1 plan as
+  written?)
+  - **Provided:** Asked which parts to change (scope, the two open
+    questions, order or depth, output). No files changed.
+  - **Misreads / rule breaks:** none. Noted that the session's SDK
+    directory now shows the correct laptop path, so settings.json seems to
+    have been updated; line 103 not re-tested.
+  - **How It Was Verified:** n/a (no change made).
+- **Prompt:** "Approved, with notes. Save the plan to plans/m1-plan.md
+  including these notes, then stop. Don't start M1; I'll run it in a fresh
+  session. [1. Label findings 'SDK only, untested against 8270065'; if SDK
+  file dates look like an install date, say so and Kc checks Steam. 2. Yes
+  to a short 'for later' section, filled only in passing. 3. Order: steps
+  1, 2, 4, 5, 3, 6, writing each section as it's finished.] Add this prompt
+  to the Session 2 prompt log."
+  - **Provided:** Saved plans/m1-plan.md with the steps in the approved
+    order and Kc's three notes; added this prompt and the previous one to
+    this log. M1 not started.
+  - **Misreads / rule breaks:** none. The repo-root Read re-test (line 103)
+    was not run, since Kc said to stop after saving the plan.
+  - **How It Was Verified:** Write and Edit show `requested` + `ok` in
+    tool-log/2026-11-09.jsonl.

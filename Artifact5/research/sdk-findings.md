@@ -390,7 +390,8 @@ finding.**
     source (Kc clones it to `local\refs\`) to check that its multiplayer
     menu code matches this SDK and whether it merged anything from the
     2022 build; then, only if the plain M2 test fails, run the test with
-    the Highlander on both machines. Nothing here is checked yet.
+    the Highlander on both machines. Stage 0 (the source read) is done:
+    see section 7. The run itself is untested.
 
 ### Candidate hooks for M2's "open the multiplayer screen" button
 In order of preference (all untested against 8270065):
@@ -438,7 +439,91 @@ therefore adds the mod's own `X2TC` trace lines. The cheat `UnsuppressMP`
 on with `unsuppress` console commands; it is not used, since it needs
 the developer console.
 
+## 7. Community Highlander source compared with the SDK (M2 Stage 0)
+
+Read in Session 5 (2026-11-10, on the PC) from Kc's clone in
+`local\refs\X2WOTCCommunityHighlander\` (cloned by Kc that day; the commit
+isn't recorded, since the agent doesn't run git; `VERSION.ps1` says
+1.32.0). License: MIT (`LICENSE`, Copyright (c) 2017 X2CommunityCore).
+**Source reading only; the Highlander was not run.** Paths in this
+section are relative to the clone unless they start with `SrcOrig`.
+
+- **The clone has no copy of the multiplayer menu classes.** A search of
+  the whole clone found no `UIFinalShell.uc`, `UIShell.uc`,
+  `XComShellPresentationLayer.uc`, `UIMPShell_MainMenu.uc` or
+  `X2MPShellManager.uc`. `X2WOTCCommunityHighlander\Src\XComGame\Classes\`
+  holds 347 `.uc` files; the SDK's `SrcOrig\XComGame\Classes\` holds
+  2,475. The repo carries only the classes the Highlander changes.
+- **Its build takes everything else from the SDK.** `_CopyToSrc`
+  (`.scripts\X2ModBuildCommon\build_common.ps1` L341–361) mirrors the
+  SDK's `SrcOrig` into `Src`, then copies the mod's `Src` over it. The
+  README's manual steps do the same (`README.md` L62–84). So the
+  Highlander's XComGame gets those five classes from the builder's SDK,
+  which is the 2018 source that sections 2–5 describe. Does its
+  multiplayer menu code match the SDK? Yes, by construction: it has no
+  version of its own.
+- **What it replaces.** The README says it replaces the game's XComGame
+  script package (L22), normally as a cooked package (L36–38), and that
+  the cook also produces `Engine` and `Core` replacements (L198–206).
+- **The nearby classes it does change have no multiplayer-menu changes**
+  (diff against the SDK, ignoring line endings; lines only in the
+  Highlander / only in the SDK):
+
+  | Class | Lines | What changed |
+  |---|---|---|
+  | `XComShell.uc` | +7 / -1 | A music flag (Issue #1598) |
+  | `XComPresentationLayerBase.uc` | +8 / -6 | Photobooth poster size (#1584); DLC hook manager (#212) |
+  | `XComEngine.uc` | +3 / -1 | `OnlineEventMgrClassName` (L468–470) names its subclass `CHOnlineEventMgr` (#511) |
+  | `CHOnlineEventMgr.uc` | new | Overrides `GetDLCInfos` (L23) to sort DLC info classes by run order; the rest are private helpers |
+  | `XComOnlineEventMgr.uc` | +28 / -0 | DLC hooks when a save loads (#212, #808) |
+  | `Helpers.uc` | +4 / -2 | Loot (#114); the `Net…` hash functions are untouched |
+
+  `XComTacticalController.uc` (+26 / -2), `XComPlayerController.uc`
+  (+42 / -2), `UIScreenStack.uc` (+316 / -3), `UITLE_ChallengeModeMenu.uc`
+  (+14 / -6), `UIMPShell_SquadUnitInfoItem.uc` (+2 / -1) and
+  `UIMPSquadSelect_ListItem.uc` (+2 / -1): no changed line mentions
+  multiplayer, lobby, invite, online, network or Steam. That comes from a
+  filtered diff; the full diffs of these six were not read.
+- **Config.** `X2WOTCCommunityHighlander\Config\XComPlots.ini` L2–3
+  removes the plot entry `Plot_Multiplayer_Test` (Issue #1210). Guess: a
+  config change like this could change the multiplayer INI hash, so both
+  machines would need the same Highlander version (already in
+  plans/m2-plan.md).
+- **Did it merge anything from the 2022 build? No sign of it.** No `.md`,
+  `.uc`, `.uci`, `.txt`, `.ps1`, `.ini` or `.int` file in the clone
+  contains "2022". `CHANGELOG.md` (marked deprecated at its top) mentions
+  multiplayer once (L127: multiplayer teams usable in single player,
+  #188) and says nothing about the shutdown. Limits: `git log` was not
+  run; the documentation website was not read (its pages are built from
+  comments in the source, which the search covered); the compiled
+  Workshop release can't be inspected here.
+- **Logging.** The README notes that script logging is stripped from the
+  cooked version (L213–215). Guess: the same would be true of the shipped
+  game's own cooked XComGame, so the game's script log lines might not
+  exist in a retail run even with their categories unsuppressed. Mod
+  packages aren't affected (M0's `X2TC` lines appeared).
+
+**What this means for question 13 (still a guess until it is run):**
+- The premise holds as far as source goes. With the Highlander active,
+  the menu classes would be compiled from the 2018 SDK source, which
+  still creates the Multiplayer item (`SrcOrig\XComGame\Classes\UIFinalShell.uc`
+  L135) and has `StartMPShellState` intact
+  (`SrcOrig\XComGame\Classes\XComShellPresentationLayer.uc` L702–712).
+- That gives a prediction to test: with the Highlander on build 8270065,
+  the game's own Multiplayer item should be back on the main menu. If it
+  is and a match works, the switch was in XComGame's compiled scripts. If
+  it is but hosting or joining fails, the block is in native code or the
+  online service. If the item isn't there, the published build differs
+  from this source or something else hides it.
+- Not known: which SDK source the published Workshop build was compiled
+  from, and whether anything outside this repo goes into it.
+
 ## For later (M3/M4, noticed in passing only)
+
+- **Multiplayer teams in single player (Highlander).** The Highlander's
+  `CHANGELOG.md` L127 lists a feature that lets mods use the multiplayer
+  teams in single player (#188). Not read further; it may matter for M3
+  if the Highlander is used.
 
 - **History sync is native and already exists for two players.**
   `XComGameStateNetworkManager` has `SendHistory`/`ReceiveHistory`

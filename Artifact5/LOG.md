@@ -10,7 +10,8 @@ CLAUDE.md describes.
 - [x] M1: Read the SDK (Session 3; done before M0 by Kc's decision. SDK
   date from SteamDB added in Session 4)
 - [ ] M2: Reach multiplayer on the current build (decision gate; plan
-  approved 2026-11-10, plans/m2-plan.md; Stage 0 is next)
+  approved 2026-11-10, plans/m2-plan.md; Stage 0 done 2026-11-10,
+  Stage 1 is next)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -1236,3 +1237,76 @@ prompt. No game was run and no mod file changed.
   - **How It Was Verified:** tool-log shows the Write of
     `plans/m2-plan.md`, five Edits of sdk-findings.md and one of
     resources.md as `ok`. Nothing was built or run.
+
+### 2026-11-10 — Session 5 (continued): M2 Stage 0, Highlander source read
+On the PC. Kc switched the model to Claude Opus 5.5 and back to **Claude
+Fable 5.2** before this prompt; this turn ran on Fable 5.2. No game was
+run, nothing was built, and no mod file changed.
+
+- **Planned:** plans/m2-plan.md Stage 0: record the Highlander's license,
+  compare its multiplayer menu classes with the SDK's, and look for
+  anything merged from the 2022 build.
+- **License (recorded as CLAUDE.md requires):** Community Highlander,
+  **MIT** (`LICENSE`: Copyright (c) 2017 X2CommunityCore). Clone:
+  `local\refs\X2WOTCCommunityHighlander\` (Kc, 2026-11-10; `VERSION.ps1`
+  says 1.32.0; the commit isn't recorded, since the agent doesn't run
+  git). No code from it was reused.
+- **Result** (source reading only; details, paths and line numbers in
+  research/sdk-findings.md section 7):
+  - The clone has none of the five menu classes (`UIFinalShell`,
+    `UIShell`, `XComShellPresentationLayer`, `UIMPShell_MainMenu`,
+    `X2MPShellManager`). It holds 347 XComGame classes against the SDK's
+    2,475: only the ones it changes.
+  - Its build mirrors the SDK's `SrcOrig` and copies its own source over
+    it (`.scripts\X2ModBuildCommon\build_common.ps1` L341–361). So the
+    Highlander's XComGame compiles those five classes from the SDK's 2018
+    source. They match the SDK by construction.
+  - The classes it does change near the menu and online code (`XComShell`,
+    `XComPresentationLayerBase`, `XComEngine`, `XComOnlineEventMgr`,
+    `Helpers`, and its own `CHOnlineEventMgr`) have no multiplayer-menu
+    changes.
+  - No sign of anything merged from the 2022 build: no text file in the
+    clone contains "2022", and its changelog mentions multiplayer once
+    (multiplayer teams in single player, #188).
+  - Its README says script logging is stripped from the cooked version
+    (L213–215). Guess: the shipped game's own script log lines may be
+    stripped the same way.
+- **What it means for Kc's hypothesis (still a guess):** the premise
+  holds in source. It gives a prediction to test: with the Highlander on
+  build 8270065, the game's own Multiplayer item should be back on the
+  main menu. Not run; the plan runs the Highlander only if the plain test
+  fails.
+- **Changed:** research/sdk-findings.md (section 7, a pointer in question
+  13, one "for later" note); research/resources.md (the license); the M2
+  line under "Milestone status".
+- **Problems:**
+  - **tool-log gap.** One call that ran and returned output has a
+    `requested` line and no completion line: the read of
+    `build_common.ps1` L336–372, sent together with four other reads.
+    The M0 checks treat "`requested` with nothing after it" as refused;
+    this one was not refused. Guess: the hook missed the completion when
+    five calls finished together. I re-ran the read alone (L341–361) and
+    that one shows `requested` + `ok`. The tool log was not edited.
+  - I first wrote the build step's range as L341–360; the re-read showed
+    L341–361 and I corrected it.
+  - Three comparison commands were shell loops over several files (one
+    purpose each: compare the Highlander's files with the SDK's).
+- **Checks:** no game run, so no build ID check (last recorded: 8270065
+  on 2026-11-09). In `tool-log/2026-11-10.jsonl`, every other call of
+  this turn shows `requested` + `ok`.
+- **Next:** Stage 1 (the two mod classes and the PC checklist), when Kc
+  says go.
+
+### Session 5 prompt log (continued, 2026-11-10, Stage 0)
+- **Prompt:** "Yes, cloned" (the button answering "Is the Highlander
+  cloned into local\refs\ yet?")
+  - **Provided:** Stage 0: the license, the comparison with the SDK, the
+    search for 2022 changes, section 7 in research/sdk-findings.md, and
+    the entry above. Stopped before Stage 1.
+  - **Misreads / rule breaks:** none on the request. The tool-log gap,
+    the corrected line range and the shell loops are listed under
+    Problems above.
+  - **How It Was Verified:** the file search, file counts, diffs and text
+    searches ran this turn against the clone and the SDK, read-only; the
+    build step was read twice. Nothing was run in game, so the hypothesis
+    stays a guess.

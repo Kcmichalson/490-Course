@@ -517,6 +517,12 @@ section are relative to the clone unless they start with `SrcOrig`.
   from this source or something else hides it.
 - Not known: which SDK source the published Workshop build was compiled
   from, and whether anything outside this repo goes into it.
+- **Anecdote (Kc, 2026-11-10; not a test):** on Kc's old modded install
+  (LWOTC, so the Highlander was on), Kc doesn't remember a Multiplayer
+  item on the main menu. If that memory is right, it goes against the
+  prediction above. Why it might (all guesses): the published build
+  differs from this source, another mod changed the menu, or the item is
+  hidden some other way. Only a run settles it.
 
 ## For later (M3/M4, noticed in passing only)
 

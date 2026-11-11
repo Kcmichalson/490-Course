@@ -206,7 +206,7 @@ Kc does this; the agent can't write there.
 1. Close the game and AML.
 2. In `Documents\My Games\XCOM2 War of the Chosen\XComGame\`, rename
    `Config` to `Config-before-M2` (keeps the current settings).
-3. Make a new `Config` folder and copy the 47 .ini files from
+3. Make a new `Config` folder and copy the 46 .ini files from
    `Artifact5\local\config-backup-before-AML\` into it.
 4. Start AML, check the game's `Mods` folder is still in Mod Directories,
    tick only X2TacticalCoop, keep `-review -noRedScreens`, `-allowConsole`

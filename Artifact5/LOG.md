@@ -11,7 +11,8 @@ CLAUDE.md describes.
   date from SteamDB added in Session 4)
 - [ ] M2: Reach multiplayer on the current build (decision gate; plan
   approved 2026-11-10, plans/m2-plan.md; Stage 0 done 2026-11-10,
-  Stage 1 is next)
+  Stage 1 run 1 2026-11-10: button click reaches the handler, but no
+  map load follows)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -972,8 +973,9 @@ document" is plans/m0-toolchain-plan.md (Kc).
       was refused**, and I stopped there as CLAUDE.md says. Kc copies it.
     - The earlier decision line said the backup was "to `Artifact5\local\`";
       corrected to the folder name Kc gave.
-  - **How It Was Verified:** `ls` of `local\` (no log file; 47 .ini files
-    in the backup); Read and Grep of the current Launch.log; tool-log
+  - **How It Was Verified:** `ls` of `local\` (no log file; 46 .ini files
+    in the backup; first written as 47, corrected 2026-11-10 after Kc's
+    count and `ls | wc -l`); Read and Grep of the current Launch.log; tool-log
     shows the refused `cp` as `requested` only.
 - **Prompt:** "Done. AML didn't list the mod at first because by default it
   only scans the Steam Workshop folder [...]. I added [the game's
@@ -1000,7 +1002,7 @@ document" is plans/m0-toolchain-plan.md (Kc).
 - **Build ID 8270065** (Kc, from `appmanifest_268500.acf`).
 - **Run:** Kc launched War of the Chosen once with mods off, went to the
   main menu and quit (about 21:27–21:29 local).
-- **Config backup:** `local\config-backup-before-AML\` (47 .ini files from
+- **Config backup:** `local\config-backup-before-AML\` (46 .ini files from
   My Games, taken before AML's first run). `XComModOptions.ini` has an
   empty `[Engine.XComModOptions]` section, so no mods were active.
 - **Log:** to be saved as `local\launch-log-clean-baseline.log` (not there
@@ -1310,3 +1312,135 @@ run, nothing was built, and no mod file changed.
     searches ran this turn against the clone and the SDK, read-only; the
     build step was read twice. Nothing was run in game, so the hypothesis
     stays a guess.
+
+### 2026-11-10 — Session 5 (continued): M2 Stage 1 code written (not built)
+On the PC, Claude Fable 5.2. **Nothing was built or run; the code is
+untested.** Game build ID: not checked this turn (Kc reads it before the
+test).
+
+- **Planned:** plans/m2-plan.md Stage 1: the button in the main menu
+  listener, the trace listener, and the PC checklist.
+- **Changed** (classes are in
+  `mod/X2TacticalCoop/Src/X2TacticalCoop/Classes/`):
+  - `X2TC_MainMenuListener.uc` (targeted edit). `AddMPButton` spawns a
+    separate `UIButton` on the main menu ("MULTIPLAYER", top left at
+    40, 40) and logs `X2TC: MP button added to <class>`.
+    `OnMPButtonClicked` returns if `m_bDisableActions` is set, logs
+    `X2TC: MP button clicked, calling StartMPShellState`, and calls
+    `StartMPShellState()` on the screen's owner.
+  - `X2TC_MPTraceListener.uc` (new, diagnostics only).
+    `X2TC: screen <class>, game <game class>` for every screen;
+    `X2TC: MP state network=… online=…` for multiplayer shell screens;
+    four `X2TC: MP criteria …` lines on the multiplayer main menu (DLC,
+    mods and INI hashes with the two flags; package hashes; mod names;
+    DLC names).
+  - `mod/README.md`: the class list.
+  - research/sdk-findings.md section 7: Kc's anecdote.
+- **Anecdote (Kc; not a test):** on the old modded install (LWOTC, so
+  the Highlander was on), Kc doesn't remember a Multiplayer item on the
+  main menu. If that memory is right, it goes against Stage 0's
+  prediction. Recorded as anecdotal.
+- **Small differences from the plan:**
+  - The criteria are four lines, not one, because the package hashes may
+    be long.
+  - The button is taken out of keyboard and controller navigation
+    (`DisableNavigation`) so the menu row navigates as before. It is
+    mouse only.
+  - `MP state` is logged when a screen opens. Guess: on the multiplayer
+    main menu that may be before the connectivity checks finish; later
+    multiplayer screens log it again.
+- **Stage 1 checklist given to Kc (one launch):** restore the clean
+  config; read the build ID; Build task; AML with only X2TacticalCoop,
+  `-review -noRedScreens`, console off; click MULTIPLAYER; note which
+  menu items are enabled; Run A: create a custom game with lobby type
+  LAN and reach the lobby; Run B: the same with Private; open Find
+  custom game and search once; quit; keep a copy of Launch.log in
+  `local\m2-logs\pc-stage1.log`.
+- **Problems:** one check command failed (`grep -P`, a locale error) and
+  was re-run with a plain pattern.
+- **Checks:** the SDK calls the code uses were read first
+  (`XComGame\Classes\UIButton.uc` L48, L53, L311–372;
+  `UIPanel.uc` L343, L430, L654–659; `UIMPShell_Base.uc` L17, L29;
+  `X2MPShellManager.uc` L55–56; `Helpers.uc` L94–105;
+  `Core\Classes\Object.uc` L1345). Both class files indent with tabs.
+  Not compiled: Kc builds. `tool-log/2026-11-10.jsonl` shows this turn's
+  calls as `requested` + `ok`, and the failed check as `failed`.
+- **Next:** Kc builds and runs the checklist; then the log is read
+  against the table in plans/m2-plan.md.
+
+### Session 5 prompt log (continued, 2026-11-10, Stage 1 code)
+- **Prompt:** "On the old modded install (LWOTC, so the Highlander was
+  on): I don't remember a Multiplayer item on the main menu. Record that
+  as anecdotal, not a test. Then yes, start Stage 1: write the two
+  classes and give me the PC checklist."
+  - **Provided:** the anecdote in sdk-findings.md section 7 and above;
+    the button and click handler in `X2TC_MainMenuListener.uc`; the new
+    `X2TC_MPTraceListener.uc`; the README class list; the PC checklist.
+  - **Misreads / rule breaks:** none on the request. Three small
+    differences from the approved plan and one failed check command are
+    listed in the entry above.
+  - **How It Was Verified:** not built and not run, so nothing here is
+    verified in game. The SDK signatures were read before writing, and
+    the indentation check found no space-indented lines.
+
+### 2026-11-10 — Session 5 (continued): M2 Stage 1 run 1 (PC)
+On the PC, Claude Opus 5.5 reading the log. **Game build ID 8270065**
+(`steamapps\appmanifest_268500.acf` L13, read by Claude this turn; Kc's
+message left the number as a placeholder). Kc built, launched through
+AML with only X2TacticalCoop, and played the run. Log:
+`local\m2-logs\pc-stage1.log`.
+
+- **What Kc saw:** the MULTIPLAYER button at the top left, overlapping
+  the XCOM 2 logo slightly. Several clicks, nothing happened: no loading
+  screen, no dialog. Kc quit there.
+- **What the log shows (test result):**
+  - The build loaded and both listeners ran: `X2TC: DLC info loaded`
+    (L104); `X2TC: Main menu listener loaded, screen class: UIFinalShell`
+    (L145); `X2TC: MP button added to UIFinalShell` (L146); trace lines
+    for every shell screen (L137–155). Plan table row 1: pass.
+  - The click reached our handler: nine
+    `X2TC: MP button clicked, calling StartMPShellState` lines
+    (L164–172, 0070.42–0079.77). None of the three guard lines appear,
+    so `m_bDisableActions` was off and the owner was the shell
+    presentation layer. Row 2: pass.
+  - Nothing follows the calls: no `LoadMap`, no `Game class is`, no
+    error or warning, until `Closing by request` (L173, 0109.99).
+    Row 3: fail. The game class was `XComShell` (L123), so the SDK's
+    `StartMPShellState` would take the `open` branch
+    (`XComGame\Classes\XComShellPresentationLayer.uc` L704–707).
+  - The other warnings in the log (the corrupt texture, `SulzDevXPACK`,
+    the `Plot_Multiplayer_Test` redscreen, `DefaultCharacterPool.bin`)
+    are in the clean baseline too, so they are not from the mod.
+- **What it means:** the call into the retail `StartMPShellState`
+  returns without loading the multiplayer map and without logging
+  anything. Guesses, not tested: (a) the retail compiled function no
+  longer matches the SDK source (stubbed in a later build); (b) the
+  `open` console command is refused in this setup (no console);
+  (c) the command is queued but dropped. The log can't tell these
+  apart, and multiplayer categories are suppressed.
+- **Next (proposed, plan variant A):** have our handler run
+  `open XComShell_Multiplayer.umap?Game=XComGame.XComMPShell` itself,
+  with a log line before and after. If the map loads, (a) is likely; if
+  not, (b) or (c). Button position: move it off the logo.
+- **Correction:** the config backup holds 46 .ini files, not 47 (Kc's
+  count; `ls | wc -l` gives 46). Fixed in plans/m2-plan.md and in the two
+  earlier LOG.md lines.
+
+### Session 5 prompt log (continued, 2026-11-10, Stage 1 run 1)
+- **Prompt:** "Stage 1 result: build ID [number]. The MULTIPLAYER button
+  appears at the top left (it overlaps the XCOM 2 logo slightly). I
+  clicked it several times and nothing happened: no loading screen, no
+  dialog. I stopped there and quit. The log is in
+  local\m2-logs\pc-stage1.log. The config backup holds 46 files, not 47;
+  please correct that. Read the log against the plan's table and tell me
+  whether the click reached our handler."
+  - **Provided:** the log read against table rows 1–3 (above); the
+    build ID read from the app manifest; the 47 → 46 correction.
+  - **Misreads / rule breaks:** the 47 count was mine, from an earlier
+    turn; corrected. No code changed this turn.
+  - **How It Was Verified:** `grep` of `pc-stage1.log` for `X2TC`,
+    `LoadMap`, `Game class is`, errors and warnings, and `sed` of
+    L156–end; `grep` of the baseline log for the same warnings; `grep`
+    of the app manifest for `buildid`; `ls | wc -l` of the backup
+    folder (46); `grep` for every other "47" in plans/, LOG.md, SPEC.md
+    and research/sdk-findings.md (no other config count).

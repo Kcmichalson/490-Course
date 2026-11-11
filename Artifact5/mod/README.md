@@ -15,7 +15,10 @@ the SDK (see CLAUDE.md, "Legal and community limits").
 X2TacticalCoop/X2TacticalCoop.x2proj        title and description
 X2TacticalCoop/Config/                      declares and loads the script package; DLCIdentifier
 X2TacticalCoop/Localization/                localization (.int) files
-X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes (main menu listener, DLC info)
+X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes:
+    X2TC_MainMenuListener                     main menu: MULTIPLAYER button (M2) and X2TC lines
+    X2TC_MPTraceListener                      M2 diagnostics: X2TC lines per screen, MP state, MP criteria
+    X2DownloadableContentInfo_X2TacticalCoop  DLC info: one X2TC line when templates are created
 ```
 
 ## Launching

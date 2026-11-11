@@ -4,7 +4,8 @@
 //  What it changes: nothing in the game. Diagnostics only (plans/m2-live-test-plan.md,
 //  table rows 8-11). The game's own multiplayer log categories are suppressed, so this
 //  writes X2TC lines to Launch.log for the steps of a match:
-//    - a multiplayer lobby opens and closes
+//    - a multiplayer lobby opens (a lobby that ends in a map change logs no "closed"
+//      line: Stage 1e showed OnRemoved is not called then; the LoadMap line marks it)
 //    - the lobby's state changes: players in the lobby, opponent joined, network
 //      connection, match can start
 //    - the tactical HUD opens (the tactical map is up), with the game class
@@ -13,6 +14,10 @@
 //  The lobby and the turn are watched with a one-second timer, not with game events,
 //  because it is not known which events fire on the guest's machine. So a line can be up
 //  to a second late, and a turn's end shows as the next turn's start.
+//
+//  Each timer logs one "poll timer running" line the first time it fires, and the turn
+//  poll logs once why it has no acting player yet. Without them a silent log could mean
+//  either "nothing changed" or "the timer never ran" (Stage 1e could not tell which).
 //
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\UIScreenListener.uc         (OnInit, OnRemoved)
@@ -44,13 +49,20 @@ var bool bLastCanStartMatch;
 var int LastTurnPlayerID;
 var int LastTurnCount;
 
+// One-time lines: set once the timer has fired, and once the reason for "no acting
+// player" has been logged. Reset each time a lobby or a tactical HUD opens.
+var bool bLobbyTimerSeen;
+var bool bTurnTimerSeen;
+var bool bTurnWaitLogged;
+
 event OnInit(UIScreen Screen)
 {
 	if (UIMPShell_Lobby(Screen) != none)
 	{
 		`log("Lobby opened", , 'X2TC');
 		LastLobbyPlayers = -2;
-		PollLobby();
+		bLobbyTimerSeen = false;
+		LogLobbyState();
 		Screen.SetTimer(1.0, true, nameof(PollLobby), self);
 	}
 	else if (UITacticalHUD(Screen) != none)
@@ -73,8 +85,20 @@ event OnRemoved(UIScreen Screen)
 	}
 }
 
-// Timer function: logs the lobby's state when it changes.
+// Timer function: says once that the timer runs, then logs the lobby's state.
 function PollLobby()
+{
+	if (!bLobbyTimerSeen)
+	{
+		bLobbyTimerSeen = true;
+		`log("Lobby poll timer running", , 'X2TC');
+	}
+
+	LogLobbyState();
+}
+
+// Logs the lobby's state when it changes.
+function LogLobbyState()
 {
 	local UIMPShell_Lobby Lobby;
 	local int Players;
@@ -126,6 +150,8 @@ function OnTacticalHUD(UIScreen Screen)
 	{
 		LastTurnPlayerID = -1;
 		LastTurnCount = -1;
+		bTurnTimerSeen = false;
+		bTurnWaitLogged = false;
 		Screen.SetTimer(1.0, true, nameof(PollTurn), self);
 	}
 }
@@ -137,21 +163,32 @@ function PollTurn()
 	local StateObjectReference PlayerRef;
 	local XComGameState_Player PlayerState;
 
+	if (!bTurnTimerSeen)
+	{
+		bTurnTimerSeen = true;
+		`log("Turn poll timer running", , 'X2TC');
+	}
+
 	Rules = `TACTICALRULES;
 	if (Rules == none)
 	{
+		LogTurnWait("no tactical ruleset");
 		return;
 	}
 
+	// Outside the ruleset's unit-actions state this returns an empty reference
+	// (X2TacticalGameRuleset.uc L5462-5469).
 	PlayerRef = Rules.GetCachedUnitActionPlayerRef();
 	if (PlayerRef.ObjectID <= 0)
 	{
+		LogTurnWait("no acting player (object" @ PlayerRef.ObjectID $ ")");
 		return;
 	}
 
 	PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
 	if (PlayerState == none)
 	{
+		LogTurnWait("no player state for object" @ PlayerRef.ObjectID);
 		return;
 	}
 
@@ -164,6 +201,18 @@ function PollTurn()
 	LastTurnCount = PlayerState.PlayerTurnCount;
 
 	`log("Turn start: player object" @ PlayerRef.ObjectID @ "team" @ int(PlayerState.TeamFlag) @ "turn count" @ PlayerState.PlayerTurnCount @ "local player=" $ (PlayerRef.ObjectID == Rules.GetLocalClientPlayerObjectID()), , 'X2TC');
+}
+
+// Logs once per tactical HUD why the turn poll has nothing to report yet.
+function LogTurnWait(string Reason)
+{
+	if (bTurnWaitLogged)
+	{
+		return;
+	}
+
+	bTurnWaitLogged = true;
+	`log("Turn poll waiting:" @ Reason, , 'X2TC');
 }
 
 // Finds a screen by class on the local player's screen stack, without keeping a reference.

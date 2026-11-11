@@ -60,7 +60,9 @@ won't notice a different build of our mod. Our own version line has to.
 ## Steps
 
 Kc's note 5: **Steps 1 and 2 now. Steps 3-6 are on hold until Stage
-1e's result**, since a match-start fix would change the build.
+1e's result**, since a match-start fix would change the build. Stage 1e
+ran on 2026-11-10 and needs no match-start fix (result under Step 2), so
+Steps 3-6 were written the same day.
 
 ### Step 1: code (one build; no class overrides)
 All in `mod/X2TacticalCoop/Src/X2TacticalCoop/Classes/`.
@@ -108,22 +110,59 @@ separate plan for a match-start fix (a listener that travels to the
 match data's map when the lobby closes, or a lobby class override with
 why nothing else works). If the map loads, no fix.
 
-### Step 3 (on hold): shared build
-`SHOW_TEST_BUTTONS` false, rebuild, package. Host and friend run this
-exact build.
+**Stage 1e result (test, 2026-11-10, build 8270065, no Highlander; log
+`local\m2-logs\pc-stage1e.log`, 615 lines):**
+- The build compiled; `X2TC: version 0.2.0` (L111). Kc: the buttons, the
+  click sound and the greyed-out MULTIPLAYER worked as expected.
+- **Lobby exit fixed.** After `Failed; returning to Entry` and
+  `LoadMap: XPACK_Shell_Intro?closed` (L290, L296) the listener logged
+  `Main menu state: shuttle to MP menu=False closed URL=True visible=False`
+  (L335), travelled, and the multiplayer menu opened (L345, L375). The
+  game had already cleared its request flag, so the second trigger is the
+  one that works.
+- **OPEN SHELL:** `open` reloaded the main menu (L439-444). So `open`
+  works from the main shell.
+- **OPEN MP TAC:** `open` loaded the map: `LoadMap: Plot_WLD_MP_Sm_01?game=XComGame.XComMPTacticalGame`
+  (L494), `Game class is 'XComMPTacticalGame'` (L498),
+  `Tactical HUD opened, game XComMPTacticalGame, multiplayer=True`
+  (L575). Kc saw a black map with the tactical buttons and a red enemy
+  outline; exiting hung on "Preparing to exit online match..." (no match
+  was set up).
+- **Decision: no match-start fix.** The command shape the lobby uses is
+  not refused. Still untested: the same command run from a real lobby
+  with a second player (row 10).
+- **Not shown:** whether the one-second trace timers fire. The lobby was
+  open about 3 seconds with no state change, and the test map never had
+  an acting player, so no timer line was due. No `Lobby closed` line
+  either: `OnRemoved` isn't called when a map change ends the lobby.
 
-### Step 4 (on hold): packaging
+### Step 3: shared build (written 2026-11-10, not built)
+`SHOW_TEST_BUTTONS` false, rebuild, package. Host and friend run this
+exact build. One addition after Stage 1e: `X2TC_MatchTraceListener` logs
+`Lobby poll timer running` / `Turn poll timer running` the first time
+each timer fires, and `Turn poll waiting: <reason>` once, so the host's
+solo run (checklists/host.md, Part 1) shows whether the timers work.
+
+### Step 4: packaging (written and tried 2026-11-10)
 A new tool, Python 3 standard library only:
 - `tools/package_mod.py`: reads the built `Mods\X2TacticalCoop` folder
   in the game (read only); writes `local\release\X2TacticalCoop-<version>.zip`
   and a `.sha256.txt` with the zip's hash and one hash per file; fails
   if the version in the source differs from the one passed in.
+  As written it also stops if this is the test build, if a class file
+  differs from the built folder's copy, or if a zip of that version
+  already exists.
 - `tools/preflight_compare.py`: takes two Launch.logs and lists the
   version, the `MP criteria` lines and the mod and DLC names side by
-  side, marking every difference.
+  side, marking every difference. As written it also compares the
+  executable's version lines and flags `-allowConsole`.
 
-### Step 5 (on hold): checklists
-`checklists/friend.md` and `checklists/host.md`.
+### Step 5: checklists (written 2026-11-10)
+`checklists/friend.md` and `checklists/host.md`. Added while writing,
+for Kc to keep or cut: the friend starts the game once the normal way
+after renaming `Config` (AML reads its mod folders from the user
+`XComEngine.ini`, so a missing `Config` is an untested start for AML),
+and the friend makes a squad loadout in Part A if they have none.
 - **Friend (non-technical):**
   1. XCOM 2 and War of the Chosen installed; DLC list the same as the
      one the host sends.
@@ -151,7 +190,7 @@ A new tool, Python 3 standard library only:
   overlay; start; one turn each; quit; save both logs as
   `local\m2-logs\live-host.log` and `live-guest.log`.
 
-### Step 6 (on hold): pre-flight, each alone, before the session
+### Step 6: pre-flight, each alone, before the session (in the checklists)
 1. Build 8270065.
 2. Launch with only our mod, click MULTIPLAYER, quit.
 3. The friend sends their Launch.log.

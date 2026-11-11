@@ -46,7 +46,7 @@ const OpenShellTestURL = "XPACK_Shell_Intro?Game=XComGame.XComShell";
 const OpenMPTacTestURL = "Plot_WLD_MP_Sm_01?game=XComGame.XComMPTacticalGame";
 
 // true: the PC test build, with the MP TEST buttons. false: the build other players get.
-const SHOW_TEST_BUTTONS = true;
+const SHOW_TEST_BUTTONS = false;
 
 event OnInit(UIScreen Screen)
 {

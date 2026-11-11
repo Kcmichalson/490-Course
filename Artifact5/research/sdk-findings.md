@@ -706,6 +706,45 @@ Read for plans/m2-live-test-plan.md. Not run on 8270065.
   Stage 1d although the mod's code changed between them, so it probably
   covers mod names, not file contents.
 
+### Stage 1e: `open` works for other maps (test, build 8270065, no Highlander)
+Log `local\m2-logs\pc-stage1e.log`, 2026-11-10, mod version 0.2.0.
+- `ConsoleCommand("open XPACK_Shell_Intro?Game=XComGame.XComShell")`
+  from the main menu reloaded the main menu (L439–444).
+- `ConsoleCommand("open Plot_WLD_MP_Sm_01?game=XComGame.XComMPTacticalGame")`
+  from the main menu loaded the multiplayer tactical map: `LoadMap`
+  (L494), `Game class is 'XComMPTacticalGame'` (L498), the ruleset
+  `X2TacticalMPGameRuleset_0` in the redscreen stacks (L521), tactical
+  HUD up (L575). Kc saw a black map with the tactical buttons and a red
+  enemy outline with five health. No match was set up (`There are no
+  valid spawn locations on this map`, L555), so this shows only that the
+  command is accepted.
+- **What this does to the leading hypothesis:** `open` is not blocked in
+  general, and not blocked from the main shell. The one `open` that
+  loaded nothing (Stage 1c) was to `XComShell_Multiplayer.umap` with
+  `XComGame.XComMPShell`. Narrowed guess: the block is tied to that map
+  or that game class. Not tested which, and not needed: the mod travels
+  there with `ClientTravel`.
+- **Match start (row 10):** the lobby's command has the same shape
+  (`UIMPShell_Lobby.uc` L648), so a refusal is now unlikely (guess; the
+  real call runs from the lobby with a second player and is untested).
+- **Lobby exit:** after `Failed; returning to Entry` (L290) the main
+  menu opened with the shuttle flag already cleared, hidden, on a
+  `?closed` URL (`X2TC: Main menu state: shuttle to MP menu=False closed
+  URL=True visible=False`, L335). The mod's `ClientTravel` then reached
+  the multiplayer menu (L345, L375). So the game clears its flag before
+  a screen listener's `OnInit` runs on `UIFinalShell`.
+- **Leaving the test map** through the pause menu showed "Preparing to
+  exit online match..." and hung (`UIProgressDialogue`, L603; Kc closed
+  the game). There was no online session, so this says nothing yet about
+  leaving a real match.
+- **Screen listeners and map changes:** no `OnRemoved` reached the
+  listener when the lobby ended in a map change (no `X2TC: Lobby closed`
+  line). Timers set on a screen with a listener as the timer object
+  compiled; whether they fire was not shown (no change was due in the 3
+  seconds the lobby was open, and
+  `X2TacticalGameRuleset.GetCachedUnitActionPlayerRef` returns an empty
+  reference outside the unit-actions state, L5462–5469).
+
 ## For later (M3/M4, noticed in passing only)
 
 - **Multiplayer teams in single player (Highlander).** The Highlander's

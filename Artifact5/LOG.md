@@ -17,8 +17,11 @@ CLAUDE.md describes.
   loads nothing, `ClientTravel` reaches the multiplayer menu, rows 1-5
   pass; Stage 1d 2026-11-10: LAN and Private lobbies reached, rows 1-7
   pass on the PC; rows 8-11 need a second machine; live-test plan
-  approved 2026-11-10, plans/m2-live-test-plan.md; its Step 1 code
-  written, not built; next Stage 1e)
+  approved 2026-11-10, plans/m2-live-test-plan.md; Stage 1e
+  2026-11-10: lobby exit fixed, `open` loads the multiplayer tactical
+  map, no match-start fix needed; shared build, packaging tools and
+  checklists written, shared build not built yet; next the host's solo
+  run in checklists/host.md, then the live test)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -1906,3 +1909,143 @@ planning).
   - **How It Was Verified:** not built and not run. `file` on the five
     classes and a Grep for space-indented lines; SDK declarations read
     before writing.
+
+### 2026-11-10 — Session 5 (continued): Stage 1e result; shared build, tools and checklists written
+On the PC, Claude Fable 5.2. Test by Kc: game build ID 8270065 (Kc's
+report), no Highlander, mod version 0.2.0 test build. Log:
+`local\m2-logs\pc-stage1e.log` (615 lines).
+
+- **Stage 1e result (test):**
+  - The Step 1 code compiled (the three compile risks did not happen):
+    `X2TC: version 0.2.0` (L111), `Invite listener registered for local
+    user 0` (L151), `MP test buttons added` (L154).
+  - MULTIPLAYER: `MP button clicked, ClientTravel to ...` (L173) →
+    `LoadMap: XComShell_Multiplayer.umap?Game=XComGame.XComMPShell`
+    (L178) → `screen UIMPShell_MainMenu` (L208). `MP criteria` as before:
+    `dlc=0 mods=-687928801 ini= devconsole=False modsinstalled=True`
+    (L210). Kc: button layout, click sound and the greyed-out button
+    "worked as expected".
+  - LAN lobby: `Lobby opened` and `Lobby state: players=1 opponent
+    joined=False connections=True can start=True` (L275-276).
+  - **Lobby exit fixed:** `Failed; returning to Entry` (L290),
+    `LoadMap: XPACK_Shell_Intro?closed` (L296), then `Main menu state:
+    shuttle to MP menu=False closed URL=True visible=False` (L335),
+    `Return to MP menu: ClientTravel to ...` (L336), and the multiplayer
+    menu (L345, L375). The second trigger did it; the game's flag was
+    already cleared.
+  - **OPEN SHELL:** `open XPACK_Shell_Intro?Game=XComGame.XComShell`
+    reloaded the main menu (L439-444). Kc: a loading screen, then the
+    main menu.
+  - **OPEN MP TAC:** `open Plot_WLD_MP_Sm_01?game=XComGame.XComMPTacticalGame`
+    loaded the map (L489-498); `Tactical HUD opened, game
+    XComMPTacticalGame, multiplayer=True` (L575). Kc: an all-black map
+    with the end turn / previous / next soldier / rotate buttons at the
+    top right and a red outline of an enemy soldier with five health,
+    pannable. Exit to main menu showed "Preparing to exit online
+    match..." with a spinner and hung; Kc pressed Alt+F4.
+- **What it means:**
+  - `open` is not blocked in general or from the main shell. The only
+    `open` that loaded nothing is the one to the multiplayer shell
+    (Stage 1c). Narrowed guess: the block is tied to that map or game
+    class.
+  - **No match-start fix** (the plan's decision rule: the map loads).
+    Row 10 itself is still untested: the real command runs from a lobby
+    with a second player.
+  - The exit hang happened with no online session, so it says nothing
+    yet about leaving a real match (the host checklist warns about it).
+- **Not shown by this run:** whether the trace timers fire. The lobby
+  was open about 3 seconds (L275 to L282-290) with no state change, and
+  the test map never had an acting player, so no line was due. No
+  `Lobby closed` line: `OnRemoved` isn't called when a map change ends
+  the lobby.
+- **Planned:** Steps 3-6 of plans/m2-live-test-plan.md, released by
+  Stage 1e's result.
+- **Changed:**
+  - `X2TC_MainMenuListener.uc`: `SHOW_TEST_BUTTONS = false` (the shared
+    build).
+  - `X2TC_MatchTraceListener.uc`: one-time lines `Lobby poll timer
+    running`, `Turn poll timer running`, `Turn poll waiting: <reason>`;
+    the first lobby state line now comes from `LogLobbyState`, so the
+    timer line can only come from the timer. Header comment corrected
+    (no "closed" line on a map change).
+  - `tools/package_mod.py` (new): zips the built mod folder to
+    `local\release\X2TacticalCoop-<version>.zip` with a `.sha256.txt`.
+    Stops on a version mismatch, the test build, a class file that
+    differs from the built copy, a stale compiled script, or an existing
+    zip.
+  - `tools/preflight_compare.py` (new): two Launch.logs side by side
+    (executable version lines, mod version, `MP criteria`, mod and DLC
+    names), `READY` or `NOT READY`.
+  - `checklists/friend.md`, `checklists/host.md` (new), with Kc's notes:
+    AML link, `Config` renamed to `Config-backup` and back with no
+    editing, the firewall line.
+  - plans/m2-live-test-plan.md (Stage 1e result, Steps 3-6 status),
+    research/sdk-findings.md ("Stage 1e").
+- **Differences from the plan:**
+  - The timer lines above are new code after Stage 1e (diagnostics
+    only). Reason: without them a silent log in the live test could mean
+    "nothing changed" or "the timer never ran".
+  - Friend checklist additions not in the plan: start the game once the
+    normal way after renaming `Config` (AML takes its mod folders from
+    the user `XComEngine.ini`; starting AML with no `Config` is
+    untested), and make a squad loadout if they have none.
+  - The host checklist's Part 1 doubles as the shared build's solo test.
+- **Problems:** none this turn.
+- **Checks:**
+  - `preflight_compare.py` on the Stage 1e log against itself: 15 rows
+    `same`, `READY`, exit 0. Against the Stage 1b log (no version or
+    criteria lines): `NOT READY`, exit 1.
+  - `package_mod.py --dry-run` on the real built folder: stopped with
+    "Changed since the last build (rebuild): X2TC_MainMenuListener.uc",
+    as it should (the source changed after Kc's build).
+  - `package_mod.py` on a fake built folder in `local\pkg-test\`: wrote
+    and verified a zip; a second run refused to replace it. The fake
+    folder, the fake zip and its list were then deleted (all created in
+    this session), so `local\release\` does not exist yet.
+  - **The shared build is not compiled or run.** The real package can
+    only be made after Kc's build.
+  - `file` on the classes: `X2TC_MainMenuListener.uc` still CRLF, the
+    others LF; no space-indented lines in the edited trace class.
+  - tool-log: this turn's calls are in `tool-log/2026-11-10.jsonl` as
+    `requested` / `ok` pairs (tail read).
+  - Unverified checklist lines (marked or listed for Kc): AML's menu
+    names beyond "Mod Directories", the Steam overlay setting's place,
+    the lobby's READY / START GAME / INVITE FRIENDS labels (from the
+    game's `XComGame.int` L4113-4122, not seen with two players).
+- **Next:** Kc builds the shared build and runs checklists/host.md
+  Part 1; the agent reads `local\m2-logs\preflight-host.log`.
+
+### Session 5 prompt log (continued, 2026-11-10, Stage 1e)
+- **Prompt:** "Goes MP Shell goes into a loading screen before booting
+  back to the main menu. MP TAC open a map that is visibly entirely
+  black with the end turn / previous/next soldier / turn left/right
+  buttons in the top right. There is a red outline of an enemy soldier
+  with five health in the center of the screen and it is pannable.
+  Trying to exit to main menu from this state shows a 'Preparing to exit
+  online match...' popup with spinning loading icon and hangs. Alt f4'd.
+  "buildid" "8270065""
+  - **Provided:** the log read against the plan; the Stage 1e result in
+    the plan, sdk-findings and this file; then Steps 3-6 (shared build,
+    two tools, two checklists).
+  - **Misreads / rule breaks:** I read "Goes MP Shell" as the MP TEST:
+    OPEN SHELL button (the log agrees, L439-444). Kc gave only the
+    result; I went on to Steps 3-6 without asking, on the strength of
+    "Hold Steps 3-6 until Stage 1e's result" and the plan's rule "If the
+    map loads, no fix". The timer lines and the two friend-checklist
+    additions are mine, not in the approved plan; listed above for Kc to
+    keep or cut. No rule break found: no git, no game or SDK file
+    written, files written with Write/Edit and Python only, deletions
+    limited to this session's test files.
+  - **How It Was Verified:** Grep and Reads of `pc-stage1e.log` (line
+    numbers above); SDK `X2TacticalGameRuleset.uc` L5462-5469 and
+    `X2TacticalMPGameRuleset.uc` L253-265 read for the missing turn
+    lines; the tool runs listed under Checks.
+- **Prompt (sent mid-task):** "Everything else worked as expected"
+  - **Provided:** recorded as Kc's observation for the checklist steps
+    the first message didn't cover (button layout, click sound,
+    greyed-out MULTIPLAYER, lobby exit landing on the multiplayer menu).
+  - **Misreads / rule breaks:** none. "As expected" is taken to mean the
+    checklist's expected results; the click sound and grey-out have no
+    log line, so they rest on Kc's word.
+  - **How It Was Verified:** the lobby exit by L335-375 of the log; the
+    rest not checkable from the log.

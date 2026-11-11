@@ -82,6 +82,75 @@ Tests table rows 1-7 with no second machine.
   multiplayer looks like in Launch.log. Then switch back, check the build
   ID is 8270065 again, and restore the clean config.
 
+**Stage 1 run 1 result (2026-11-10, build 8270065):** rows 1-2 pass,
+row 3 fails. Nine clicks reached our handler and called
+`StartMPShellState()`; no map load and no error followed (LOG.md).
+
+**Changed order (Kc, 2026-11-10):** the next PC runs are, in this order:
+
+#### Stage 1b: Highlander run (PC, no code change)
+Fallback 1 moved forward, on the PC alone. Reason: Discord community
+reports (not tests; research/sdk-findings.md) say the Highlander brings
+the original multiplayer menu back.
+- Kc subscribes to the Highlander on the Workshop (the agent doesn't run
+  Steam) and ticks it in AML together with X2TacticalCoop. Same
+  arguments, console off, clean config restored first.
+- Note the Highlander version shown in AML or in game, if any.
+- Check whether the game's own Multiplayer item is back in the main
+  menu row. If it is, use it; if not, use our MULTIPLAYER button (that
+  tests whether the Highlander's `StartMPShellState` works).
+- Then Run A (LAN lobby) and Run B (Private lobby), as in Stage 1.
+- Log: `local\m2-logs\pc-stage1b-highlander.log`.
+- What to expect differently in the log (guesses from Stage 0): no
+  `Plot_Multiplayer_Test` redscreen (the Highlander's `XComPlots.ini`
+  removes it); fewer of the game's own script log lines (its README says
+  script logging is stripped from the cooked build). Our `X2TC` lines
+  come from our own package and should still appear.
+- The Highlander changes XComGame and the installed-mods list, so the
+  hashes in `MP criteria` will differ from a run without it. Any later
+  two-machine test with it needs the same Highlander version on both.
+
+**Stage 1b result (2026-11-10, build 8270065, Highlander v1.32.0 from
+the Workshop):** the stock MULTIPLAYER and CHALLENGE MODE items are back
+in the main menu row (Kc saw it; log L114-120 shows the Highlander's
+components loaded). Clicking stock MULTIPLAYER did nothing (Kc), and our
+button's four clicks (L178, L180, L181, L212) were followed by no
+`LoadMap`. Row 3 fails with the Highlander too. The full log (recopied
+after the game closed, 269 lines, clean exit L260) adds: a later
+Challenge Mode visit that reached the challenge leaderboards screen,
+where our trace logged `MP state network=True online=True` (L244; that
+screen extends the multiplayer shell base class), and the message "An
+active challenge is not currently running" (Kc). Leading hypothesis
+(Kc, a guess): the block is below script, in the exe or the `open`
+command (research/sdk-findings.md section 7).
+
+#### Stage 1c: variant A, two test buttons (PC, without the Highlander)
+Changed 2026-11-10 (Kc): two test buttons instead of one, under our
+MULTIPLAYER button, in a column at the top right (moved off the logo):
+- **MP TEST: OPEN** runs
+  `open XComShell_Multiplayer.umap?Game=XComGame.XComMPShell` with
+  `ConsoleCommand`, the same command the SDK's `StartMPShellState` runs
+  (`XComShellPresentationLayer.uc` L706).
+- **MP TEST: TRAVEL** calls `ClientTravel(<same URL>, TRAVEL_Absolute)`
+  on the shell's `XComPlayerController`, the route the shell uses to
+  start an online game (`XComShellPresentationLayer.uc` L1197;
+  `Engine\Classes\PlayerController.uc` L504).
+- Each logs `X2TC: MP test <name> clicked…` before the call and
+  `X2TC: MP test <name>: … returned` after it.
+
+Reading it (guesses until run):
+- OPEN loads the map: the retail `StartMPShellState` itself was emptied;
+  the Highlander result then needs another explanation.
+- OPEN fails, TRAVEL loads: the console-command route is blocked for
+  this map, travel isn't.
+- Both fail, both "returned" lines present: the exe refuses this map or
+  game class below script, which fits the leading hypothesis. Next would
+  be direct IP or the beta reference run.
+- A "returned" line missing or a crash: note the last line; the call
+  itself failed.
+
+Log: `local\m2-logs\pc-stage1c.log`.
+
 ### Stage 2: PC + laptop on LAN, shared Steam account (optional, may be ambiguous)
 Tests rows 8-11 when Kc is alone. One Steam account can't normally play
 on two PCs at once, so this stage may not start at all, and any failure
@@ -170,7 +239,8 @@ Variants of the plain test (a few lines each, same checklist):
   `XComShellPresentationLayer.UIMPShell_MainMenu()` (L714-726) directly.
 
 ## Fallbacks, in Kc's order
-1. **Highlander run** (source read already done in Stage 0). Subscribe on
+1. **Highlander run** (source read already done in Stage 0; the PC-only
+   half moved forward to Stage 1b on 2026-11-10). Subscribe on
    both machines, tick it in AML with our mod, same version on both, same
    checklist. Also note whether the game's own Multiplayer item returns.
 2. **Direct IP.** Our mod calls the network manager the way

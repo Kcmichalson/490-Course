@@ -524,6 +524,73 @@ section are relative to the clone unless they start with `SrcOrig`.
   differs from this source, another mod changed the menu, or the item is
   hidden some other way. Only a run settles it.
 
+### Community reports from the XCOM 2 Modding Discord (2026-11-10; reports, not tests)
+Relayed by Kc. Nothing here has been tested by this project.
+- Zelfana: enabling the Highlander brings back the original multiplayer
+  menu, because its source predates the removal. (Supports the
+  prediction above; contradicts Kc's LWOTC anecdote.)
+- Max: multiplayer was never removed from the files, only the main menu
+  button. (Fits question 8: `XComShell_Multiplayer.upk` ships.)
+- arch: multiplayer is peer to peer, and the Steam backend should still
+  work.
+- Max: MrShadow was also working on a co-op mod (status unknown).
+
+**Our own test so far (Stage 1 run 1, build 8270065):** calling the
+retail `StartMPShellState()` from our button produced no map load and no
+log line. That fits a patch emptying that function in XComGame as well
+as the button, but it is not proof: the `open` command being refused or
+dropped would look the same. Stage 1b (Highlander) and Stage 1c
+(variant A) are meant to tell these apart.
+
+**Stage 1b result (test, build 8270065, Highlander v1.32.0 from the
+Workshop):** with the Highlander on, the stock MULTIPLAYER and CHALLENGE
+MODE items are back in the main menu row (Kc saw it). That matches
+Zelfana's report and the Stage 0 prediction, and contradicts Kc's LWOTC
+anecdote. Clicking stock MULTIPLAYER, or our button (log L178–212), still
+loaded nothing: no `LoadMap`, no error. (Log reread after Kc recopied the
+full file: 269 lines, clean exit at L260; the result is unchanged.)
+
+**Challenge Mode in the same run (observation, Kc and the log):**
+- Kc: Challenge Mode showed it was searching for the current
+  leaderboard, then "An active challenge is not currently running."
+  Load Game opened its normal screen.
+- Log: the squad select screen received an interval-end callback
+  (`UIChallengeMode_SquadSelect:OnReceivedChallengeModeIntervalEnd`,
+  0756.03), then `UIChallengeLeaderboards` opened (L243) and handled
+  `OnReceivedChallengeModeDeactivatedIntervalEnd`, with a redscreen
+  about missing `XComGameState_BattleData` (L246, likely because no
+  challenge is loaded; a guess).
+- `UIChallengeLeaderboards` extends `UIMPShell_Leaderboards`
+  (`SrcOrig\XComGame\Classes\UIChallengeLeaderboards.uc` L9), so our
+  trace logged the shared multiplayer shell manager there:
+  `X2TC: MP state network=True online=True` (L244). So on 8270065 with
+  the Highlander, both connectivity flags were true at that point.
+- Kc's reading (an interpretation, not tested): the game reached the
+  online challenge service and got a clean "nothing running" answer,
+  unlike Multiplayer, which does nothing. The callbacks fit that; the
+  log doesn't show whether the answer came from the service or a local
+  default.
+
+**Leading hypothesis (Kc, 2026-11-10; a guess, not a finding):** the
+Highlander's `StartMPShellState` is the 2018 version, so if it still
+loads nothing, the block is below script: in the exe or in the `open`
+command. Evidence and limits:
+- The Highlander repo has no `XComShellPresentationLayer.uc`, so its
+  build compiles the SDK's (section 7 above). Whether the Workshop build
+  was compiled that way is not known.
+- The returning menu items show the Highlander's `UIFinalShell` is the
+  one in use (test). That its `StartMPShellState` runs the SDK body is
+  inferred, not tested.
+- A blanket refusal of `open` seems less likely (a guess): the SDK
+  starts a new campaign with the same kind of call,
+  `ConsoleCommand("open Avenger_Root?game=XComGame.XComHeadQuartersGame")`
+  (`SrcOrig\XComGame\Classes\UIShellDifficulty.uc` L1059), and campaigns
+  still start. Whether the retail script still does it that way isn't
+  known. If the block is native, it may be specific to this map or the
+  `XComMPShell` game class.
+- Stage 1c (two buttons, `ConsoleCommand open` vs `ClientTravel`,
+  without the Highlander) tests the next step.
+
 ## For later (M3/M4, noticed in passing only)
 
 - **Multiplayer teams in single player (Highlander).** The Highlander's

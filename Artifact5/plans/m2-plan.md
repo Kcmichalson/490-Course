@@ -168,6 +168,17 @@ create custom match with LAN, reach the lobby, back out; the same with
 Private; search for custom match once (LAN). Log:
 `local\m2-logs\pc-stage1d.log`. Then Stage 2/3 as planned.
 
+**Stage 1d result (2026-11-10, build 8270065, no Highlander):** rows 6
+and 7 pass for LAN (log L220-272) and Private (L397-452): create menu,
+squad list, `LoadMap: XComShell_Multiplayer?Game=XComGame.X2MPLobbyGame`,
+`Game class is 'X2MPLobbyGame'`, `screen UIMPShell_Lobby`. Search
+(LAN) reached `UIMPShell_ServerBrowser` (L579) with an empty list and no
+error (row 8's screen only; finding a host needs a second machine).
+Leaving a lobby lands on the main menu, not the multiplayer menu,
+with the menu hidden until Escape: the return path calls
+`StartMPShellState` (details in LOG.md). Stage 1 on the PC is done:
+rows 1-7 pass by the travel route. Rows 8-11 need Stage 2 or 3.
+
 ### Stage 2: PC + laptop on LAN, shared Steam account (optional, may be ambiguous)
 Tests rows 8-11 when Kc is alone. One Steam account can't normally play
 on two PCs at once, so this stage may not start at all, and any failure

@@ -635,6 +635,39 @@ why `StartMPShellState` did nothing, with or without the Highlander
 - Practical result either way: our button reaches the multiplayer menu
   by `ClientTravel`, so M2 can go on without knowing which.
 
+### Stage 1d: hosting on the PC (test, build 8270065, no Highlander)
+- Create Custom Match defaults (Kc): max squad cost no point limit, turn
+  timer no time limit, map type Facility, biome greyed out; lobby type
+  Public / Private / LAN.
+- LAN and Private both reached the lobby (six soldiers with equipment
+  and point values): `LoadMap: XComShell_Multiplayer?Game=XComGame.X2MPLobbyGame`
+  (L229, L407), `Game class is 'X2MPLobbyGame'` (L233, L411),
+  `screen UIMPShell_Lobby` (L271, L451). Kc saw no difference between
+  them. With the Private lobby open, Steam's friends list offered
+  "Invite to game" on a friend (Kc; not clicked). So Steam session
+  creation works on 8270065, as far as the host side shows (open
+  question 3).
+- Search For Custom Match (LAN) reached `UIMPShell_ServerBrowser`
+  (L579): empty list, no error.
+- **Leaving a lobby:** Back and confirming the exit logged
+  `UIMPShell_Lobby:OnDestroyedOnlineGame` → `AttemptExitLoadoutScreen` →
+  `XComOnlineEventMgr:ReturnToMPMainMenu` → `SetShuttleToMPMainMenu`
+  (L278–282), `IpNetDriverSteamworks_0 shut down`, `Failed; returning
+  to Entry`, then `LoadMap: XPACK_Shell_Intro?closed` (L290): the main
+  menu, not the multiplayer menu. Kc saw the main menu empty until
+  Escape. In the SDK, the main shell answers that shuttle flag with
+  `ShuttleToMPMainMenu`, which hides `UIFinalShell` and then calls
+  `StartMPShellState` (`SrcOrig\XComGame\Classes\XComShellPresentationLayer.uc`
+  L385–399). Guess: the hide works and `StartMPShellState` loads nothing
+  (as in Stage 1), which leaves the hidden menu. Fits what Kc saw;
+  untested. The two `UIShellDifficulty` lines after each return (L343,
+  L346, L525) are not explained yet.
+- For later (guess): accepting a Steam invite uses
+  `ShuttleToMPInviteLoadoutMenu` (L403–418), which opens the
+  multiplayer menu screen directly instead of calling
+  `StartMPShellState`; whether it works from the main shell is
+  untested.
+
 ## For later (M3/M4, noticed in passing only)
 
 - **Multiplayer teams in single player (Highlander).** The Highlander's

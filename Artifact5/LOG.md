@@ -15,8 +15,8 @@ CLAUDE.md describes.
   map load follows; Stage 1b Highlander run 2026-11-10: stock items
   return, MULTIPLAYER still loads nothing; Stage 1c 2026-11-10: `open`
   loads nothing, `ClientTravel` reaches the multiplayer menu, rows 1-5
-  pass; MULTIPLAYER switched to travel, not yet built; next Stage 1d,
-  rows 6-7)
+  pass; Stage 1d 2026-11-10: LAN and Private lobbies reached, rows 1-7
+  pass on the PC; rows 8-11 need a second machine)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -1700,3 +1700,69 @@ Highlander, only X2TacticalCoop. Log: `local\m2-logs\pc-stage1c.log`
   - **How It Was Verified:** `grep` and `sed -n '170,230p'` of the log;
     `grep` for `PreClientTravel` (one line, L174); `file` and Grep of the
     listener after the edit. The switched button isn't built or run yet.
+
+### 2026-11-10 — Session 5 (continued): M2 Stage 1d result, rows 6-7 pass
+On the PC, Claude Opus 5.5 reading the log. **Game build ID 8270065**
+(Kc), no Highlander, only X2TacticalCoop, MULTIPLAYER on `ClientTravel`.
+Log: `local\m2-logs\pc-stage1d.log` (638 lines, clean exit L629–638).
+No code changed this turn.
+
+- **What Kc saw:** Create Custom Match defaults: max squad cost no point
+  limit, turn timer no time limit, map type Facility, biome greyed out;
+  lobby type Public / Private / LAN. An old squad from years ago was
+  selectable. Confirm led to the lobby (six soldiers side by side with
+  equipment and point values). Back and confirming the exit went to the
+  main menu, which was empty until Escape. Private worked the same; with
+  it open, Steam's friends list offered "Invite to game" on a friend.
+  Search: empty list, no errors.
+- **The table (test result):**
+
+  | Row | Result | Log |
+  |---|---|---|
+  | 1–5 | pass again | L150–153, L170–209 (first visit) |
+  | 6 Create custom, pick squad | pass | LAN L220, L222; Private L397, L399 |
+  | 7 Host reaches lobby | pass, LAN and Private | LAN: L225 `PreClientTravel`, L229 `LoadMap: XComShell_Multiplayer?Game=XComGame.X2MPLobbyGame…`, L233 `Game class is 'X2MPLobbyGame'`, L271 `screen UIMPShell_Lobby`. Private: L403, L407, L411, L451 |
+  | 8 Second machine finds the game | screen only | L575 `UIMPShell_CustomGameMenu_Search`, L579 `UIMPShell_ServerBrowser`, empty list; finding a host needs Stage 2 or 3 |
+  | 9–11 | not run | need two machines |
+
+- **Leaving a lobby:** L278–290: `OnDestroyedOnlineGame` →
+  `AttemptExitLoadoutScreen` → `ReturnToMPMainMenu` →
+  `SetShuttleToMPMainMenu`, `IpNetDriverSteamworks_0 shut down`,
+  `Failed; returning to Entry`, `LoadMap: XPACK_Shell_Intro?closed`.
+  In the SDK, the main shell's `ShuttleToMPMainMenu` hides the main menu
+  and then calls `StartMPShellState` (`XComShellPresentationLayer.uc`
+  L385–399). Guess: that call loads nothing, as in Stage 1, which leaves
+  the hidden menu Kc saw. Not a blocker; noted for later.
+- **Not explained:** `screen UIShellDifficulty` twice at L343/L346 and
+  once at L525, shortly after each return to the main menu. Guess: the
+  Escape key press; asked.
+- **Every lobby screen logged `MP state network=True online=True`.**
+  `MP criteria` is the same on all three visits.
+- **Stage 1 done:** rows 1–7 pass on the PC on 8270065 by the travel
+  route. Rows 8–11 need Stage 2 (laptop, shared account, may be
+  ambiguous) or Stage 3 (a friend).
+- **Changed:** plans/m2-plan.md (Stage 1d result);
+  research/sdk-findings.md section 7 (Stage 1d, the lobby exit, invite
+  note).
+- **Problems:** none.
+- **Next:** Kc's choice of Stage 2 or Stage 3. Possible small fix,
+  not done (scope): make leaving a lobby return to the multiplayer menu.
+
+### Session 5 prompt log (continued, 2026-11-10, Stage 1d result)
+- **Prompt:** "Default settings: Max squad cost: no point limit. Turn
+  timer: no time limit. Map type: facility Biome type: (greyed out), no
+  biome selection. [Lobby] Type set to public / private / lan
+  (selected). Was able to select a squad that I had made years prior.
+  Clicked confirm. Got to the Squad overview wth the six soldiers side
+  by side showing their equipment and point values. Then clicked back
+  and confirm multiplayer exit, booted back to main menu. Main menu was
+  empty for a second but pressing escape brought it back. Setting to
+  private worked, no differences. Right clicking a friend in the steam
+  friend UI while private is open has an 'invite to game' option. Empty
+  list with no errors when searching. Build ID of 8270065."
+  - **Provided:** rows 6–8 read with line numbers; the lobby-exit
+    explanation from the SDK (a guess); plan, findings and LOG.md.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** `grep` and `sed -n` of the log (L274–290,
+    L328–348); `grep` and `sed -n` of `XComShellPresentationLayer.uc`
+    (L180–195, L383–420) and `OnlineEventMgr.uc` L246–247.

@@ -151,6 +151,23 @@ Reading it (guesses until run):
 
 Log: `local\m2-logs\pc-stage1c.log`.
 
+**Stage 1c result (2026-11-10, build 8270065, no Highlander):** OPEN
+logged before and after its call (L171-172) and loaded nothing. TRAVEL
+loaded the multiplayer shell (L173-183) and its main menu (L208). Rows
+1-5 pass by the travel route; Ranked Match greyed out (Kc), which the
+SDK does when ranked game data isn't valid (`UIMPShell_MainMenu.uc`
+L521-524). Leaving the multiplayer menu loaded the main shell
+(L227) without a `PreClientTravel` line, the way `X2MPShellManager.CloseShell`
+does with `ConsoleCommand("open" ...)` (L264-268): so `open` itself
+still works for that map (details in LOG.md and sdk-findings.md).
+
+#### Stage 1d: rows 6-7 by the travel route (PC, no Highlander)
+Changed 2026-11-10 (Kc): the MULTIPLAYER button now uses
+`ClientTravel`; the two test buttons stay for now. One run:
+create custom match with LAN, reach the lobby, back out; the same with
+Private; search for custom match once (LAN). Log:
+`local\m2-logs\pc-stage1d.log`. Then Stage 2/3 as planned.
+
 ### Stage 2: PC + laptop on LAN, shared Steam account (optional, may be ambiguous)
 Tests rows 8-11 when Kc is alone. One Steam account can't normally play
 on two PCs at once, so this stage may not start at all, and any failure

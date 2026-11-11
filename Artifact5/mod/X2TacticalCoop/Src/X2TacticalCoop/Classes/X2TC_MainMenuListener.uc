@@ -2,8 +2,9 @@
 //  X2TacticalCoop: X2TC_MainMenuListener
 //
 //  What it changes: adds a MULTIPLAYER button to the main menu (M2, plans/m2-plan.md).
-//  Clicking it makes the same call the old Multiplayer menu item made, which loads the
-//  multiplayer shell. It also writes X2TC lines to Launch.log: one when a main menu
+//  Clicking it loads the multiplayer shell map with the player controller's ClientTravel
+//  (the old Multiplayer item's StartMPShellState loads nothing on build 8270065; M2
+//  Stage 1c). It also writes X2TC lines to Launch.log: one when a main menu
 //  screen opens (the M0 hello-world check), one when the button is added, one per click.
 //  M2 Stage 1c adds two test buttons that try to load the same map another way:
 //  MP TEST: OPEN runs the "open" console command itself; MP TEST: TRAVEL calls the
@@ -18,7 +19,7 @@
 //    XComGame\Classes\UIFinalShell.uc                (retail main menu; extends UIShell)
 //    XComGame\Classes\UIButton.uc                    (InitButton and its click delegate)
 //    XComGame\Classes\UIPanel.uc                     (AnchorTopRight, SetPosition, DisableNavigation)
-//    XComGame\Classes\XComShellPresentationLayer.uc  (StartMPShellState, the map URL)
+//    XComGame\Classes\XComShellPresentationLayer.uc  (the map URL, L706)
 //    XComGame\Classes\XComPlayerController.uc        (the shell's player controller)
 //    Engine\Classes\Actor.uc                         (ConsoleCommand L1699, ETravelType L772)
 //    Engine\Classes\PlayerController.uc              (ClientTravel L504)
@@ -73,12 +74,14 @@ function SpawnMenuButton(UIScreen Screen, name ButtonName, string Label, delegat
 	NewButton.DisableNavigation();
 }
 
-// Click handler. Does what the old Multiplayer item did (UIFinalShell.OnMenuButtonClicked,
-// case 'MP'), with the same single guard, m_bDisableActions.
+// Click handler. Has the old Multiplayer item's guard (UIFinalShell.OnMenuButtonClicked,
+// case 'MP', m_bDisableActions), but loads the multiplayer shell with ClientTravel instead
+// of StartMPShellState.
 function OnMPButtonClicked(UIButton Button)
 {
 	local UIShell ShellScreen;
 	local XComShellPresentationLayer ShellPres;
+	local XComPlayerController ShellPC;
 
 	ShellScreen = UIShell(Button.Screen);
 	if (ShellScreen == none)
@@ -100,8 +103,17 @@ function OnMPButtonClicked(UIButton Button)
 		return;
 	}
 
-	`log("MP button clicked, calling StartMPShellState", , 'X2TC');
-	ShellPres.StartMPShellState();
+	// Stage 1c showed StartMPShellState and the "open" console command load nothing on
+	// 8270065, while ClientTravel loads the multiplayer shell (LOG.md, M2 Stage 1c).
+	ShellPC = XComPlayerController(ShellPres.Owner);
+	if (ShellPC == none)
+	{
+		`log("MP button clicked, but the shell presentation layer has no XComPlayerController owner", , 'X2TC');
+		return;
+	}
+
+	`log("MP button clicked, ClientTravel to" @ MPShellURL, , 'X2TC');
+	ShellPC.ClientTravel(MPShellURL, TRAVEL_Absolute);
 }
 
 // Test A: runs the console command that the SDK's StartMPShellState runs

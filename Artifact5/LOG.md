@@ -13,8 +13,10 @@ CLAUDE.md describes.
   approved 2026-11-10, plans/m2-plan.md; Stage 0 done 2026-11-10,
   Stage 1 run 1 2026-11-10: button click reaches the handler, but no
   map load follows; Stage 1b Highlander run 2026-11-10: stock items
-  return, MULTIPLAYER still loads nothing; Stage 1c code written, not
-  built)
+  return, MULTIPLAYER still loads nothing; Stage 1c 2026-11-10: `open`
+  loads nothing, `ClientTravel` reaches the multiplayer menu, rows 1-5
+  pass; MULTIPLAYER switched to travel, not yet built; next Stage 1d,
+  rows 6-7)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -1626,3 +1628,75 @@ On the PC, Claude Opus 5.5. No code changed. Build 8270065 (the 1b run).
   - **How It Was Verified:** `wc -l`, `sed -n '205,400p'` and `grep` of
     the recopied log; `grep` of `UIChallengeLeaderboards.uc` for its
     parent class.
+
+### 2026-11-10 — Session 5 (continued): M2 Stage 1c result, MULTIPLAYER switched to travel
+On the PC, Claude Opus 5.5. **Game build ID 8270065** (Kc), no
+Highlander, only X2TacticalCoop. Log: `local\m2-logs\pc-stage1c.log`
+(278 lines, clean exit L269–278).
+
+- **What Kc saw:** MP TEST: OPEN did nothing (no sound, the button just
+  looked held). MP TEST: TRAVEL loaded the multiplayer menu: Ranked
+  Match greyed out; Quick Match, Create Custom Match, Search For Custom
+  Match, Leaderboards and Edit Squad Loadouts enabled.
+- **The table, by the travel route (test result):**
+
+  | Row | Result | Log |
+  |---|---|---|
+  | 1 Main menu | pass | L151–153 |
+  | 2 Click reaches handler | pass | L171 (OPEN), L173 (TRAVEL) |
+  | 3 Shell map loads | pass by TRAVEL; fail by OPEN | L174 `PreClientTravel`, L179 `LoadMap: XComShell_Multiplayer.umap?Game=XComGame.XComMPShell…`, L183 `Game class is 'XComMPShell'`; after OPEN only L172 `ConsoleCommand returned` |
+  | 4 MP main menu | pass | L208 `screen UIMPShell_MainMenu`, L209 `MP state`, L210–213 `MP criteria` |
+  | 5 Items enabled | pass (Ranked excepted) | L209 `network=True online=True`; Kc saw Create and Search custom enabled |
+  | 6–11 | not run yet | — |
+
+- **Also in the log:** `MP criteria dlc=0 mods=<hash> ini= devconsole=False modsinstalled=True`,
+  `packages=` empty, mod names `X2TacticalCoop`, DLC names
+  `DLC_1, DLC_2, DLC_3, TLE, XCom_DLC_Day0` (L210–213);
+  `Error: Can't destroy a null online session` (L199); leaving the menu
+  loaded the main shell (L227) with no `PreClientTravel`, matching
+  `X2MPShellManager.CloseShell`'s `open` (SDK L264–268).
+- **Leading hypothesis (Kc; a guess):** the console `open` command is
+  what's blocked, which also explains `StartMPShellState` doing nothing
+  with or without the Highlander. Recorded in sdk-findings.md with one
+  point against a blanket block: the return trip looks like an `open`
+  and worked. Narrower guesses (only this map or game class, or only
+  from the main shell) fit everything so far; untested.
+- **Changed:**
+  - `X2TC_MainMenuListener.uc` (targeted edit): `OnMPButtonClicked` keeps
+    its guards and now calls `ClientTravel(MPShellURL, TRAVEL_Absolute)`
+    on the shell's `XComPlayerController`, logging
+    `X2TC: MP button clicked, ClientTravel to …`. Header comments
+    updated. The two test buttons are unchanged.
+  - plans/m2-plan.md: Stage 1c result; new Stage 1d (rows 6–7 by
+    travel).
+  - research/sdk-findings.md section 7: Stage 1c result and the new
+    leading hypothesis.
+- **Problems:** none. Compile risks from the last entry were cleared:
+  Stage 1c built and ran with the same constructs.
+- **Checks:** the listener has CRLF endings and no space-indented lines;
+  no `StartMPShellState()` call is left. SDK lines read:
+  `UIMPShell_MainMenu.uc` L505–532, `X2MPShellManager.uc` L260–270. Not
+  built: Kc builds.
+- **Next:** Kc runs Stage 1d.
+
+### Session 5 prompt log (continued, 2026-11-10, Stage 1c result)
+- **Prompt:** "Stage 1c result, build 8270065, no Highlander: MP TEST:
+  OPEN did nothing (no sound, the button just looked held). MP TEST:
+  TRAVEL loaded the multiplayer menu: Ranked Match greyed out; Quick
+  Match, Create Custom Match, Search For Custom Match, Leaderboards and
+  Edit Squad Loadouts enabled. Log is in local\m2-logs\pc-stage1c.log.
+  Read the log against the table and record which rows pass by the
+  travel route. This suggests the console open command is what's
+  blocked, which would also explain why StartMPShellState did nothing,
+  with or without the Highlander; record that as the new leading
+  hypothesis. Then: switch the MULTIPLAYER button to the travel route,
+  keep the two test buttons for now, and give me the checklist to
+  continue rows 6-7 (create custom match with LAN, then Private, reach
+  the lobby; search once) in the next run."
+  - **Provided:** rows 1–5 with line numbers; the hypothesis recorded,
+    with the return-trip evidence against a blanket block; the
+    MULTIPLAYER button on `ClientTravel`; plan Stage 1d; the checklist.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** `grep` and `sed -n '170,230p'` of the log;
+    `grep` for `PreClientTravel` (one line, L174); `file` and Grep of the
+    listener after the edit. The switched button isn't built or run yet.

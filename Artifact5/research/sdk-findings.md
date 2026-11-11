@@ -589,7 +589,51 @@ command. Evidence and limits:
   known. If the block is native, it may be specific to this map or the
   `XComMPShell` game class.
 - Stage 1c (two buttons, `ConsoleCommand open` vs `ClientTravel`,
-  without the Highlander) tests the next step.
+  without the Highlander) tests the next step. (Superseded by the
+  Stage 1c result below.)
+
+### Stage 1c: `open` vs `ClientTravel` (test, build 8270065, no Highlander)
+- MP TEST: OPEN ran `ConsoleCommand("open XComShell_Multiplayer.umap?Game=XComGame.XComMPShell")`
+  and returned (log L171–172). Nothing loaded; no error (Kc: no sound,
+  the button just looked held).
+- MP TEST: TRAVEL ran `ClientTravel` with the same URL: `PreClientTravel`
+  (L174), `LoadMap: XComShell_Multiplayer.umap?Game=XComGame.XComMPShell`
+  (L179), `Game class is 'XComMPShell'` (L183), `UIMPShell_MainMenu`
+  (L208).
+- On the multiplayer menu: `MP state network=True online=True` (L209).
+  Ranked Match greyed out; Quick Match, Create Custom Match, Search For
+  Custom Match, Leaderboards and Edit Squad Loadouts enabled (Kc). In
+  the SDK, Ranked alone is greyed when both checks pass but the ranked
+  game data isn't valid (`SrcOrig\XComGame\Classes\UIMPShell_MainMenu.uc`
+  L521–524).
+- `MP criteria` (L210–213): `dlc=0`, `ini=` (empty), `packages=` (empty),
+  `devconsole=False`, `modsinstalled=True`, mod names `X2TacticalCoop`,
+  DLC names `DLC_1, DLC_2, DLC_3, TLE, XCom_DLC_Day0`. Native lines just
+  before: `UHelpers::NetGameDataHashesAreValid - Checking 5 MP Ini Names - GModifiedBaseGameScripts FALSE`.
+  Guess: the empty INI and package hashes are why ranked data isn't
+  valid.
+- `Error: Can't destroy a null online session` (L199) at map start;
+  nothing visible came of it.
+- Leaving the multiplayer menu loaded `XPACK_Shell_Intro?Game=XComGame.XComShell`
+  (L227) with **no** `PreClientTravel` line before it. That URL is the
+  one `X2MPShellManager.CloseShell` builds for its
+  `ConsoleCommand("open" @ ...)` (`SrcOrig\XComGame\Classes\X2MPShellManager.uc`
+  L264–268). If the retail script still does that, `open` works there.
+
+**Leading hypothesis (Kc, 2026-11-10; a guess, replaces the one above):**
+the console `open` command is what's blocked, which would also explain
+why `StartMPShellState` did nothing, with or without the Highlander
+(both run `open` for this map). What the tests support and don't:
+- Tested: `open` to `XComShell_Multiplayer` from the main menu loads
+  nothing; `ClientTravel` to the same URL loads it.
+- Against a blanket block: the return trip from the multiplayer menu
+  looks like an `open` (no `PreClientTravel`, CloseShell's URL) and
+  worked, and campaigns start with an `open` in the SDK.
+- Narrower guesses that fit everything so far: `open` is refused for the
+  multiplayer shell map or the `XComMPShell` game class only, or only
+  when called from the main shell. Not tested which.
+- Practical result either way: our button reaches the multiplayer menu
+  by `ClientTravel`, so M2 can go on without knowing which.
 
 ## For later (M3/M4, noticed in passing only)
 

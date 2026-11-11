@@ -16,9 +16,13 @@ X2TacticalCoop/X2TacticalCoop.x2proj        title and description
 X2TacticalCoop/Config/                      declares and loads the script package; DLCIdentifier
 X2TacticalCoop/Localization/                localization (.int) files
 X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes:
-    X2TC_MainMenuListener                     main menu: MULTIPLAYER button (M2) and X2TC lines
+    X2TC_MainMenuListener                     main menu: MULTIPLAYER button (M2), return to the MP menu
+                                              after a lobby, MP TEST buttons (test build only)
+    X2TC_InviteListener                       accepted Steam invites: X2TC lines, and travel to the MP menu
+                                              when accepted on the main menu
     X2TC_MPTraceListener                      M2 diagnostics: X2TC lines per screen, MP state, MP criteria
-    X2DownloadableContentInfo_X2TacticalCoop  DLC info: one X2TC line when templates are created
+    X2TC_MatchTraceListener                   M2 diagnostics: X2TC lines for lobby state, tactical HUD, turns
+    X2DownloadableContentInfo_X2TacticalCoop  DLC info: X2TC lines when templates are created (loaded, version)
 ```
 
 ## Launching

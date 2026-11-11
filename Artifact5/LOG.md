@@ -16,7 +16,9 @@ CLAUDE.md describes.
   return, MULTIPLAYER still loads nothing; Stage 1c 2026-11-10: `open`
   loads nothing, `ClientTravel` reaches the multiplayer menu, rows 1-5
   pass; Stage 1d 2026-11-10: LAN and Private lobbies reached, rows 1-7
-  pass on the PC; rows 8-11 need a second machine)
+  pass on the PC; rows 8-11 need a second machine; live-test plan
+  approved 2026-11-10, plans/m2-live-test-plan.md; its Step 1 code
+  written, not built; next Stage 1e)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -1766,3 +1768,141 @@ No code changed this turn.
   - **How It Was Verified:** `grep` and `sed -n` of the log (L274–290,
     L328–348); `grep` and `sed -n` of `XComShellPresentationLayer.uc`
     (L180–195, L383–420) and `OnlineEventMgr.uc` L246–247.
+
+### 2026-11-10 — Session 5 (continued): lobby exit repeat test (Kc)
+On the PC. **Game build ID 8270065** (read from the app manifest this
+turn; Kc ran the same build with no changes). Seen in game; no new log
+was given. No code changed.
+
+- **What Kc saw:** exiting multiplayer goes back to a main menu with no
+  cursor or buttons. Clicking brings the cursor back, nothing else.
+  Escape does nothing there. Space opens the new-game difficulty screen
+  (Kc believes it picks the default-selected item, New Game). Escape
+  from the difficulty screen returns to a normal main menu. Kc saw that
+  screen flash up in Stage 1d too.
+- **What it explains:** the `UIShellDifficulty` lines in
+  `pc-stage1d.log` (L343, L346, L525). It fits the guess from the SDK:
+  `ShuttleToMPMainMenu` hides the main menu, then `StartMPShellState`
+  loads nothing, so a hidden menu keeps keyboard focus. Still a guess
+  for which call fails.
+- **Changed:** research/sdk-findings.md section 7 (the repeat test).
+- **Possible fix (not done, Kc's call):** when the main menu opens with
+  the shuttle-to-multiplayer request, travel to the multiplayer shell
+  ourselves (or at least show the menu again).
+
+### Session 5 prompt log (continued, 2026-11-10, lobby exit)
+- **Prompt:** "I definitely saw something flash up, and it did look like
+  the menu that shows up to select difficulty when starting a new game.
+  Okay I went and teste it without changes. What's happening is that
+  exiting from multiplayer goes back to a main menu without any cursor
+  or buttons loaded. clicking makes the cursor appear but nothing else.
+  Clicking esc does nothing at this point. Pressing space I believe is
+  selecting the default-selected option which is new game, which then
+  opens the new game inteface to select a difficulty. Pressing Esc from
+  here goes back to the normally loaded main menu."
+  - **Provided:** the observation recorded with what it explains; the
+    build ID read from the manifest.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** `grep` of `appmanifest_268500.acf` for
+    `buildid`; nothing else to check (no new log).
+
+### 2026-11-10 — Session 5 (continued): live-test plan approved, Step 1 code written (not built)
+On the PC. The plan was written by Claude Opus 5.5; the plan file, code
+and this entry by Claude Fable 5.2. **Nothing was built or run; the code
+is untested.** Game build ID 8270065 (read from the app manifest while
+planning).
+
+- **Planned:** plans/m2-live-test-plan.md (approved by Kc with five
+  notes): be ready for rows 8-11 with a friend over the internet.
+  Steps 1 and 2 now; Steps 3-6 (shared build, packaging, checklists,
+  pre-flight) on hold until Stage 1e's result.
+- **Found in the SDK while planning (source only, guesses for retail):**
+  - Accepting an invite on the main menu ends in `StartMPShellState`
+    (`XComOnlineEventMgr.uc` L3580), the call that loads nothing. From
+    inside the multiplayer menu it takes another branch with no `open`.
+  - The join itself (invite or search) goes through `StartNetworkGame`
+    and `ClientTravel` (`XComShellPresentationLayer.uc` L1103-1170,
+    L1194-1206; `X2MPShellManager.uc` L1416-1445, L1902-1950).
+  - **Match start is a risk:** both machines run
+    `ConsoleCommand("open <plot>?game=XComGame.XComMPTacticalGame")`
+    (`UIMPShell_Lobby.uc` L648, L743-755, L807-812).
+  - `mods=-687928801` is the same in the Stage 1c and 1d logs although
+    the code changed. Guess: the hash covers mod names, not contents.
+- **Changed** (classes in `mod/X2TacticalCoop/Src/X2TacticalCoop/Classes/`):
+  - `X2DownloadableContentInfo_X2TacticalCoop.uc`: `X2TC_VERSION = "0.2.0"`,
+    logged as `X2TC: version 0.2.0`.
+  - `X2TC_MainMenuListener.uc` (targeted edits):
+    - `ReturnToMPMenuIfAsked`: logs `X2TC: Main menu state: shuttle to MP
+      menu=… closed URL=… visible=…`; travels to the multiplayer shell if
+      the game's request flag is set, or if the menu is hidden on a map
+      loaded with `?closed`.
+    - Click sound on every button (`PlayUISound(eSUISound_MenuSelect)`);
+      MULTIPLAYER is disabled after its click.
+    - `SHOW_TEST_BUTTONS` constant (true now).
+    - Test buttons MP TEST: OPEN SHELL
+      (`open XPACK_Shell_Intro?Game=XComGame.XComShell`) and
+      MP TEST: OPEN MP TAC
+      (`open Plot_WLD_MP_Sm_01?game=XComGame.XComMPTacticalGame`).
+  - `X2TC_InviteListener.uc` (new): registers an invite-accepted
+    callback; logs it; half a second later logs whether the game kept
+    the invite and, on the main menu only, travels to the multiplayer
+    shell.
+  - `X2TC_MatchTraceListener.uc` (new, diagnostics): `Lobby opened`,
+    `Lobby state: players=… opponent joined=… connections=… can start=…`
+    on change, `Lobby closed`, `Tactical HUD opened, game …`,
+    `Turn start: player object … team … turn count … local player=…`.
+  - `mod/README.md`: the class list. plans/m2-live-test-plan.md (new).
+- **Differences from the plan:**
+  - Turns and the lobby are watched with a one-second timer, not the
+    `'PlayerTurnBegun'` / `'PlayerTurnEnded'` events, because it isn't
+    known which events fire on the guest's machine. A turn's end shows
+    as the next turn's start.
+  - The lobby-exit fix has a second trigger (hidden menu plus `?closed`)
+    because it isn't known whether the listener runs before the game
+    clears its request flag.
+  - The listeners keep no screen references (the lobby is looked up each
+    second), to avoid holding a level in memory across a map change.
+- **Problems:** none this turn.
+- **Checks:** SDK declarations read for every call (paths and lines in
+  each class header). `X2TC_MainMenuListener.uc` still has CRLF endings;
+  the other four classes have LF; no space-indented lines. Not compiled:
+  Kc builds. Compile risks (guesses): the invite delegate's
+  `const out OnlineGameSearchResult` parameter, `SetTimer` with a
+  listener object, the `SHOW_TEST_BUTTONS` constant in an `if`.
+- **Next:** Kc builds and runs the Stage 1e checklist.
+
+### Session 5 prompt log (continued, 2026-11-10, live-test plan)
+- **Prompt:** "Goal: be fully ready for the live test of rows 8-11 with a
+  friend over the internet (their own account and copy, Private lobby
+  plus Steam invite). Plan all of the following, then wait for my
+  approval: [1. trace the invite path for the guest, plan a ClientTravel
+  fix if it uses StartMPShellState or open; 2. backup join route by
+  Public match and search; 3. X2TC trace lines for invite, lobby joined
+  with player count, match start, tactical map loaded, each turn start;
+  4. the lobby-exit and click-feedback fixes, hide the MP TEST buttons
+  in the friend's build; 5. packaging with version and checksum;
+  6. friend and host checklists; 7. a pre-flight check each can do
+  alone]"
+  - **Provided:** the SDK trace and the plan in chat; no files written
+    that turn.
+  - **Misreads / rule breaks:** none. One finding not asked for: the
+    match start's `open` command, as a risk for row 10.
+  - **How It Was Verified:** every claim cites SDK lines read that turn;
+    all of it is labeled source-only.
+- **Prompt:** "Approved, with notes: 1. Version 0.2.0. 2. AML link:
+  https://github.com/X2CommunityCore/xcom2-launcher/releases 3. Friend's
+  configs: in the friend checklist, have them rename their Config folder
+  to Config-backup before testing so the game regenerates clean
+  defaults, and rename it back afterwards. No editing. 4. Add a firewall
+  line to the friend checklist: allow on private networks if asked.
+  5. Do Steps 1 and 2 now. Hold Steps 3-6 until Stage 1e's result, since
+  a match-start fix would change the build. Save the plan as
+  plans/m2-live-test-plan.md, log this prompt, then write the Step 1
+  code and give me the Stage 1e checklist."
+  - **Provided:** the plan file with the five notes; the Step 1 code;
+    the Stage 1e checklist.
+  - **Misreads / rule breaks:** none. Three differences from the plan
+    are listed in the entry above.
+  - **How It Was Verified:** not built and not run. `file` on the five
+    classes and a Grep for space-indented lines; SDK declarations read
+    before writing.

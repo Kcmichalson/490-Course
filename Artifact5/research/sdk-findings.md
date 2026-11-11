@@ -661,12 +661,50 @@ why `StartMPShellState` did nothing, with or without the Highlander
   L385–399). Guess: the hide works and `StartMPShellState` loads nothing
   (as in Stage 1), which leaves the hidden menu. Fits what Kc saw;
   untested. The two `UIShellDifficulty` lines after each return (L343,
-  L346, L525) are not explained yet.
+  L346, L525) are explained by Kc's repeat test below.
+- **Repeat test (Kc, 2026-11-10, build 8270065, no code change; seen,
+  no new log):** after exiting a lobby, the main menu shows no cursor
+  and no buttons. A click brings the cursor back, nothing else; Escape
+  does nothing. Space opens the new-game difficulty screen (Kc: it
+  seems to pick the default-selected item, New Game). Escape from there
+  returns to a normal main menu. Kc also saw that difficulty screen
+  flash up in Stage 1d. This fits the guess above: the main menu is
+  hidden but still has keyboard focus, and closing the difficulty
+  screen shows it again. Which call fails is still inferred from the
+  SDK source, not tested.
 - For later (guess): accepting a Steam invite uses
   `ShuttleToMPInviteLoadoutMenu` (L403–418), which opens the
   multiplayer menu screen directly instead of calling
   `StartMPShellState`; whether it works from the main shell is
-  untested.
+  untested. (Traced further below.)
+
+### Join and match-start paths in the SDK (source only; for the live test)
+Read for plans/m2-live-test-plan.md. Not run on 8270065.
+- **Invite accepted (guest):** `OnGameInviteAccepted`
+  (`SrcOrig\XComGame\Classes\XComOnlineEventMgr.uc` L3502–3591) checks
+  the hashes (L3550), stores the invite, sets the shuttle to the invite
+  loadout (L3557) and calls `Presentation.StartMPShellState()` (L3580).
+  On the main menu that is the `open` branch (loads nothing in Stage 1).
+  In the multiplayer menu it is the other branch
+  (`XComShellPresentationLayer.uc` L704–711 → `TravelToNextScreen`
+  L173–184 → `UIMPShell_MainMenu`), and the menu opens the accept-invite
+  squad screen (`UIMPShell_MainMenu.uc` L95, L108–116).
+- **Joining (invite or search):** `StartNetworkGame`
+  (`XComShellPresentationLayer.uc` L1103–1170) creates the network
+  client, and `OnPlayerJoined` → `OnNetworkCreateGame` travels with
+  `ClientTravel` (L1194–1206). The search screen gets there through
+  `X2MPShellManager.OSSJoin` (L1902–1950) and
+  `OSSJoinOnlineGameCompleted` (L1416–1445). `BuildJoinURL` builds an
+  `open` command (L2052–2058) but nothing calls it.
+- **Match start:** both machines run `LoadTacticalMap`
+  (`UIMPShell_Lobby.uc` L743–755; host L2042, L2167; guest L807–812),
+  which runs `ConsoleCommand` on
+  `"open" @ <plot map> $ "?game=XComGame.XComMPTacticalGame"` (L648).
+  If `open` is refused for that, row 10 fails. Stage 1e tests the
+  command's shape from the main menu.
+- **Mods hash (guess from two logs):** `mods=-687928801` in Stage 1c and
+  Stage 1d although the mod's code changed between them, so it probably
+  covers mod names, not file contents.
 
 ## For later (M3/M4, noticed in passing only)
 

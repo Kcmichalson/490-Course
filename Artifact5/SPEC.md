@@ -14,9 +14,12 @@ fall short; the answer to "is it possible, and what blocks it" is a valid
 result.
 
 **Success test (my decision):** two friends who've played co-op over
-Parsec find this better: each uses their own mouse, keyboard and screen,
-there's no streaming lag, and each controls their own soldiers without
-handing over control.
+Parsec find this better. The baseline is Parsec plus the "WOTC Online
+Co-op (Play Over Parsec)" mod (research/prior-art.md), which already
+gives each player their own soldiers and turns but shares the host's one
+screen, camera and HUD over a stream, with the guest on a controller.
+Our distinct value: each player's own screen and camera, no streaming
+lag, and keyboard and mouse for both.
 
 Artifact 5 requirements this covers: a five-week attempt at something big,
 scaffolded to last (this file, CLAUDE.md, plans/), a log of plans and
@@ -56,7 +59,8 @@ soldiers and when, and what happens when the guest disconnects.
 
 ## 5. What's already known
 See LOG.md, "Findings before Session 1", and research/. In short:
-- No working tactical co-op exists. The 2016 Tactical Co-Op mod is
+- No working networked tactical co-op exists (the Parsec mod above
+  streams one game). The 2016 Tactical Co-Op mod is
   abandoned; the WOTC Co-op Campaign prototype covers the strategy layer
   only
 - Mr.Fear (Modern Multiplayer Mod) is staying on PvP and may add a

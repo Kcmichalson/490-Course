@@ -830,3 +830,101 @@ research/prior-art.md; the matching questions are 9–12 in section 6.
   the install they play, and run it with `-nohomedir` so saves, config and
   logs stay inside the copy. (`-nohomedir` isn't in the script source;
   it's an engine command-line switch, so this is their claim only.)
+
+## 8. M3: starting point and the guest's action path (Sessions 6-7, source only)
+
+Basis for plans/m3-plan.md. Paths under `SrcOrig\XComGame\Classes\`
+unless named otherwise; "CHL" means the Community Highlander clone in
+`local\refs\X2WOTCCommunityHighlander\X2WOTCCommunityHighlander\Src\XComGame\Classes\`
+(v1.32.0). **None of this has run in an M3 test.** Session 6 used two
+read-only research agents, then re-read the lines for findings 1, 2, 3,
+5, 6 and 9 and the checks in 4; the single-XCOM-player list in 7 and the
+multiplayer-ruleset details in 4 beyond L2548 are the agents' reading,
+not re-checked line by line. Session 7 re-read everything in 10-12.
+
+### Session 6 (2026-11-12)
+1. **Shipped multiplayer sync.** One machine simulates, the other
+   follows in a replay. The active side sends new frames after each
+   action (`X2TacticalMPGameRuleset.uc` L1341-1369, `SendPartialHistory`
+   L348-359); the inactive side's `XComMPReplayMgr` steps forward when the
+   history grows (`XComMPReplayMgr.uc` L141-154); roles swap at a turn
+   switch by remote commands (`HistoryReceived`, `SwitchTurn`; L319-339,
+   L1219-1226). Retail config selects this mode with
+   `bPauseGameStateSending=true` (game `XComGame\Config\DefaultGame.ini`
+   L103-105, read in place). The other mode in the source (both machines
+   simulate from mirrored input contexts, `X2GameRuleset.uc` L226-249) is
+   off in retail. **Tested (M2):** the script call stacks in
+   `live-guest.log` (L521-606) match the "did not queue" branch at
+   `X2GameRuleset.uc` L244-248.
+2. **The network pieces aren't multiplayer-only.** One engine-wide
+   network manager (`XComGameStateNetworkManager.uc` L233); `CreateServer`,
+   `CreateClient`, `SendHistory`, `SendPartialHistory`,
+   `SendGameStateContext`, `SendRemoteCommand` and the receive delegates
+   are callable from any script (L244-438). The base ruleset caches it
+   (`X2GameRuleset.uc` L152). A context arriving from the network is
+   submitted to whichever tactical ruleset is running (L295-305). With no
+   connection-closed delegate registered, the game reopens the main menu
+   (L440-445).
+3. **Only stock game classes.** `XComGameInfo.SetGameType` (L146-201)
+   rewrites any `?game=` to `XComMPTacticalGame` or `XComTacticalGame`;
+   the ruleset comes from the game class.
+4. **Multiplayer mode switches off campaign-mission needs** by checks
+   script can't change: aliens spawn only when `IsSinglePlayerGame()`
+   (`X2TacticalGameRuleset.uc` L2548); mission objectives skipped
+   (`XComParcelManager.uc` L1962-1968); abilities filtered to the
+   multiplayer set (L877-892). The multiplayer ruleset treats every
+   player as human (L505-509), places units for Team One and Two only
+   (L735), and decides "remote" by Steam ID (L437-478).
+5. **A single-player mission can start from a history.** If the top frame
+   isn't a start state, `InitBattle` calls `LoadGame`
+   (`XComTacticalGRI.uc` L336-357), which rebuilds the map and resumes
+   mid-turn (`X2TacticalGameRuleset.uc` L2994-3473, L4242-4275). Challenge
+   Mode opens a map from a history in memory with `?LoadingSave`
+   (`UIChallengeMode_SquadSelect.uc` L1278).
+6. **Skirmish** is a campaign-free single-player mission in the retail
+   menus, under the Tactical Legacy Pack item (`UIFinalShell.uc` L137;
+   `UITLE_SkirmishModeMenu.uc` L240-337, L2671).
+7. **Single player assumes one XCOM player** (`XGAIPlayer.uc` L1089,
+   L1107; `XGBattle_SP.uc` L321-341, L982-1014; four player slots,
+   `XGBattle.uc` L17). Team relations are native
+   (`XComGameState_Unit.uc` L9603-9606).
+8. **ObjectIDs** come from one native counter with no per-machine range
+   (`XComGameStateHistory.uc` L431): aligned only if one machine creates
+   objects at a time. Agrees with the prototype's claim.
+9. **Leaving a multiplayer match** goes through `AttemptExit`
+   (`XComTacticalController.uc` L2498-2523) to the `open` that 8270065
+   refuses; multiplayer matches only.
+
+### Session 7 (2026-11-12): is there a hook before an action is applied?
+10. **The Highlander leaves the submit path as it was.**
+    `SubmitGameStateContext` and `SubmitGameStateContexts` (CHL
+    `X2GameRuleset.uc` L209-298, L303-407) carry no Highlander issue
+    markers. Their only hook is the event observers'
+    `PreBuildGameStateFromContext` (L275-278), which can't refuse an
+    action. The Highlander makes the observer list public (Issue #481,
+    L88; `CHANGELOG.md` L240). The tutorial is the one built-in case that
+    takes over submitted actions (`X2GameRuleset.uc` L290-293).
+11. **`PostModifyNewAbilityContext` (Highlander Issue #890) fits.** CHL
+    `XComGameStateContext_Ability.uc` L1549-1566: triggered in
+    `ActivateAbility_Internal` with the finished context (targets, hit
+    result, after the template's `ModifyNewContextFn`) and before
+    `ActivateAbility` hands it to the ruleset (L1334-1373, the latent
+    submit at L1367). Listeners must use ELD_Immediate. Not in SrcOrig.
+    It can read and change the context, not cancel it.
+12. **The guest's own submit adds nothing while in replay.**
+    `X2TacticalGameRuleset.AddNewStatesAllowed` returns false when the
+    replay manager's `bInReplay` is set (SrcOrig
+    `X2TacticalGameRuleset.uc` L682-692; CHL L694-704), and
+    `SubmitGameStateContext` then adds nothing (`X2GameRuleset.uc`
+    L216-298). But input is held too: `XComTacticalController.SetInputState`
+    changes the input state during a replay only if forced or in the
+    tutorial (SrcOrig L780-786). `bInReplay` is `protectedwrite`
+    (`XComReplayMgr.uc` L14), so a subclass of the replay manager can set
+    it. Whether the native `LatentSubmitGameStateContext`
+    (`X2GameRuleset.uc` L166) also checks `AddNewStatesAllowed`: not in
+    the script source.
+
+**Design consequence (plans/m3-plan.md section 2):** the guest captures
+its action with finding 11 and forwards it; finding 12 keeps it from
+applying locally; no class override unless Stage 5 shows the guest can't
+give input in follow mode or its action still applies.

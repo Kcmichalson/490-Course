@@ -21,6 +21,10 @@ relying on it.
   Workshop mod; the network code internals aren't accessible to modders;
   a co-op mode (two players vs. a bot on a random mission) is a future idea.
 - Steam chat with Kc, 2026-11-09: see LOG.md.
+- Steam chat with Kc, 2026-11-12 (his reports, not tests): heavy game
+  history from the AI can freeze the second client; and his belief that
+  Firaxis removed the network code from the Windows executable, which
+  our M2 live test contradicts. Both in LOG.md, Session 7.
 
 ## XCOM 2: Tactical Co-Op (Team Dragonpunk / Quixotic Cloud Games)
 - https://steamcommunity.com/sharedfiles/filedetails/?id=792693587
@@ -103,6 +107,46 @@ are about the same network manager our tactical co-op will use. Their
 fixes are a starting point to test, not facts. Reusing any of their code
 is allowed by MIT (keep their copyright notice), but propose it in a plan
 first.
+
+## WOTC Online Co-op (Play Over Parsec) (justthere1000)
+- https://steamcommunity.com/sharedfiles/filedetails/?id=3829705126
+  (Workshop id 3829705126)
+- Source: Workshop description pasted by Kc, 2026-11-12. Page figures as
+  pasted: posted Oct 29, updated Nov 7 (no year shown), 5 change notes,
+  101 current subscribers.
+- **Design reference only.** No license is stated, so no code is read or
+  reused.
+- **What it is:** the host runs XCOM 2 with the mod; the guest streams the
+  host's game over Parsec and plays on their own controller (the guest
+  doesn't need to own the game). Parsec delivers the guest's controller as
+  a second Xbox 360 pad, which the mod gives to Player 2. The guest can't
+  use keyboard and mouse (Parsec merges them with the host's); the host
+  can. A sister mod, "WOTC Local Co-op (Same PC, Hot-Seat)" (id
+  3829704957), does the same with two pads on one PC.
+- **Design, as described:** every soldier belongs to Player 1 or Player
+  2, assigned in the Armory or at Squad Select ("CO-OP TEAMS"). Split
+  turns by default (P1 phase, P2 phase, aliens; P1's End Turn or running
+  out of actions hands over); an optional shared turn (`bSharedTurn`)
+  where both act in any order and End Turn from either ends it for both,
+  with a check. Mission timers and start-of-turn effects tick once per
+  round. Recruits, rescues, VIPs and mind-controlled enemies go to Player
+  1. A "give soldiers" screen when a player has no soldiers left. Bigger
+  squads (8, +2 per upgrade, up to 12), enemies with 1.5x HP and one
+  extra per pod, each switchable. Long War of the Chosen supported.
+- **Technical notes from the page:** requires the Community Highlander
+  v1.32.0; conflicts with mods that override `XComTacticalController`,
+  so it overrides that class. Its config file is
+  `Config\XComCoopCampaign.ini`.
+- **Its own known issue:** one camera, one HUD, one input stream, so both
+  players share the host's screen.
+- **Unconfirmed possible link:** the WOTC Co-op Campaign prototype's
+  config file has the same name (`XComCoopCampaign.ini`). Nothing else
+  connects them; a guess, not a finding.
+- **Relevance:** it is the baseline our success test is measured against
+  (SPEC.md section 1). Its ownership model, split turns and "no value
+  means Player 1" match plans/m3-plan.md. Our distinct value is each
+  player's own screen and camera, no streaming lag, and keyboard and mouse
+  for both.
 
 ## Co-op Anything directory
 - https://github.com/cranebeaker/coop-anything

@@ -31,7 +31,10 @@ CLAUDE.md describes.
   and from the multiplayer menu, one full turn each); all 11 rows pass
   on 8270065 by the travel route**; exiting a match hangs on both
   sides, a lead is in sdk-findings)
-- [ ] M3: Two humans on one team
+- [ ] M3: Two humans on one team (plan drafted in Session 6, approved
+  2026-11-12 in Session 7, plans/m3-plan.md: single-player mission, host
+  authoritative, guest follows, Highlander route for the guest's
+  actions; mod 0.3.0. Stage 1 checklist written, not yet run)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -2373,3 +2376,161 @@ Claude Opus 5.5. No test this turn.
   - **How It Was Verified:** Read of the milestone status after the
     edit is not needed (Edit succeeded); the entry cites the live test
     entry for the evidence.
+
+### 2026-11-12 — Session 6: M3 plan drafted (ended at the usage limit)
+On the PC, Claude Opus 5.5, in plan mode. Written in Session 7 from
+Session 6's draft (`C:\Users\Kc\.claude\plans\polished-inventing-fiddle.md`)
+and today's tool log, because plan mode blocked project edits and the
+session then hit its usage limit. The tool log shows Session 6 ran in the
+same Claude conversation as the "Session 5 (continued)" entries above
+(resumed 2026-11-12 05:48 UTC); Kc counts the M3 planning as Session 6.
+
+- **Planned:** the M3 plan (SPEC.md M3), research and plan only.
+- **Researched (SDK source, 2018):** two read-only research agents swept
+  the multiplayer and single-player tactical code; Session 6 re-read the
+  lines the design depends on. Results, with paths and lines, in
+  research/sdk-findings.md section 8, findings 1-9: how shipped
+  multiplayer syncs (one side simulates, the other follows in a replay);
+  the network manager is usable from any script; only stock game
+  classes; multiplayer mode switches off alien spawning, objectives and
+  the full ability set; a single-player mission can start from a
+  history; Skirmish as a campaign-free test mission; one-XCOM-player
+  assumptions; ObjectIDs from one counter; the match-exit path.
+- **Draft:** recommended (b), a single-player mission with the guest
+  following and its actions applied by the host; a solo loop on PC +
+  laptop; a six-stage ladder; unit ownership modelled on the "WOTC Online
+  Co-op (Play Over Parsec)" mod Kc mentioned; the exit hang as a separate
+  plan; seven open questions; a ruleset class override at the guest-action
+  stage.
+- **Changed:** no project file (plan mode). The draft's `ExitPlanMode`
+  call has a `requested` line and nothing after it in the tool log: it
+  never ran, because the session hit its usage limit.
+- **Problems:** usage limit before approval; the records the draft listed
+  were written in Session 7.
+- **Checks:** none (no test, no code).
+
+### Session 6 prompt log (reconstructed)
+Reconstructed from the draft only, as Kc chose; Kc's exact wording isn't
+available (transcript reads are blocked by Kc's settings).
+- **Prompt:** Kc asked for the M3 plan (wording not available).
+  - **Provided:** the research above and the draft plan.
+  - **Misreads / rule breaks:** none known.
+  - **How It Was Verified:** not applicable (no fix).
+- **Prompt:** Kc named the "WOTC Online Co-op (Play Over Parsec)" mod as
+  the baseline and gave the distinct value (own screen and camera, no
+  streaming lag, keyboard and mouse for both) (wording not available).
+  - **Provided:** the baseline paragraph and the ownership section of the
+    draft.
+  - **Misreads / rule breaks:** none known.
+  - **How It Was Verified:** not applicable.
+- **Prompt:** two answers mentioned in the draft's "first actions"; what
+  they were isn't recorded there.
+  - **Provided:** unknown.
+  - **Misreads / rule breaks:** unknown.
+  - **How It Was Verified:** not applicable.
+
+### 2026-11-12 — Session 7: M3 records, plan revised and approved, Stage 1 checklist
+On the PC, Claude Opus 5.5. No test this session.
+
+- **Planned:** check for half-finished Session 6 edits; write the records
+  Session 6 couldn't; revise the M3 draft (test loop order, a Highlander
+  hook before the ruleset override, version 0.3.0); after approval, save
+  the plan and give the Stage 1 checklist.
+- **Half-finished edits:** none. Session 6's only project writes were the
+  "M2 closed" edits (08:01 UTC), committed in 7dbfea1. The one
+  uncommitted change at session start, `.claude/settings.json`, is Kc's
+  (the repo-root Read rule removed on this PC because its `*` also matched
+  Artifact5; Kc is replacing it with named-file rules). Not read or
+  touched.
+- **Prior art (recorded in research/prior-art.md):** "WOTC Online Co-op
+  (Play Over Parsec)" by justthere1000, Workshop id 3829705126, from the
+  Workshop description pasted by Kc. Design reference only (no license,
+  no code reuse). Unconfirmed possible link: its config file has the same
+  name as the WOTC Co-op Campaign prototype's (`XComCoopCampaign.ini`).
+  SPEC.md's success test now names it as the baseline.
+- **Mr.Fear, Steam chat, 2026-11-12 (his reports, not tests):**
+  - The AI sends large amounts of game history; if it gets too heavy the
+    second client can't receive it and the game freezes. Taken into
+    plans/m3-plan.md (Stages 3-4 log the history size and watch the
+    alien turn).
+  - He believes Firaxis removed the network code from the executable on
+    Windows. **Our M2 live test contradicts that** on build 8270065:
+    Steam invite, lobby, match start, game states sent both ways, one
+    turn each (live test entry, 2026-11-11). Both are recorded; his
+    remark may refer to 2K's online services (matchmaking, ranked) rather
+    than the peer-to-peer network code. Not asked of him.
+- **Highlander check (source only; research/sdk-findings.md section 8,
+  findings 10-12):** the Highlander doesn't change the submit path, but
+  its `PostModifyNewAbilityContext` event (Issue #890) sees every ability
+  about to be submitted, and the guest's own submit adds nothing while
+  its replay manager is in replay. So the guest's actions can be captured
+  and forwarded with no class override; the ruleset override stays only
+  as Stage 5's fallback. Open: input is held during a replay unless
+  forced (`XComTacticalController.uc` L780-786).
+- **Decisions (Kc):** (b) host-authoritative; the Highlander route and
+  the Highlander v1.32.0 as a required dependency (all M2 results were
+  without it, so Stage 2's first run is also the first test of travel and
+  connection with it on); AML and offline mode on the laptop set up by Kc
+  before Stage 1; Skirmish as the test mission; split turns for M3, the
+  shared turn in M4; the exit hang as a separate plan before friend
+  playtests; the host's own input on P2's soldiers decided at Stage 6
+  (for M3's check, players keep to their own soldiers); version 0.3.0.
+  Kc deletes Session 6's draft file.
+- **Changed:** plans/m3-plan.md (new); research/prior-art.md (new
+  section, Mr.Fear pointer); SPEC.md (success test, "no working networked
+  co-op"); research/sdk-findings.md (section 8); checklists/m3-stage1.md
+  (new); `X2DownloadableContentInfo_X2TacticalCoop.uc` (`X2TC_VERSION`
+  0.2.0 → 0.3.0, the only code change); this entry and the M3 status line.
+- **Problems:** my Python append to sdk-findings turned `\r` in a path
+  into a carriage return; found by a line-ending check and fixed.
+- **Checks:** Highlander and SrcOrig lines read as cited in sdk-findings
+  findings 10-12; `file` on the edited files (no stray carriage returns
+  after the fix); tool-log check below. Not built (Kc builds in Stage 1,
+  Part A).
+
+### Session 7 prompt log
+- **Prompt:** "Session 7, on my PC, Opus 5.5. [...] Read CLAUDE.md,
+  SPEC.md, LOG.md, the plans/ folder, research/sdk-findings.md and
+  research/prior-art.md. Then read the M3 draft plan [...] Check whether
+  Session 6 left any half-finished edits [...] tell me what you find
+  before changing anything." [Then: record the Parsec mod, Mr.Fear's two
+  reports and Session 6; revise the draft (A: test loop order laptop
+  offline, two instances, family share later; B: check the Highlander
+  for a hook before the ruleset override; C: version 0.3.0); show the
+  revised plan and open questions and wait for approval.]
+  - **Provided:** the half-finished-edit check (none; the settings.json
+    change and the session numbering reported); the Highlander search;
+    the revised plan with eleven open questions (the seven carried, two
+    marked answered, four new), shown for approval in plan mode before
+    any project file was written.
+  - **Misreads / rule breaks:** I read only the parts of LOG.md the task
+    needed (structure, the top, and the M2 entries), not all 2,375 lines.
+    I didn't read every plans/ file in full (m0 and m1 plans by name
+    only). The date question (Mr.Fear 2026-11-13 vs today) was asked, not
+    guessed.
+  - **How It Was Verified:** tool-log query of 2026-11-12 for Session 6's
+    Edit/Write calls and session starts; git status at session start.
+- **Prompt (mid-task):** [the "WOTC Online Co-op (Play Over Parsec)"
+  Workshop description, pasted.]
+  - **Provided:** its summary in research/prior-art.md and the SPEC.md
+    baseline, after approval.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** the prior-art section re-read against the
+    paste (requires Highlander v1.32.0, `XComTacticalController`
+    conflict, `XComCoopCampaign.ini`).
+- **Prompt:** "Approved, with these answers: 1. Yes, (b) [...] 2. Yes to
+  the Highlander route [...] Stage 2's first run is also the first test
+  of the travel and connection code with the Highlander on [...] 3. AML
+  isn't on the laptop yet [...] 9. The Mr.Fear chat was 2026-11-12. 10.
+  Write Session 6's prompt log from the draft, marked as reconstructed
+  [...] 11. The settings.json change is mine [...] Save this plan as
+  plans/m3-plan.md, write the records from section 1, then give me the
+  Stage 1 checklist."
+  - **Provided:** the files listed under Changed; the Stage 1 checklist;
+    a commit message.
+  - **Misreads / rule breaks:** the carriage-return slip above (fixed).
+    The version bump in the mod source is the only code change; it is
+    what Stage 1 asks for.
+  - **How It Was Verified:** carriage return: `file` reported "CR, LF"
+    line terminators on sdk-findings.md; after the fix a Python check
+    found no `\r` and a Read of L834-853 shows the path intact.

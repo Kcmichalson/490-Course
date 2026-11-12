@@ -143,6 +143,13 @@ exact build. One addition after Stage 1e: `X2TC_MatchTraceListener` logs
 each timer fires, and `Turn poll waiting: <reason>` once, so the host's
 solo run (checklists/host.md, Part 1) shows whether the timers work.
 
+**Result (test, 2026-11-11, build 8270065; log
+`local\m2-logs\preflight-host.log`):** the shared build compiled and
+ran; no test buttons; `X2TC: Lobby poll timer running` (L282), so the
+timers fire; lobby exit lands on the multiplayer menu again (L336-377).
+Packaged the same night as `local\release\X2TacticalCoop-0.2.0.zip`.
+Don't rebuild before the session.
+
 ### Step 4: packaging (written and tried 2026-11-10)
 A new tool, Python 3 standard library only:
 - `tools/package_mod.py`: reads the built `Mods\X2TacticalCoop` folder

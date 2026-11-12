@@ -20,8 +20,9 @@ CLAUDE.md describes.
   approved 2026-11-10, plans/m2-live-test-plan.md; Stage 1e
   2026-11-10: lobby exit fixed, `open` loads the multiplayer tactical
   map, no match-start fix needed; shared build, packaging tools and
-  checklists written, shared build not built yet; next the host's solo
-  run in checklists/host.md, then the live test)
+  checklists written; shared build 0.2.0 built and run alone
+  2026-11-11, trace timer confirmed, packaged to `local\release\`; next
+  the friend's solo run and the pre-flight compare, then the live test)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -2049,3 +2050,66 @@ report), no Highlander, mod version 0.2.0 test build. Log:
     log line, so they rest on Kc's word.
   - **How It Was Verified:** the lobby exit by L335-375 of the log; the
     rest not checkable from the log.
+
+### 2026-11-11 — Session 5 (continued): shared build run alone (host checklist Part 1), packaged
+On the PC, Claude Fable 5.2. Test by Kc: no Highlander, mod version
+0.2.0 shared build (built 2026-11-11 00:36 by the file dates). Game
+build ID 8270065: read by the agent from `appmanifest_268500.acf` after
+the run; Kc's message did not state it. Log:
+`local\m2-logs\preflight-host.log` (446 lines, opened 00:37:00).
+
+- **Result (test), against checklists/host.md Part 1 step 8:**
+  - `X2TC: version 0.2.0` (L112). Command line `-review -noRedScreens`
+    (L9).
+  - Shared build: `MP button added` (L155) with no `MP test buttons
+    added` line anywhere.
+  - MULTIPLAYER → `LoadMap: XComShell_Multiplayer.umap?Game=XComGame.XComMPShell`
+    (L179); `MP criteria dlc=0 mods=-687928801 ini= devconsole=False
+    modsinstalled=True` (L211), `packages=` empty, mod names
+    `X2TacticalCoop`, DLC names `DLC_1, DLC_2, DLC_3, TLE, XCom_DLC_Day0`
+    (L212-214): the same values as every earlier run.
+  - Lobby: `LoadMap: ...X2MPLobbyGame` (L234), `Lobby opened` and
+    `Lobby state: players=1 opponent joined=False connections=True can
+    start=True` (L276-277).
+  - **`X2TC: Lobby poll timer running` (L282), 0.8 s after the lobby
+    opened.** So a timer set on a screen with a listener as its object
+    does fire: Stage 1e's open point is closed for the lobby timer. The
+    turn timer uses the same call and is still unrun.
+  - No further `Lobby state` line in the 25 seconds the lobby was open
+    (L276 to L292), as expected with nothing changing.
+  - Lobby exit: `Failed; returning to Entry` (L292), `closed URL=True
+    visible=False` (L336), travel, multiplayer menu (L346, L377). Then
+    Back to the main menu (L394) and quit (L446).
+  - No `ScriptWarning` and no `Accessed None` lines in the log.
+- **Packaged (the agent ran it, after the log was read):**
+  `tools/package_mod.py --version 0.2.0` on the game's
+  `Mods\X2TacticalCoop`: its checks passed (version, shared build, every
+  class file identical to the built folder's copy, compiled script
+  newer than the source). Wrote `local\release\X2TacticalCoop-0.2.0.zip`
+  and `X2TacticalCoop-0.2.0.sha256.txt`; 11 files; the tool re-read the
+  zip and compared every file's hash. The zip's SHA-256 is in the list
+  file (`local\`, not committed).
+- **Changed:** this entry and the M2 status line only. No code change.
+- **Problems:** none.
+- **Not done:** nothing was sent to anyone; sending the zip, the friend
+  checklist and the DLC list is Kc's. The friend's side, the invite fix
+  and the turn trace are untested until the live test.
+- **Rule for what follows:** don't rebuild before the session. A rebuild
+  means a new version, a new package and a resend.
+- **Next:** checklists/host.md Part 1 step 10 (send), then Part 2 when
+  the friend's log arrives.
+
+### Session 5 prompt log (continued, 2026-11-11, host pre-flight)
+- **Prompt:** "Yes, read it" (the button under "Is the host checklist's
+  Part 1 run done and its log saved?")
+  - **Provided:** the log read against Part 1 step 8; the build ID from
+    the app manifest; a dry run of the packaging tool, then the real
+    package in `local\release\`.
+  - **Misreads / rule breaks:** none found. One thing done without
+    being asked: I ran the packaging step myself (host checklist Part 1
+    step 9) once the log passed. It writes only inside `local\` and
+    refuses to replace an existing zip.
+  - **How It Was Verified:** Grep of `preflight-host.log` (line numbers
+    above); Grep of the manifest for `buildid`; the tool's own output
+    (dry run "checks passed", then "Wrote ..." twice, exit 0); file
+    dates of the built folder.

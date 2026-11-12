@@ -21,8 +21,10 @@ CLAUDE.md describes.
   2026-11-10: lobby exit fixed, `open` loads the multiplayer tactical
   map, no match-start fix needed; shared build, packaging tools and
   checklists written; shared build 0.2.0 built and run alone
-  2026-11-11, trace timer confirmed, packaged to `local\release\`; next
-  the friend's solo run and the pre-flight compare, then the live test)
+  2026-11-11, trace timer confirmed, packaged to `local\release\`;
+  friend's solo run 2026-11-11: rows 1-5 pass on a second machine and
+  account, pre-flight compare READY; friend's build ID not yet reported;
+  next the live test, checklists/host.md Part 3)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -2113,3 +2115,67 @@ the run; Kc's message did not state it. Log:
     above); Grep of the manifest for `buildid`; the tool's own output
     (dry run "checks passed", then "Wrote ..." twice, exit 0); file
     dates of the built folder.
+
+### 2026-11-11 — Session 5 (continued): friend's solo run, pre-flight compare READY
+On the PC, Claude Opus 5.5 (the session's model changed from Claude
+Fable 5.2 between turns). The friend's Launch.log, saved by Kc as
+`local\m2-logs\preflight-guest.log` (514 lines, opened 23:33:40). It
+holds the friend's machine and user names; they are not quoted here and
+the file stays in `local\`. Who the friend is is not recorded (Kc's to
+say). **The friend's game build ID is not in the log and was not
+reported**; host side 8270065.
+
+- **Pre-flight compare (test):** `tools/preflight_compare.py
+  preflight-host.log preflight-guest.log`: all 15 rows `same`, `READY`,
+  exit 0. Same executable (`Init: Version: 8917`, compiled Feb 22 2022,
+  changelists 1100000 / 469133), mod version 0.2.0, `MP criteria dlc=0
+  mods=-687928801 ini= devconsole=False modsinstalled=True`, empty
+  package hashes, mod names `X2TacticalCoop`, DLC names `DLC_1, DLC_2,
+  DLC_3, TLE, XCom_DLC_Day0`, `-review -noRedScreens` on both.
+- **Rows 1-5 pass on a second machine and Steam account (test):**
+  `X2TC: version 0.2.0` (L151), `MP button added` and no test buttons
+  (L190), `MP button clicked, ClientTravel ...` (L399), `Game class is
+  'XComMPShell'` (L408), `screen UIMPShell_MainMenu` (L434), `MP state
+  network=True online=True` (L435). The friend then opened Edit Squad
+  Loadouts (`UIMPShell_SquadLoadoutList_Preset` L450,
+  `UIMPShell_SquadEditor_Preset` L454), went back to the main menu
+  (L462-490) and quit (L506). No lobby (not in the friend's Part A).
+- **Other observations (from the log; meaning is a guess):**
+  - The friend's game ran from a different Steam library than Kc's.
+    Mod path: the default `../../XcomGame/Mods/X2TacticalCoop` (L146).
+    Only the five DLC folders and our mod were checked for DLC (L136-146).
+  - Before the version line, the engine reported 7 `XCom*.ini` files
+    missing (L4-10), and 41 more between L86 and L126. Kc's host log has
+    none of these for the same names. Guess: the friend's renamed
+    `Config` meant this launch built a fresh one, so either Part A step
+    5 (one normal launch first) was skipped or its files weren't kept.
+    Either way the friend ran on clean defaults, which is what Kc's note
+    3 wanted, and AML still loaded the mod.
+  - The friend's main-menu backdrop map was `XComShell_Tundra` (L166)
+    and later `TLP_Shell_Skyranger` (L462); Kc's is `XPACK_Shell_Intro`.
+    Guess: the backdrop depends on the profile; neither is in the match
+    hashes.
+  - `Error:` lines on the friend's side are the same kinds as Kc's
+    (corrupt `borderGradientDashed` texture, `DefaultCharacterPool.bin`,
+    `Can't destroy a null online session`), plus `NVAPI Error ... not an
+    Nvidia card` (L158). None come from the mod.
+- **Still untested:** the invite, the join, the match start and turns
+  (rows 8-11); the invite fix and the turn trace.
+- **Changed:** this entry and the M2 status line. No code change.
+- **Problems:** the friend's build ID is missing. CLAUDE.md asks for it
+  with every test result. The matching executable lines fit 8270065 but
+  don't prove it (a content-only update could keep the same executable).
+- **Next:** Kc gets the friend's `buildid`; then the live test
+  (checklists/host.md Part 3).
+
+### Session 5 prompt log (continued, 2026-11-11, pre-flight compare)
+- **Prompt:** "Yes, compare" (the button under "Has the friend's
+  solo-run Launch.log arrived for the pre-flight compare?")
+  - **Provided:** the compare (READY); a read of the friend's log for
+    the row 1-5 lines and for errors; this entry.
+  - **Misreads / rule breaks:** none found. I didn't read or quote the
+    log's machine and user name lines.
+  - **How It Was Verified:** the tool's output (15 `same`, exit 0);
+    Grep of `preflight-guest.log` for X2TC, LoadMap, game class, errors
+    and DLC checks (line numbers above); the same Grep on the host log
+    for comparison.

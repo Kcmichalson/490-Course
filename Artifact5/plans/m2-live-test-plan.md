@@ -198,6 +198,12 @@ and the friend makes a squad loadout in Part A if they have none.
   `local\m2-logs\live-host.log` and `live-guest.log`.
 
 ### Step 6: pre-flight, each alone, before the session (in the checklists)
+**Result (2026-11-11):** `preflight_compare.py` on
+`preflight-host.log` and `preflight-guest.log`: READY, all 15 rows the
+same. The friend's run also passed rows 1-5 on their own machine and
+account. Open: the friend's `buildid` (not in the log, not yet
+reported).
+
 1. Build 8270065.
 2. Launch with only our mod, click MULTIPLAYER, quit.
 3. The friend sends their Launch.log.

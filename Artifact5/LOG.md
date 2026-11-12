@@ -23,8 +23,12 @@ CLAUDE.md describes.
   checklists written; shared build 0.2.0 built and run alone
   2026-11-11, trace timer confirmed, packaged to `local\release\`;
   friend's solo run 2026-11-11: rows 1-5 pass on a second machine and
-  account, pre-flight compare READY; friend's build ID not yet reported;
-  next the live test, checklists/host.md Part 3)
+  account, pre-flight compare READY; **live test 2026-11-11: rows 8-11
+  pass over the internet (Private lobby, Steam invite from the main menu
+  and from the multiplayer menu, one full turn each); all 11 rows pass
+  on 8270065 by the travel route**; proposed decision: current build,
+  for Kc to confirm; friend's build ID still to be recorded; exiting a
+  match hangs on both sides, a lead is in sdk-findings)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -2179,3 +2183,157 @@ reported**; host side 8270065.
     Grep of `preflight-guest.log` for X2TC, LoadMap, game class, errors
     and DLC checks (line numbers above); the same Grep on the host log
     for comparison.
+- **Prompt:** "Don't know, you don't need it for this test we can get it
+  later, give me the next thing that we can test currently with them
+  since I have them for the time being live"
+  - **Provided:** the live-test checklist (rows 8-11) in chat, condensed
+    from checklists/host.md Part 3 and checklists/friend.md Part B, with
+    the invite accepted from the multiplayer menu first and from the
+    main menu (the invite fix) as a second round if time allows.
+  - **Decision (Kc):** the friend's `buildid` is deferred; it is to be
+    added to the live-test result when Kc has it. Until then the
+    friend's build is recorded as unknown.
+  - **Misreads / rule breaks:** none. Kc chose the model in the app
+    (`/model claude-opus-5-5`) before this prompt.
+  - **How It Was Verified:** nothing to verify yet; no test run this
+    turn.
+- **Prompt:** "Was able to get to step 11 as expected, game hanged were
+  it did previously, though I exited and hung at the same spot, when I
+  exited, he got the 'after action report, victory', but then after
+  trying to close from that their own game hung. We have both closed the
+  game, continue with round 2? Or send logs now"
+  - **Provided:** save both logs first (a new launch overwrites
+    Launch.log), then round 2 with its own log names. Kc's report is
+    recorded here as seen, not yet checked against the logs: rows 8-11
+    reached on both sides; the host's exit hung on "Preparing to exit
+    online match..."; the friend then got the after-action report
+    ("victory") and their game hung when closing it.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** not yet; the logs are read after round 2.
+- **Prompt:** "wait what is different between round 2 and 1?"
+  - **Provided:** the only difference is where the friend is when the
+    invite is accepted (round 1: multiplayer menu, the game's own path;
+    round 2: main menu, the mod's invite fix). No files changed.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** from the plan and the SDK trace already
+    recorded; nothing new run.
+- **Prompt:** "Wait, they were already on the main menu this last run,
+  should we do a run where they are in the multiplayer interface or is
+  this fine?"
+  - **Correction (Kc):** in round 1 the friend accepted the invite from
+    the **main menu**, not the multiplayer menu as the checklist said.
+    So round 1 already exercised the mod's invite fix; the logs will
+    show whether `X2TC_InviteListener` did the travel.
+  - **Provided:** round 2 swapped: the friend accepts from the
+    multiplayer menu (the game's own path, which the friend checklist
+    tells players to use), up to the lobby only; logs saved first.
+  - **Misreads / rule breaks:** none on my side; the checklist step and
+    what was run differed, recorded above.
+  - **How It Was Verified:** not yet; both rounds' logs are read after
+    round 2.
+
+### 2026-11-11 — Session 5 (continued): live test with a friend, rows 8-11 pass
+On the PC, Claude Opus 5.5. Test by Kc and a friend (who is not recorded
+here; Kc's to say), over the internet, each on their own Steam account
+and copy, mod 0.2.0 shared build on both. **Game build ID: host
+8270065; friend not yet reported** (Kc: "we can get it later"). Logs in
+`local\m2-logs\` (not committed): `live-host.log` (600 lines) and
+`live-guest.log` (626), round 1; `live-host-2.log` (455) and
+`live-guest-2.log` (459), round 2. The logs hold Steam persona names and
+IP addresses; neither is quoted here.
+
+**Where the friend accepted the invite (Kc, from the friend's
+recollection):** round 1 (`live-host.log`, `live-guest.log`) from the
+**main menu**; round 2 (`live-host-2.log`, `live-guest-2.log`) from the
+**multiplayer menu**. The logs agree: round 1's invite check says
+`game XComShell`, round 2's says `game XComMPShell`.
+
+Clock offset: the guest's log starts 19 s after the host's in round 1
+(23:40:50 and 23:41:09), so host time minus 19 s is guest time. The
+cross-machine timings below use that.
+
+- **Round 1 (test): rows 8-11 pass.**
+  - **Row 8, invite from the main menu (the mod's invite fix):** guest
+    `OnGameInviteAccepted` → `SetShuttleToMPInviteLoadout` (L165-167),
+    `X2TC: Invite accepted callback: success=True has game settings=True`
+    (L169), half a second later `Invite check: kept by the game=True
+    shuttle to invite loadout=True game XComShell` and `Invite: on the
+    main menu, ClientTravel to ...` (L170-171), `Game class is
+    'XComMPShell'` (L180), `screen UIMPShell_SquadLoadoutList_AcceptingInvite`
+    (L212). **The fix worked as written.** Whether the game alone would
+    have stalled there was not tested (guess from Stage 1: yes).
+  - **Row 9, join:** guest `TriggerAcceptedInvite` (L224) → `LoadMap:
+    XComShell_Multiplayer?Game=XComGame.X2MPLobbyGame` (L234) → `Lobby
+    opened` (L270). Host: `NotifyAcceptedConnection` (L286), `Lobby
+    state: players=1 opponent joined=True connections=True can
+    start=True` (L287).
+  - **Row 10, match start:** both loaded `Plot_ALN_MP_Md_02` with
+    `XComGame.XComMPTacticalGame` (host L296, guest L283) and opened the
+    tactical HUD (host L369, guest L356). The lobby's `open` works with
+    two players. Game states crossed the network (`SendGameState` 21
+    states, guest L279; `SendMergeGameState` on both).
+  - **Row 11, one full turn each:** host `Turn start: player object 868
+    team 2 turn count 1 local player=True` (L541); host `Turn poll
+    waiting: no acting player` (L578) as the guest's turn began (guest
+    `Turn start: player object 869 team 4 turn count 1 local
+    player=True`, L520); host `turn count 2` (L579) a second after the
+    guest's `OnPlayerTurnBegun` (L605-606). No disconnect popup.
+  - **Exit (problem):** host pause menu → `UIProgressDialogue` (L583;
+    Kc saw "Preparing to exit online match..."), connection closed
+    (L584-586), then nothing until `appRequestExit` 37 s later (L589).
+    The guest saw the connection close at the same clock time (L609-611)
+    and got `UIMissionSummary` (L613; Kc: the after-action report,
+    "victory"). Kc: the friend's game hung when closing that; their log
+    shows `appRequestExit` 38 s later (L615) and a normal exit, so how it
+    was closed isn't known.
+- **Round 2 (test): rows 8-9 pass from the multiplayer menu.**
+  - Guest: invite callback (L223), the game rebuilt the multiplayer menu
+    and opened the accept-invite squad screen by itself (L226-233), then
+    `Invite check: ... game XComMPShell` and `Invite: not on the main
+    menu, leaving it to the game` (L235-236). Lobby joined (L251-288).
+    Host: `opponent joined=True` (L286).
+  - Leaving the lobby closed the connection on both (host L296-300,
+    guest L295-304); **both** landed on a hidden main menu and the
+    lobby-exit fix took each to the multiplayer menu (host L344-384,
+    guest L345-386). First test of that fix on a second machine and
+    after the other player's departure. Both then quit normally.
+- **Trace limitations found (diagnostics only; not fixed, to avoid a
+  rebuild):**
+  - `Lobby state: players=` stays 1 with two players on both sides, so
+    `PRIArray` isn't a player count here; `opponent joined` (host side)
+    is the useful flag. The guest's lobby shows `can start=False`.
+  - Each side logs only its own turns as `Turn start`; the other
+    player's turn shows as one `Turn poll waiting: no acting player`
+    line (one-shot), and the guest's first wait line hides later ones.
+- **Exit hang lead (SDK source; a guess for 8270065):**
+  `XComTacticalController.AttemptExit` (L2498-2517) shows the progress
+  dialog, forfeits, and sets a 15-second `ForcedExit` that calls
+  `Pres.StartMPShellState()` (L2519-2523), which runs
+  `ConsoleCommand("open XComShell_Multiplayer.umap?Game=XComGame.XComMPShell")`
+  (`XComPresentationLayerBase.uc` L1194-1198): the one `open` that loads
+  nothing on 8270065. That fits both hangs. Untested.
+- **Result against SPEC.md M2:** "One ordinary 1v1 match over LAN or
+  Steam, with a friend [...] that gets through at least one full turn":
+  done, with Launch.log lines from both machines. Rows 1-11 of
+  plans/m2-plan.md pass on 8270065 (rows 1-7 Stages 1c-1d, 8-11 today).
+  **Proposed decision: current build (no beta branch).** Not recorded
+  as decided until Kc confirms; the friend's build ID is still missing.
+- **Changed:** this entry, the M2 status line, plans/m2-plan.md
+  (results), plans/m2-live-test-plan.md (result), research/sdk-findings.md
+  (live test, exit hang lead). No code change.
+- **Problems:** exit hangs (above); friend's build ID missing.
+- **Checks:** Grep and Reads of all four logs (line numbers above);
+  SDK `XComTacticalController.uc` L2480-2559,
+  `XComPresentationLayerBase.uc` L1771-1779 and the `StartMPShellState`
+  lines; the game's `XComGame.int` L4658 for the dialog text.
+
+### Session 5 prompt log (continued, 2026-11-11, live test)
+- **Prompt:** "All four logs saved, please be sure to note that host-2
+  and guest-2 are in the multiplayer menu hweras live-host and
+  live-guest were from the main menu, as per their recollection."
+  - **Provided:** the four logs read against rows 8-11; the note on
+    where the invite was accepted (and that the logs agree); the exit
+    hang lead; the records above.
+  - **Misreads / rule breaks:** none found. Persona names and IP
+    addresses in the logs are not quoted anywhere committed.
+  - **How It Was Verified:** as under Checks above.

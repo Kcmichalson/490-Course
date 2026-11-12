@@ -211,6 +211,16 @@ reported).
    `devconsole=False`, mod names and DLC names must match.
 5. Both can see each other online in Steam.
 
+## Live test result (2026-11-11)
+Host build 8270065; friend's build ID not yet reported. Logs
+`local\m2-logs\live-host.log` / `live-guest.log` (round 1, invite
+accepted from the main menu) and `live-host-2.log` / `live-guest-2.log`
+(round 2, from the multiplayer menu). **Rows 8-11 pass** in round 1;
+rows 8-9 again in round 2. The invite fix and the lobby-exit fix both
+worked on the friend's machine. Exiting a match hangs on both sides
+(lead in research/sdk-findings.md). Details and line numbers: LOG.md,
+"live test with a friend".
+
 ## Open points
 - The friend's Launch.log may contain Steam names. It stays in `local/`;
   LOG.md quotes it without names or IDs.

@@ -745,6 +745,34 @@ Log `local\m2-logs\pc-stage1e.log`, 2026-11-10, mod version 0.2.0.
   `X2TacticalGameRuleset.GetCachedUnitActionPlayerRef` returns an empty
   reference outside the unit-actions state, L5462–5469).
 
+### Live test: two players over the internet (test, 2026-11-11)
+Host build 8270065, friend's build ID not yet reported; mod 0.2.0 on
+both. Logs in `local\m2-logs\live-*.log` (details and line numbers in
+LOG.md).
+- A Private lobby, a Steam invite (accepted from the main menu, then in
+  a second round from the multiplayer menu), the lobby's `open` to the
+  tactical map with two players, and one full turn each all work on
+  8270065.
+- From the main menu the game kept the invite (`HasAcceptedInvites`
+  true, shuttle to the invite loadout set) and the mod's `ClientTravel`
+  got the guest to the accept-invite squad screen. From the multiplayer
+  menu the game did it alone, as the SDK trace above predicted.
+- Game state crosses the network as in the SDK
+  (`UXComGameStateNetworkManager::SendGameState`,
+  `SendMergeGameState` lines in both logs).
+- **Exit hang (test) and lead (guess):** leaving a match hung on the
+  "Preparing to exit online match ..." dialog
+  (`m_strShutdownOnlineGame`, game `XComGame.int` L4658;
+  `XComPresentationLayerBase.uc` L1771-1779). The leaving player calls
+  `XComTacticalController.AttemptExit` (L2498-2517): forfeit, then a
+  15-second `ForcedExit` that calls `Pres.StartMPShellState()`
+  (L2519-2523), which is `ConsoleCommand("open XComShell_Multiplayer.umap?Game=XComGame.XComMPShell")`
+  (`XComPresentationLayerBase.uc` L1194-1198), the `open` that loads
+  nothing on 8270065. A likely fix in the same style as the MULTIPLAYER
+  button: travel to the multiplayer shell with `ClientTravel` when that
+  dialog stays up, or when the after-action screen closes. Untested; its
+  own plan.
+
 ## For later (M3/M4, noticed in passing only)
 
 - **Multiplayer teams in single player (Highlander).** The Highlander's

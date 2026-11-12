@@ -266,6 +266,12 @@ Variants of the plain test (a few lines each, same checklist):
 - **B** (row 4 fails): the handler calls
   `XComShellPresentationLayer.UIMPShell_MainMenu()` (L714-726) directly.
 
+**Result, all rows (2026-11-11):** rows 1-7 pass on the PC (Stages 1c,
+1d, build 8270065); rows 8-11 pass in the live test with a friend over
+the internet (Private lobby, Steam invite; host 8270065, friend's build
+ID not yet reported). See plans/m2-live-test-plan.md and LOG.md. By the
+decision rule below: current build (proposed; Kc confirms).
+
 ## Fallbacks, in Kc's order
 1. **Highlander run** (source read already done in Stage 0; the PC-only
    half moved forward to Stage 1b on 2026-11-10). Subscribe on

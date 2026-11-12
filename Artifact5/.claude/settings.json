@@ -91,7 +91,10 @@
       "Edit(~/.ssh/**)",
       "Read(//c/Users/Kc/.ssh/**)",
       "Edit(//c/Users/Kc/.ssh/**)",
-      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/*)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/.gitattributes)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/.gitignore)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/index.html)",
+      "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/LOG.md)",
       "Read(//c/Users/Kc/Documents/TCSS490-AI-Course/.git/**)"
     ]
   },

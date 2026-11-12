@@ -219,7 +219,8 @@ accepted from the main menu) and `live-host-2.log` / `live-guest-2.log`
 rows 8-9 again in round 2. The invite fix and the lobby-exit fix both
 worked on the friend's machine. Exiting a match hangs on both sides
 (lead in research/sdk-findings.md). Details and line numbers: LOG.md,
-"live test with a friend".
+"live test with a friend". M2 closed on 2026-11-12 with the decision
+"current build"; this plan is done.
 
 ## Open points
 - The friend's Launch.log may contain Steam names. It stays in `local/`;

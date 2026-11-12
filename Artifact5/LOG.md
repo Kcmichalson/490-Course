@@ -9,7 +9,10 @@ CLAUDE.md describes.
   8270065; the repo-root Read gap is carried over, see Session 5)
 - [x] M1: Read the SDK (Session 3; done before M0 by Kc's decision. SDK
   date from SteamDB added in Session 4)
-- [ ] M2: Reach multiplayer on the current build (decision gate; plan
+- [x] M2: Reach multiplayer on the current build (closed by Kc on
+  2026-11-12. **Decision: current build (8270065), no beta branch.**
+  Mod 0.2.0. Carried over: the friend's build ID for the live test, the
+  match-exit hang. History: plan
   approved 2026-11-10, plans/m2-plan.md; Stage 0 done 2026-11-10,
   Stage 1 run 1 2026-11-10: button click reaches the handler, but no
   map load follows; Stage 1b Highlander run 2026-11-10: stock items
@@ -26,9 +29,8 @@ CLAUDE.md describes.
   account, pre-flight compare READY; **live test 2026-11-11: rows 8-11
   pass over the internet (Private lobby, Steam invite from the main menu
   and from the multiplayer menu, one full turn each); all 11 rows pass
-  on 8270065 by the travel route**; proposed decision: current build,
-  for Kc to confirm; friend's build ID still to be recorded; exiting a
-  match hangs on both sides, a lead is in sdk-findings)
+  on 8270065 by the travel route**; exiting a match hangs on both
+  sides, a lead is in sdk-findings)
 - [ ] M3: Two humans on one team
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
@@ -2337,3 +2339,37 @@ cross-machine timings below use that.
   - **Misreads / rule breaks:** none found. Persona names and IP
     addresses in the logs are not quoted anywhere committed.
   - **How It Was Verified:** as under Checks above.
+
+### 2026-11-12 — Session 5 (continued): M2 closed
+Claude Opus 5.5. No test this turn.
+
+- **Decision (Kc, 2026-11-12): current build.** M3 onward targets the
+  current Steam build (8270065 at the time of the tests), not the pre-21.10
+  beta branch (SPEC.md section 3, "Game version"). Basis: all 11 rows of
+  plans/m2-plan.md pass on 8270065 by the travel route (rows 1-7 on the
+  PC, 8-11 in the live test of 2026-11-11), which meets SPEC.md's M2
+  check: one 1v1 match over Steam with a friend through one full turn,
+  with Launch.log lines from both machines.
+- **What M2 leaves for later (not M2's scope):**
+  - The friend's game build ID for the live test (Kc to add when known).
+  - Exiting a match hangs on both sides; SDK lead in
+    research/sdk-findings.md ("Live test"). Needs its own plan; likely
+    needed by M3 or M6 for playtesting.
+  - Trace limits: the lobby player count and the remote player's turns
+    (LOG.md, live test entry).
+  - Carried from M0: the repo-root Read gap.
+- **Changed:** the milestone status (M2 ticked), this entry,
+  plans/m2-plan.md and plans/m2-live-test-plan.md (closed notes).
+- **Next:** M3 (two humans on one team): plan first, per CLAUDE.md.
+
+### Session 5 prompt log (continued, 2026-11-12, M2 closed)
+- **Prompt:** "Yes, close M2" (the button under "Close M2 with the
+  decision "current build"?")
+  - **Provided:** M2 ticked with the decision and what it carries over;
+    the closing entry above; closed notes in both M2 plans; a commit
+    message.
+  - **Misreads / rule breaks:** none. The friend's build ID is still
+    missing, as Kc chose; recorded as carried over, not filled in.
+  - **How It Was Verified:** Read of the milestone status after the
+    edit is not needed (Edit succeeded); the entry cites the live test
+    entry for the evidence.

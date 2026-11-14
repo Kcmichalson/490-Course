@@ -44,7 +44,10 @@ CLAUDE.md describes.
   (0.3.2): the laptop receives the PC's history (231 frames) and opens
   the same mission in replay mode.** Stage 4 Run 1 2026-11-14 (0.3.3):
   the laptop follows live, all 24 sends matched, turn starts identical;
-  two full rounds, not three (Kc to decide))
+  two full rounds; **Stage 4 accepted by Kc 2026-11-14** (Stage 6's
+  three-turn check repeats the live follow). Stage 5 replanned and
+  approved 2026-11-14 (tutorial-style follower; Stage 5b for abilities
+  added); Stage 5 code written (0.3.4), not built)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -3221,3 +3224,110 @@ logs; only `MP state` differs). Logs in `local\m3-logs\`:
   - **Provided:** the same command, run once; it succeeded.
   - **Misreads / rule breaks:** none.
   - **How It Was Verified:** the tool-log shows the retry `ok`.
+
+### 2026-11-14 — Session 7 (continued): Stage 4 accepted; partial-history size; Stage 5 replanned
+On the PC, Claude Opus 5.5. No test, no code change.
+
+- **Decision (Kc, 2026-11-14):** Stage 4 accepted on two full rounds;
+  Stage 6's three-turn check repeats the live follow. Kc commits with
+  the suggested message.
+- **Investigated (SDK; research/sdk-findings.md finding 15):** the
+  partial history send is native, but its class keeps the last sent
+  serialization "used for binary Delta updates", has a history-delta
+  data type, and a receiver that processes incoming history data.
+  Guess: each send diffs a fresh serialization against the last one.
+  Stage 4's one-frame sends (63-94 KB, about 10-13% of a full send,
+  growing with the history's length) fit part of each send scaling with
+  the whole history. **Recorded as a risk** for long campaign missions
+  (Mr.Fear's warning) in plans/m3-plan.md, with a possible fix: send
+  only the new frames (`SendGameState` per frame or `SendMergeGameState`)
+  after a full history at join, tested later behind a switch.
+- **Found while planning Stage 5 (finding 16):** a clicked move is built
+  and submitted by `XComTacticalController.GameStateMoveUnit`, not
+  `ActivateAbility`, so the approved Highlander route
+  (`PostModifyNewAbilityContext`) never sees moves. **Stage 5 needs a
+  revised design, proposed to Kc for approval** (finding 17: the
+  tutorial's replay manager is the game's own "player acts inside a
+  replay" and receives every submitted context).
+- **Changed:** research/sdk-findings.md (findings 15-17),
+  plans/m3-plan.md (Stage 4 accepted; the size risk), this entry and the
+  M3 status line.
+- **Checks:** SDK lines read as cited in findings 15-17; the Stage 4 size
+  table from the previous entry.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 4 accepted, Stage 5 plan)
+- **Prompt:** "Accept Stage 4 on two full rounds; Stage 6's three-turn
+  check repeats the live follow. I commit with your message. One thing
+  to investigate before or during Stage 5, not a blocker: even 1-frame
+  updates were 63-94 KB and grew over the mission. Find out from the SDK
+  what a merge send contains, and whether part of it scales with total
+  history rather than new frames. If it does, record it as a risk for
+  long campaign missions (Mr.Fear's warning) with a possible fix. Then
+  plan Stage 5: the laptop's first action, applied by the PC, with a way
+  for the guest to quit from the start."
+  - **Provided:** Stage 4 recorded as accepted; the SDK reading of the
+    partial history send (it's the partial-history send, not
+    `SendMergeGameState`, that Stage 4 used; both are native), the risk
+    and a possible fix; the finding that clicked moves bypass the
+    approved hook; a revised Stage 5 plan for approval, with a LEAVE
+    button for the guest from the start.
+  - **Misreads / rule breaks:** none. "Merge send" read as the partial
+    history sends Stage 4 made; said so.
+  - **How It Was Verified:** not applicable (no fix).
+
+### 2026-11-14 — Session 7 (continued): Stage 5 approved and written (0.3.4, not built)
+On the PC, Claude Opus 5.5. No test this turn.
+
+- **Decisions (Kc, 2026-11-14):** the tutorial-style follower replaces
+  the Highlander route for capturing the guest's actions, with the
+  ruleset override as the fallback, and every tutorial-specific call is
+  logged; CO-OP: LEAVE for the guest from the start; moves first in
+  Stage 5, and a new **Stage 5b for abilities (at least a standard shot)
+  before Stage 6** ("Co-op where the guest can only move isn't real
+  co-op"; abilities pass through `ActivateAbility`, so either route can
+  capture them).
+- **Changed:**
+  - plans/m3-plan.md: section 2 revised (tutorial-style follower,
+    fallback, the original route kept for reference); Stage 5 rewritten;
+    Stage 5b added; files list; decisions 9-12; Results (Stage 5 code).
+  - `X2TC_CoopReplayMgr.uc`: extends `XComTutorialMgr`; stock replay
+    start; capture in `HandleSubmittedGameStateContext` (moves sent, the
+    rest logged); guest input switching; tutorial functions replaced by
+    logged no-ops (`IsNextAbility`, `IsTarget` return true;
+    `StartDemoSequenceDeferred`, `ToggleDemoMode`,
+    `SetupForPlayerInputUsingFrame`, the marker functions,
+    `DoTimedFocusOnTargetPoint`, `HandleTooManyInvalidSubmissions`,
+    `OnActiveUnitChanged`, `OnVisualizationBlockComplete`).
+  - `X2TC_CoopSession.uc`: `X2TC_GuestMove` and `X2TC_MoveResult`; the
+    host's move apply through `GameStateMoveUnit` with checks and a 10 s
+    wait; `LeaveAsGuest` and `ResetSession`; the host stops sending when
+    the guest leaves; poll-gap ("hitch") lines on both sides; data types
+    per send; a guest warning if its history grows by itself.
+  - `X2TC_CoopListener.uc`: CO-OP: LEAVE on the guest's tactical HUD.
+  - `X2TC_VERSION` 0.3.4; `mod/README.md`; checklists/m3-stage5.md (new).
+- **Not handled yet (recorded):** the end of a mission on the guest (the
+  follower doesn't register the tutorial's end-of-battle observer);
+  Stage 5b's abilities.
+- **Problems:** none yet; not compiled. A Python check: locals before
+  statements, balanced braces and parentheses in the three co-op
+  classes. The overridden tutorial functions' signatures were copied
+  from `XComTutorialMgr.uc`.
+- **Checks:** SDK lines read as cited in the class headers.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 approved)
+- **Prompt:** "Approved: 1. The tutorial-style follower in place of the
+  Highlander route, with the ruleset override as the fallback. Log
+  anything tutorial-specific that fires (scripted steps, narrative,
+  hidden abilities, UI hints), so surprises show up in the logs. 2.
+  CO-OP: LEAVE, from the start. 3. Moves first in Stage 5, but not moves
+  only for M3: add a Stage 5b for abilities (at least a standard shot)
+  before Stage 6. [...] Save the revised Stage 5 and the new 5b into the
+  plan, then write the Stage 5 code and checklist (version 0.3.4)."
+  - **Provided:** the plan updates, the Stage 5 code, the checklist (with
+    notes to watch for tutorial-like UI on the laptop), the records
+    above, a commit message.
+  - **Misreads / rule breaks:** none known. Narrative and UI hints that
+    don't go through the replay manager can't be intercepted there; the
+    trace listener's per-screen lines and Kc's notes cover them, as the
+    checklist says.
+  - **How It Was Verified:** not applicable (no fix; the build is Kc's).

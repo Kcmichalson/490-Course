@@ -10,7 +10,8 @@
 //  On the guest, after it has opened the host's mission (Stage 3), the tactical HUD gets
 //  no HOST button; instead it and the game's replay screen (UIReplay) tell the session
 //  they opened. From Stage 4, the replay screen is closed when the session's follower
-//  (X2TC_CoopReplayMgr) has replaced the stock replay manager.
+//  (X2TC_CoopReplayMgr) has replaced the stock replay manager. From Stage 5 the guest's
+//  tactical HUD has CO-OP: LEAVE (X2TC_CoopSession.LeaveAsGuest) where HOST would be.
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -51,6 +52,9 @@ event OnInit(UIScreen Screen)
 		{
 			// The guest's copy of the host's mission (Stage 3): no HOST button here.
 			GuestSession.OnGuestMissionScreen("tactical HUD");
+			// Stage 5: the guest's way out, from the start.
+			AddButton(Screen, 'X2TC_CoopLeaveButton', "CO-OP: LEAVE", OnLeaveClicked, 260);
+			`log("Coop: LEAVE button added to the guest's tactical HUD", , 'X2TC');
 		}
 		else
 		{
@@ -120,6 +124,23 @@ function OnHostClicked(UIButton Button)
 		Button.SetText("CO-OP: HOSTING");
 		Button.DisableButton();
 	}
+}
+
+// Stage 5: the guest leaves the co-op mission and goes back to the main menu.
+function OnLeaveClicked(UIButton Button)
+{
+	local X2TC_CoopSession GuestSession;
+
+	PlayClickSound(Button);
+	Button.DisableButton();
+	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
+	if (GuestSession == none)
+	{
+		`log("Coop: LEAVE clicked, but no guest session; opening the main menu anyway", , 'X2TC');
+		Button.ConsoleCommand(class'X2TC_CoopSession'.const.LEAVE_MAP_COMMAND);
+		return;
+	}
+	GuestSession.LeaveAsGuest();
 }
 
 function OnJoinClicked(UIButton Button)

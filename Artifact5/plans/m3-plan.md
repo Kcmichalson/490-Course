@@ -24,8 +24,29 @@ Why not let both machines simulate: the AI would have to decide the same
 on two machines, and M4's "the host applies actions in the order they
 arrive" needs one authority anyway.
 
-## 2. How the guest's action reaches the host (Highlander route)
+## 2. How the guest's action reaches the host
 
+**Revised 2026-11-14 (approved by Kc): the tutorial-style follower.** A
+clicked move is built and submitted by
+`XComTacticalController.GameStateMoveUnit`, not `ActivateAbility`, so
+the Highlander route below never sees moves (research/sdk-findings.md
+finding 16). Instead the guest's follower becomes a subclass of the
+game's tutorial manager (`XComTutorialMgr`), still placed only in the
+replay manager slot (no class override). In tutorial mode a context the
+guest submits during the replay goes to the replay manager's
+`HandleSubmittedGameStateContext` instead of being applied (moves and
+abilities, latent submits included), input is allowed during the replay,
+and the pause menu disables saving (finding 17). The follower captures
+there and sends the action to the host; tutorial-specific behaviour
+(start logic, "next ability only" filtering, markers, demo steps) is
+switched off and **logged whenever it fires**, so surprises show in the
+logs (Kc). **Fallback** if tutorial mode fails (no input, abilities
+hidden, or an action applied on the guest): the `X2TacticalGameRuleset`
+override of the two submit functions, with input forced on. Abilities
+do pass through `ActivateAbility`, so for them either route can capture
+(Kc's note); the Highlander event stays available.
+
+The original route, kept for reference:
 - On the guest, a listener on the Highlander's
   `PostModifyNewAbilityContext` event (Issue #890) sees every ability the
   player is about to submit, with its finished context, before the
@@ -107,12 +128,44 @@ playing. Lines: host `sent to frame N`; guest `replayed to frame N`;
 both `Coop sync: turn T frame N` at each XCOM turn start, in matching
 pairs. Watch the alien turn (Mr.Fear's freeze report).
 
-**Stage 5: one action from the guest, applied by the host.** Section 2's
-route. The follower forces the guest's input state (the game refuses
-input state changes during a replay unless forced or in the tutorial).
-Lines: guest `action captured (move, unit U), not applied locally`; host
-`action received (move, unit U)`, `applied, frame N`; guest `replayed to
-frame N`. On failure: record the line, plan the fallback override.
+**Stage 5: the guest's first move, applied by the host (revised and
+approved 2026-11-14; version 0.3.4).**
+- Follower: `X2TC_CoopReplayMgr` extends `XComTutorialMgr`; replays and
+  follows as in Stage 4 (the stock replay start, not the tutorial's);
+  turns the guest's input on (`ActiveUnit_Moving`) only during XCOM's
+  turn, once caught up and the visualizer is idle, and back to the
+  replay's input otherwise; captures every submitted context, sends
+  moves (unit and path tiles, `X2TC_GuestMove`) and logs the rest as not
+  sent; logs each tutorial-specific call it intercepts.
+- Host: rebuilds the move with its own
+  `XComTacticalController.GameStateMoveUnit` (the function its own clicks
+  use), after checking it is XCOM's turn, the unit is an XCOM unit, and
+  the ruleset and visualizer aren't busy (retries up to 10 s); answers
+  `X2TC_MoveResult` (applied or refused, with the reason). Ownership is
+  only logged; Stage 6 enforces it.
+- **CO-OP: LEAVE** on the guest's tactical HUD from the start: ignores
+  the game's own connection-error handling, disconnects, and opens the
+  main menu map (`open XPACK_Shell_Intro?Game=XComGame.XComShell`,
+  tested in M2 Stage 1e). The host stops sending when the connection
+  closes and plays on alone. The guest's pause menu is also tried.
+- Measurement (Mr.Fear's warning, finding 15): the data types each send
+  queues, and any gap over 1.5 s between polls on either side.
+- Lines: guest `follower: input on|off`, `captured (move, unit U, N
+  tiles), sent; not applied locally`; host `guest move received`,
+  `applied, frames A -> B` or `refused: <reason>`; guest `move result`,
+  `replayed to frame N`; `tutorial call intercepted: <name>` if any.
+- Pass: the guest's move appears on both screens and both logs show it;
+  the guest's frame count doesn't change before the host's send; LEAVE
+  returns the guest to the main menu while the host plays on.
+
+**Stage 5b: the guest's abilities (added by Kc, 2026-11-14, before
+Stage 6).** At least a standard shot: the guest's captured ability
+context (ability, source, target, and for location-targeted abilities
+the target locations) is sent; the host rebuilds it through
+`XComGameStateContext_Ability.ActivateAbility` from its own available
+actions, so its roll decides the result. Its own short addition to the
+plan once Stage 5 passes. "Co-op where the guest can only move isn't
+real co-op" (Kc), and M4 is already the hardest milestone.
 
 **Stage 6: ownership and phases (M3's check).**
 - Each soldier belongs to P1 (host) or P2 (guest), stored as a unit
@@ -141,9 +194,11 @@ test buttons behind `SHOW_TEST_BUTTONS` as before:
 - `X2TC_CoopSession` (connection, history, remote commands; Stages 2-4)
 - `X2TC_CoopListener` (HOST/JOIN buttons, opening the guest's map;
   Stages 2-3)
-- `X2TC_CoopReplayMgr` (guest follower and forced input; Stages 4-5)
-- `X2TC_CoopActionListener` (the `PostModifyNewAbilityContext`
-  listener, guest side; Stage 5)
+- `X2TC_CoopReplayMgr` (guest follower; from Stage 5 a tutorial-style
+  replay manager that captures the guest's actions and switches its
+  input; Stages 4-5b)
+- ~~`X2TC_CoopActionListener`~~ (not needed: the follower captures;
+  revised 2026-11-14)
 - `X2TC_CoopOwnership` and a small phase state object (Stage 6)
 - The Highlander dependency entry (from Stage 2, when it is first
   ticked)
@@ -166,6 +221,16 @@ test buttons behind `SHOW_TEST_BUTTONS` as before:
 8. Host's own input on P2's soldiers: decided at Stage 6; for M3's check
    the players keep to their own soldiers.
 
+Added 2026-11-14 (Kc):
+9. Stage 4 accepted on two full rounds; Stage 6's three-turn check
+   repeats the live follow.
+10. Stage 5 revised: the tutorial-style follower captures the guest's
+    actions (section 2), the ruleset override as the fallback; log every
+    tutorial-specific call.
+11. CO-OP: LEAVE for the guest from Stage 5 on.
+12. Moves first in Stage 5; Stage 5b adds abilities (at least a standard
+    shot) before Stage 6.
+
 ## 7. Not determinable from source (each settled by a stage)
 
 Direct IP on 8270065 and its address form, and with Steam offline
@@ -178,7 +243,11 @@ submit in follow mode, including the native latent submit (Stage 5).
 
 The guest must never simulate (join only on XCOM's turn with the host
 idle). The guest has no pause menu while following (Stage 4): it needs
-at least a way to quit, from Stage 5 on. Heavy history may freeze the guest (Mr.Fear; the prototype's lost
+at least a way to quit, from Stage 5 on. **Partial history sends seem to
+carry a part that scales with the whole history** (one-frame sends
+63-94 KB, growing over the mission; research/sdk-findings.md finding
+15): a risk for long campaign missions (Mr.Fear's warning); possible
+fix, sending only the new frames, to test later. Heavy history may freeze the guest (Mr.Fear; the prototype's lost
 bursts). End of mission and a dropped connection are handled minimally
 (message, back to the main menu). Only the host saves. The Highlander
 dependency ties us to its version. Week 7 may not fit Stages 1-6; Stage
@@ -400,8 +469,9 @@ on both; pre-flight compare READY (only `MP state` differs). Logs
   same 11, same teams and frames. Teams: 8 XCOM, 16 aliens, 32 the Lost,
   64 resistance, 1 neutral (the Skirmish's other player slots). That is
   XCOM turn 1, alien turn 1, XCOM turn 2, alien turn 2, and the start of
-  XCOM turn 3 (the run ended 4 s after it). **Short of the checklist's
-  three full rounds**; Kc to decide whether that is enough.
+  XCOM turn 3 (the run ended 4 s after it). Short of the checklist's
+  three full rounds; **accepted by Kc (2026-11-14): Stage 6's three-turn
+  check repeats the live follow.**
 - **Pod activations:** two on the PC: during XCOM turn 1 (scamper at PC
   84.1 s) and during alien turn 1 (102.1 s). Kc saw shots, explosions,
   damage, a soldier bleeding out and the container timer go from 7 to 6
@@ -453,3 +523,22 @@ on both; pre-flight compare READY (only `MP state` differs). Logs
   must give the guest at least a way to quit** (and handle the host
   leaving, Stage 2's note). The laptop quit first here (connection closed
   at 02:30:37.5 by its clock, the PC's at 02:30:37.6).
+
+**Stage 5 code (2026-11-14, 0.3.4, written, not built).**
+`X2TC_CoopReplayMgr` now extends `XComTutorialMgr`: stock replay start
+(`super(XComReplayMgr).StartReplay`), tutorial filters return "allowed",
+tutorial steps, markers and the end-of-battle observer replaced by
+no-ops that log once (`tutorial call intercepted: <name>`); guest input
+on (`ActiveUnit_Moving`, selecting a unit if none) during XCOM's turn
+when caught up and the visualizer is idle, off otherwise;
+`HandleSubmittedGameStateContext` captures every submitted context,
+sends `StandardMove` paths (`X2TC_GuestMove`), logs anything else as not
+sent. `X2TC_CoopSession`: host keeps one pending guest move, applies it
+with `GameStateMoveUnit` (checks: living XCOM unit, XCOM's turn, path of
+2+ tiles; waits up to 10 s for an idle ruleset and visualizer), answers
+`X2TC_MoveResult`; guest LEAVE (ignore network messages, `Disconnect`,
+reset the session, open the main menu map); host stops sending on a
+closed connection; both log poll gaps over 1.5 s; each send logs its
+queued data types; the guest warns if its history grows without a
+history from the host. `X2TC_CoopListener`: CO-OP: LEAVE on the guest's
+tactical HUD. Checklist: checklists/m3-stage5.md.

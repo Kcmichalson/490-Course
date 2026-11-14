@@ -28,8 +28,9 @@ X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes:
                                               guest client), ping and pong by remote command
     X2TC_CoopListener                         M3: CO-OP: HOST (tactical HUD, single player) and
                                               CO-OP: JOIN (main menu, address box) buttons
-    X2TC_CoopReplayMgr                        M3: the guest's replay manager; follows the host's
-                                              history as it grows (view only)
+    X2TC_CoopReplayMgr                        M3: the guest's replay manager (tutorial-style from
+                                              Stage 5); follows the host's history, captures the
+                                              guest's actions, switches the guest's input
 ```
 
 ## Launching

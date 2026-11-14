@@ -32,6 +32,13 @@
 //  send queued. Both sides log every player-turn start with its frame ("Coop sync"), so
 //  the two logs can be paired.
 //
+//  Stage 5 (the guest's first move): the guest's follower captures a move and calls
+//  SendGuestMove (unit and path tiles); the host keeps it and applies it with its own
+//  XComTacticalController.GameStateMoveUnit once it's XCOM's turn and nothing is busy
+//  (up to 10 s), then answers applied or refused. The guest can leave (LeaveAsGuest:
+//  disconnect, main menu); the host then stops sending and plays on. Both sides log
+//  gaps over 1.5 s between polls, and each send logs the data types it queued.
+//
 //  One session per game: GetSession() looks it up by a fixed name in the transient
 //  package and creates it there the first time, the pattern the Highlander uses for its
 //  dependency objects (X2WOTCCH_ModDependencies.uc L102-110). A runtime default value
@@ -73,6 +80,11 @@
 //    XComGame\Classes\X2GameRuleset.uc        (BuildingLatentGameState L108)
 //    XComGame\Classes\XComGameStateContext_TacticalGameRule.uc (GameRuleType, PlayerRef
 //                                                               L39-40; eGameRule_PlayerTurnBegin)
+//    XComGame\Classes\XComTacticalController.uc (GameStateMoveUnit L1249-1345)
+//    XComGame\Classes\X2TacticalGameRulesetDataStructures.uc (PathingInputData L211-219)
+//    XComGame\Classes\XComGameStateNetworkManager.uc (Disconnect L254; Add/GetCommandParam_String
+//                                                     L235/L239)
+//    Engine\Classes\PlayerController.uc       (bIgnoreNetworkMessages L214)
 //---------------------------------------------------------------------------------------
 
 class X2TC_CoopSession extends Object;
@@ -88,6 +100,16 @@ const CMD_HISTORY_RECEIVED = "X2TC_HistoryReceived"; // guest: a partial history
 
 // Host: a partial history without an answer for this long is logged and given up on.
 const PARTIAL_ACK_TIMEOUT_SECONDS = 15;
+
+// Stage 5.
+const CMD_GUEST_MOVE = "X2TC_GuestMove";   // guest: unit ID, tile count, then X, Y, Z per tile
+const CMD_MOVE_RESULT = "X2TC_MoveResult"; // host: 1 applied / 0 refused, then the reason
+const MOVE_RETRY_SECONDS = 10;             // host: how long a move may wait for an idle ruleset
+const HITCH_SECONDS = 1.5;                 // both: a poll gap longer than this is logged
+// The guest's way back to the main menu (the same command tested from the main menu in
+// M2 Stage 1e; the game uses a shell map with XComShell when a connection drops,
+// XComGameStateNetworkManager.uc L441-445).
+const LEAVE_MAP_COMMAND = "open XPACK_Shell_Intro?Game=XComGame.XComShell";
 
 // Guest: seconds between connection attempts, and how many.
 const CONNECT_RETRY_SECONDS = 5;
@@ -136,6 +158,17 @@ var int PartialSentSecond;    // host: Seconds when the one in flight was sent
 var int PartialSentFrames;    // host: frames in the one in flight
 var int HostTurnScanFrame;    // host: last frame checked for player-turn starts
 var int PartialsReceived;     // guest
+
+// Stage 5.
+var bool bMovePending;         // host: a guest move waiting to be applied
+var int PendingMoveUnitID;
+var array<TTile> PendingMoveTiles;
+var int PendingMoveSecond;     // host: Seconds when it arrived
+var int MovesReceived;         // host
+var int MovesSent;             // guest
+var float LastPollRealTime;    // both: WorldInfo.RealTimeSeconds at the last poll
+var int GuestExpectedFrames;   // guest: history frames after the last history from the host
+var int GuestLastWarnedFrames; // guest: frame count of the last "grew by itself" warning
 
 // The session's object name in the transient package.
 const SESSION_OBJECT_NAME = "X2TC_CoopSession_Main";
@@ -384,6 +417,8 @@ function Poll()
 		return;
 	}
 
+	LogHitch();
+
 	bServer = NetworkMgr.HasServerConnection();
 	bClient = NetworkMgr.HasClientConnection();
 	NumConnections = NetworkMgr.Connections.Length;
@@ -400,7 +435,21 @@ function Poll()
 	if (Role == eCoopRole_Host && bGuestFollowing)
 	{
 		HostScanTurns();
+		if (bMovePending)
+		{
+			TryApplyGuestMove();
+		}
 		HostMaybeSendPartial(NetworkMgr);
+	}
+
+	// Guest (Stage 5): the history may only grow through the host's histories. Growth
+	// without one would mean an action was applied on the guest itself.
+	if (Role == eCoopRole_Guest && bFollowerInstalled && GuestExpectedFrames > 0
+		&& `XCOMHISTORY.GetNumGameStates() != GuestExpectedFrames
+		&& `XCOMHISTORY.GetNumGameStates() != GuestLastWarnedFrames)
+	{
+		GuestLastWarnedFrames = `XCOMHISTORY.GetNumGameStates();
+		`log("Coop guest: WARNING: history frames=" $ GuestLastWarnedFrames @ "but the host's last history had" @ GuestExpectedFrames $ ": changed on the guest itself", , 'X2TC');
 	}
 
 	// After the mission map is open, the guest only logs state changes.
@@ -455,6 +504,23 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	local XComGameStateNetworkManager NetworkMgr;
 	local array<byte> Params, Reply;
 	local int Number;
+
+	if (Command == CMD_GUEST_MOVE)
+	{
+		if (Role == eCoopRole_Host)
+		{
+			ReceiveGuestMove(RawParams);
+		}
+		return;
+	}
+
+	if (Command == CMD_MOVE_RESULT)
+	{
+		Params = RawParams;
+		Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+		`log("Coop" @ RoleName() $ ": move result from the host:" @ (Number == 1 ? "applied" : "refused") $ "," @ class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params) @ "(frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+		return;
+	}
 
 	if (Command == CMD_FOLLOWING)
 	{
@@ -557,7 +623,7 @@ function SendHistoryToGuest()
 	CountOutData(NetworkMgr, BytesBefore, BunchesBefore);
 	NetworkMgr.SendHistory(History, `XEVENTMGR);
 	CountOutData(NetworkMgr, Bytes, Bunches);
-	`log("Coop host: history sent (queued), frames=" $ LastSentFrames $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches", , 'X2TC');
+	`log("Coop host: history sent (queued), frames=" $ LastSentFrames $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
 }
 
 // Guest (Stage 3): the host's history has arrived (the network manager has already
@@ -598,6 +664,7 @@ function OnReceiveHistory(XComGameStateHistory InHistory, X2EventManager EventMa
 	}
 
 	bLoadingMission = true;
+	GuestExpectedFrames = History.GetNumGameStates();
 	MapCommand = BattleData.m_strMapCommand $ "?LoadingSave";
 	`log("Coop guest: history received, frames=" $ History.GetNumGameStates() @ "plot=" $ GetPlotName(History) $ "; opening it in replay mode:" @ MapCommand, , 'X2TC');
 	// The game's own "replay after load" switch (UIDebugChallengeMode.uc L379-382).
@@ -705,6 +772,7 @@ function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager 
 	local int Frames;
 
 	Frames = `XCOMHISTORY.GetNumGameStates();
+	GuestExpectedFrames = Frames;
 	PartialsReceived++;
 	`log("Coop" @ RoleName() $ ": partial history" @ PartialsReceived @ "received, frames=" $ Frames, , 'X2TC');
 	if (Role != eCoopRole_Guest)
@@ -753,7 +821,7 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 	bPartialInFlight = true;
 	PartialSentSecond = Seconds;
 	PartialSentFrames = Frames;
-	`log("Coop host: partial history" @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches", , 'X2TC');
+	`log("Coop host: partial history" @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
 	LastSentFrames = Frames;
 }
 
@@ -770,6 +838,27 @@ function CountOutData(XComGameStateNetworkManager NetworkMgr, out int Bytes, out
 	{
 		Bytes += NetworkMgr.OutGameData[i].GameStateRaw.Length;
 	}
+}
+
+// The distinct data types of the outgoing bunches from FirstIndex on, as numbers (the
+// order of eGameDataType, XComGameStateNetworkManager.uc L23-33: 1 History, 2 GameState,
+// 3 MergeGameState, 6 GameStateContext, 7 HistoryDelta), e.g. "7" or "1,7".
+function string QueuedTypes(XComGameStateNetworkManager NetworkMgr, int FirstIndex)
+{
+	local array<int> Seen;
+	local string Text;
+	local int i, TypeId;
+
+	for (i = Max(FirstIndex, 0); i < NetworkMgr.OutGameData.Length; i++)
+	{
+		TypeId = int(NetworkMgr.OutGameData[i].GameDataType);
+		if (Seen.Find(TypeId) == INDEX_NONE)
+		{
+			Seen.AddItem(TypeId);
+			Text $= (Text == "" ? "" : ",") $ TypeId;
+		}
+	}
+	return Text == "" ? "none" : Text;
 }
 
 // "team T turn N" for the player whose turn it is on this machine, or "no player turn".
@@ -861,6 +950,245 @@ function OnAcceptedConnection(int ConnectionIdx)
 function OnConnectionClosed(int ConnectionIdx)
 {
 	`log("Coop" @ RoleName() $ ": connection closed (connection" @ ConnectionIdx $ ")", , 'X2TC');
+	if (Role == eCoopRole_Host && bGuestFollowing)
+	{
+		// Stage 5: the guest left; stop sending and play on alone.
+		bGuestFollowing = false;
+		bPartialInFlight = false;
+		bMovePending = false;
+		`log("Coop host: the guest is gone; partial history sends stopped, the mission goes on", , 'X2TC');
+	}
+}
+
+// Both (Stage 5): log a gap between polls longer than HITCH_SECONDS (a freeze or a long
+// frame, e.g. while a large history is processed).
+function LogHitch()
+{
+	local WorldInfo World;
+	local float Now;
+
+	World = class'WorldInfo'.static.GetWorldInfo();
+	if (World == none)
+	{
+		return;
+	}
+	Now = World.RealTimeSeconds;
+	if (LastPollRealTime > 0 && Now - LastPollRealTime > HITCH_SECONDS)
+	{
+		`log("Coop" @ RoleName() $ ": hitch, poll gap" @ (Now - LastPollRealTime) $ "s (frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+	}
+	LastPollRealTime = Now;
+}
+
+// Guest (Stage 5): send a captured move (unit and path tiles) to the host.
+function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
+{
+	local array<byte> Params;
+	local int i;
+
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(UnitID, Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Tiles.Length, Params);
+	for (i = 0; i < Tiles.Length; i++)
+	{
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Tiles[i].X, Params);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Tiles[i].Y, Params);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Tiles[i].Z, Params);
+	}
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_GUEST_MOVE, Params);
+	MovesSent++;
+	`log("Coop guest: captured move" @ MovesSent @ "(unit" @ UnitID $ "," @ Tiles.Length @ "tiles), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
+}
+
+// Host (Stage 5): a guest move arrived; keep it and try to apply it.
+function ReceiveGuestMove(array<byte> RawParams)
+{
+	local array<byte> Params;
+	local int i, Count;
+	local TTile Tile;
+
+	if (bMovePending)
+	{
+		SendMoveResult(false, "another guest move is still waiting");
+		return;
+	}
+
+	Params = RawParams;
+	PendingMoveUnitID = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+	Count = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+	PendingMoveTiles.Length = 0;
+	for (i = 0; i < Count; i++)
+	{
+		Tile.X = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+		Tile.Y = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+		Tile.Z = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+		PendingMoveTiles.AddItem(Tile);
+	}
+
+	MovesReceived++;
+	bMovePending = true;
+	PendingMoveSecond = Seconds;
+	`log("Coop host: guest move" @ MovesReceived @ "received (unit" @ PendingMoveUnitID $ "," @ Count @ "tiles); owner check: Stage 6", , 'X2TC');
+	TryApplyGuestMove();
+}
+
+// Host (Stage 5): apply the pending guest move through the controller's own move
+// function (XComTacticalController.GameStateMoveUnit L1249-1345, what the host's clicks
+// use), if it's XCOM's turn and nothing is busy; waits up to MOVE_RETRY_SECONDS.
+function TryApplyGuestMove()
+{
+	local X2TacticalGameRuleset Rules;
+	local XComGameState_Unit UnitState;
+	local XComTacticalController TacticalController;
+	local XGUnit UnitVisualizer;
+	local array<PathingInputData> Paths;
+	local PathingInputData Path;
+	local string BusyReason;
+	local int FramesBefore;
+
+	Rules = `TACTICALRULES;
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(PendingMoveUnitID));
+
+	if (UnitState == none || UnitState.GetTeam() != eTeam_XCom || UnitState.IsDead())
+	{
+		RefuseGuestMove("unit" @ PendingMoveUnitID @ "is not a living XCOM unit");
+		return;
+	}
+	if (CurrentTurnTeam() != eTeam_XCom)
+	{
+		RefuseGuestMove("not XCOM's turn (" $ CurrentTurnText() $ ")");
+		return;
+	}
+	if (PendingMoveTiles.Length < 2)
+	{
+		RefuseGuestMove("path has fewer than 2 tiles");
+		return;
+	}
+
+	BusyReason = "";
+	if (Rules == none)
+	{
+		BusyReason = "no tactical ruleset";
+	}
+	else if (Rules.BuildingLatentGameState)
+	{
+		BusyReason = "ruleset building a game state";
+	}
+	else if (class'XComGameStateVisualizationMgr'.static.VisualizerBusy())
+	{
+		BusyReason = "visualizer busy";
+	}
+	if (BusyReason != "")
+	{
+		if (Seconds - PendingMoveSecond >= MOVE_RETRY_SECONDS)
+		{
+			RefuseGuestMove("still busy after" @ MOVE_RETRY_SECONDS $ "s (" $ BusyReason $ ")");
+		}
+		return;
+	}
+
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	UnitVisualizer = XGUnit(UnitState.GetVisualizer());
+	if (TacticalController == none || UnitVisualizer == none)
+	{
+		RefuseGuestMove("no tactical controller or unit visualizer");
+		return;
+	}
+
+	Path.MovingUnitRef = UnitState.GetReference();
+	Path.MovementTiles = PendingMoveTiles;
+	Paths.AddItem(Path);
+
+	FramesBefore = `XCOMHISTORY.GetNumGameStates();
+	bMovePending = false;
+	if (TacticalController.GameStateMoveUnit(UnitVisualizer, Paths))
+	{
+		`log("Coop host: guest move" @ MovesReceived @ "applied (unit" @ PendingMoveUnitID $ ", waited" @ (Seconds - PendingMoveSecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
+		SendMoveResult(true, "unit" @ PendingMoveUnitID);
+	}
+	else
+	{
+		`log("Coop host: guest move" @ MovesReceived @ "not applied: GameStateMoveUnit returned false", , 'X2TC');
+		SendMoveResult(false, "GameStateMoveUnit returned false");
+	}
+}
+
+function RefuseGuestMove(string Reason)
+{
+	bMovePending = false;
+	`log("Coop host: guest move" @ MovesReceived @ "refused:" @ Reason, , 'X2TC');
+	SendMoveResult(false, Reason);
+}
+
+function SendMoveResult(bool bApplied, string Detail)
+{
+	local array<byte> Params;
+
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bApplied ? 1 : 0, Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_String(Detail, Params);
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_MOVE_RESULT, Params);
+}
+
+// The team whose turn it is on this machine, or eTeam_None.
+function ETeam CurrentTurnTeam()
+{
+	local X2TacticalGameRuleset Rules;
+	local XComGameState_Player PlayerState;
+
+	Rules = `TACTICALRULES;
+	if (Rules == none || Rules.CachedUnitActionPlayerRef.ObjectID <= 0)
+	{
+		return eTeam_None;
+	}
+	PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(Rules.CachedUnitActionPlayerRef.ObjectID));
+	if (PlayerState == none)
+	{
+		return eTeam_None;
+	}
+	return PlayerState.TeamFlag;
+}
+
+// Guest (Stage 5): leave the co-op mission: ignore the game's own connection-error
+// handling (XComGameViewportClient.uc L32, L76), disconnect, forget the session, and open
+// the main menu map.
+function LeaveAsGuest()
+{
+	local PlayerController PC;
+
+	`log("Coop guest: LEAVE clicked (frames=" $ `XCOMHISTORY.GetNumGameStates() $ ", moves sent=" $ MovesSent $ ")", , 'X2TC');
+	PC = class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController();
+	if (PC != none)
+	{
+		PC.bIgnoreNetworkMessages = true;
+	}
+	`XCOMNETMANAGER.Disconnect();
+	ResetSession();
+	`log("Coop guest: disconnected; opening the main menu:" @ LEAVE_MAP_COMMAND, , 'X2TC');
+	if (PC != none)
+	{
+		PC.ConsoleCommand(LEAVE_MAP_COMMAND);
+	}
+}
+
+// Back to "no session", so JOIN works again. The delegates stay registered.
+function ResetSession()
+{
+	Role = eCoopRole_None;
+	bHistoryRequested = false;
+	bHistorySent = false;
+	bLoadingMission = false;
+	bMissionTimerStarted = false;
+	bFollowerInstalled = false;
+	bGuestFollowing = false;
+	bPartialInFlight = false;
+	bMovePending = false;
+	bPongReceived = false;
+	bConnectedLogged = false;
+	LastSentFrames = 0;
+	PartialsReceived = 0;
+	MovesSent = 0;
+	LastPollRealTime = 0;
+	GuestExpectedFrames = 0;
+	GuestLastWarnedFrames = 0;
 }
 
 defaultproperties

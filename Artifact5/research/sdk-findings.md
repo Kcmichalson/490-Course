@@ -952,3 +952,50 @@ give input in follow mode or its action still applies.
     its readme says it is required with the Alien Hunters DLC and must
     not be used without it (`ReadMe.txt`). Without it the Highlander
     logs `DLC_2 -- NOT LOADED - REQUIRED` (M3 Stage 2 logs).
+
+### Before Stage 5 (2026-11-14): what a partial history send carries; how a guest move is submitted
+15. **A partial history send is a binary delta of a serialized history,
+    as far as the script source shows (the work itself is native).**
+    `SendPartialHistory(History, EventManager)` is native
+    (`XComGameStateNetworkManager.uc` L329). The class keeps
+    `BaseHistoryData`, "Last sent history data used for binary Delta
+    updates" (L74), has a data type `eGDT_HistoryDelta` (L32), and on the
+    receiving side native `ProcessIncomingHistory(ConnectionIdx,
+    NewHistoryData)`, `ReceiveRequestDelta` and `ReceiveRequestNewHistory`
+    (L177-179). **Guess:** each send serializes the history, diffs it
+    against the last serialization sent, and the receiver applies the
+    diff and processes the resulting history. Measured in Stage 4 (queued
+    bytes): the full history was 275 KB at 227 frames; one-frame partials
+    were 63-94 KB and grew with the history's length (76 KB at frame 464,
+    63 KB at 480, 79 KB at 511, 94 KB at 668), about 10-13% of a full
+    send, not a size set by the new frames. Consistent with part of each
+    send (and of the work on both machines) scaling with the whole
+    history; not proven, the numbers are noisy. **Risk:** long missions,
+    and campaign histories that also carry the strategy layer, make every
+    send bigger and slower (Mr.Fear's freeze report). **Possible fix (to
+    test later, behind a switch):** send only the new frames
+    (`SendGameState(GameState, HistoryIndex)` per frame, L338, or a merged
+    state, `SendMergeGameState`, L347), as the prototype's strategy sync
+    claims to do with batching, acknowledgment and frame alignment, with
+    a full history only at join.
+16. **Clicked moves don't pass through `ActivateAbility`.** The player's
+    move is built and submitted by `XComTacticalController.GameStateMoveUnit`
+    (L1249-1345): it makes the move context itself and calls
+    `LatentSubmitGameStateContext` (or `SubmitGameStateContext`). So the
+    Highlander's `PostModifyNewAbilityContext` (finding 11), raised in
+    `ActivateAbility_Internal`, never sees a clicked move. The Highlander
+    adds no event in `GameStateMoveUnit` (its copy has none).
+17. **The tutorial is the game's own "player acts inside a replay".**
+    With `bInReplay` and `bInTutorial` set, a submitted context goes to
+    `` `TUTORIAL.HandleSubmittedGameStateContext `` instead of being
+    applied (`X2GameRuleset.uc` L290-293; the macro casts the replay
+    manager to `XComTutorialMgr`, `Core\Globals.uci` L193); this covers
+    latent submits too (the ability bar checks a flag that handler sets,
+    right after a latent activation, `UITacticalHUD_AbilityContainer.uc`
+    L676-688). In tutorial mode, input state changes are allowed during
+    the replay (`XComTacticalController.uc` L780-786), and the pause menu
+    disables saving (`UIPauseMenu.uc` L704-712). The HUD shows only the
+    abilities `` `TUTORIAL.IsNextAbility `` accepts (`UITacticalHUD.uc`
+    L528; `UITacticalHUD_Ability.uc` L95-100). `XComTutorialMgr`
+    (847 lines) defaults `bInTutorial = true` (L756); its tutorial logic
+    lives in its `StartReplay` (L85-115) and its states.

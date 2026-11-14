@@ -320,3 +320,37 @@ HOST button, and the HUD or replay screen tells the session it survived
 the map load (and restarts its poll). **Alien Hunters Highlander on
 both machines from Stage 3 (Kc, 2026-11-14)**, checked in the
 pre-flight compare. Checklist: checklists/m3-stage3.md.
+
+**Stage 3 Run 1 (test, 2026-11-14): pass.** Build 8270065 on both, mod
+0.3.2, Highlander and Alien Hunters Highlander v1.32.0 on both
+(`DLC_2 -- v1.32.0`, PC L119, laptop L116). Pre-flight compare READY
+(only `MP state` differs; mod names identical, three mods). Logs
+`stage3-pc-1.log`, `stage3-laptop-1.log`, `stage3-preflight-*.log`.
+- PC: ping, `history request received`, `sending history, frames=231
+  plot=Plot_SLM_Guerilla_MdObj_RetainWall`, `history sent (queued)`
+  (L405-409).
+- Laptop: `history requested` (L186), `history received, frames=231`
+  0.8 s later (L187; the delegate's history is the game's: True),
+  `opening it in replay mode: open Plot_SLM_Guerilla_MdObj_RetainWall?game=XComGame.XComTacticalGame?LoadingSave`
+  (L188), the game's `LoadMap` (L190), `TacticalGRI::InitBattle:
+  StartGameState=None` (L212: the load-game path), `tactical HUD opened;
+  session kept (loading mission=True, connections=1), frames=231`
+  (L386), `replay screen opened; ... in replay=True replay frame=192`
+  (L397). Map load to HUD: 6 s.
+- **Findings (tested):** a whole tactical history (231 frames) crosses
+  the direct connection in under a second; the guest's game loads the
+  host's mission from it with no save file; the session object and the
+  connection survive the guest's map load; the guest's copy runs in the
+  game's replay mode, not as a live game.
+- Kc: black screen, the map, the soldiers that are on the PC with
+  "Concealed" over them, the mission timer (7 turns until the container
+  detonates). Loading took about 20 s from JOIN.
+- **The "Challenge Scoring: Total Score: 0" screen** ("You'll get them
+  next time, Commander!"): the stock replay is Challenge Mode's. Its
+  ruleset state starts playback by itself (`X2TacticalGameRuleset.uc`
+  L4984-5001, `PerformingReplay` at laptop L403), it replayed frames
+  192-230 in about 8 s, and at the end the replay screen opens the
+  Challenge summary (`UIReplay.OnCompleteReplayToFrame`, L374-382;
+  `UIChallengePostScreen` at laptop L472). Pressing play again replays
+  and shows it again (L540). Expected for this path, and harmless; Stage
+  4's own follower replaces the stock replay screen.

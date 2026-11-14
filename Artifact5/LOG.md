@@ -40,8 +40,9 @@ CLAUDE.md describes.
   Highlander on); ping not sent because of a timer bug. Run 1b: PC's
   fix works, laptop ran the old build; builds now get their own patch
   version. **Stage 2 passed 2026-11-14 (Run 1c, 0.3.1): connection,
-  ping and pong between PC and laptop.** Stage 3 code written
-  2026-11-14 (0.3.2), not built)
+  ping and pong between PC and laptop.** **Stage 3 passed 2026-11-14
+  (0.3.2): the laptop receives the PC's history (231 frames) and opens
+  the same mission in replay mode.** Stage 4 next)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -3027,3 +3028,62 @@ On the PC, Claude Opus 5.5. No test this turn.
   - **Misreads / rule breaks:** none.
   - **How It Was Verified:** not applicable; the pre-flight compare in
     Part C checks it.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 3 passed (the laptop opens the PC's mission)
+On the PC, Claude Opus 5.5. Test by Kc: PC (online) hosting from a
+Skirmish mission and idle, laptop (Steam offline) joining. **Game build
+ID 8270065 on both** (not re-reported). Mod 0.3.2; Highlander and Alien
+Hunters Highlander v1.32.0 on both. Logs in `local\m3-logs\`:
+`stage3-preflight-pc.log`, `stage3-preflight-laptop.log`,
+`stage3-pc-1.log` (428 lines), `stage3-laptop-1.log` (557). LAN
+addresses in the game's own lines not quoted.
+
+- **Planned:** checklists/m3-stage3.md, Parts A-D.
+- **Pre-flight compare (I ran it on the saved logs):** READY; only `MP
+  state` differs (online); mod names on both:
+  `X2WOTCCommunityHighlander, DLC2CommunityHighlander, X2TacticalCoop`.
+  The Highlander now logs `DLC_2 -- v1.32.0` instead of `NOT LOADED`.
+- **Result: Stage 3 passes** (details with line numbers in
+  plans/m3-plan.md, Results). PC sent 231 frames
+  (`Plot_SLM_Guerilla_MdObj_RetainWall`); the laptop received 231 frames
+  0.8 s after asking, opened the map with `?LoadingSave` in replay mode,
+  `InitBattle` took the load-game path (`StartGameState=None`), and the
+  session reported `session kept ... connections=1` and `in replay=True`.
+  Kc saw the PC's soldiers, "Concealed", and the mission timer on the
+  laptop; about 20 s from JOIN to the map.
+- **Findings (tested, 8270065):** a tactical history crosses the direct
+  connection whole and fast at this size; the guest loads the host's
+  mission from memory with no save file; the session object survives a
+  map load (the garbage-collection guess of 2026-11-14 holds, at least
+  here); the connection survives the guest's `open`.
+- **Challenge summary screen (explained, harmless):** the stock replay
+  plays by itself (`PerformingReplay` clicks play,
+  `X2TacticalGameRuleset.uc` L4993-5001), reached the last frame in about
+  8 s, and the replay screen then opens the Challenge summary
+  (`UIReplay.uc` L374-382), as built for Challenge Mode replays. Kc's
+  "pause, play" replayed it and showed the summary again. Stage 4's own
+  follower replaces this screen.
+- **Changed:** plans/m3-plan.md (Results), this entry, the M3 status
+  line. No code change.
+- **Checks:** `tools/preflight_compare.py` on the two pre-flight logs;
+  Python reads of both test logs; SDK `UIReplay.uc` L360-385,
+  `X2TacticalGameRuleset.uc` L4984-5011, `XComPresentationLayer.uc`
+  L933-965.
+- **Next:** Stage 4 (live follow, view only): our own follower so the
+  laptop jumps to the PC's latest frame and keeps up as the PC plays.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 3 Run 1)
+- **Prompt:** "Loaded with laptop. Loaded into a black screen, then the
+  map, then the soldiers, then "Concealed" appeared over them. I see the
+  7 turns until container detonation mission UI and I see the soldiers
+  infront of me that are on the PC version. I have a 'Challenge Scoring:
+  Total Score: 0' after the replay UI loads for a few seconds, saying
+  "You'll get them next time, Commander!". [...] Loading in took about
+  twenty seconds. The laptop is playing by default [...] Pausing it then
+  playing it again appears the same challenge over screen. then quit the
+  laptop using the in-game menu. Logs are in"
+  - **Provided:** the pre-flight compare and both logs read; Stage 3
+    passed; the challenge screen explained from the SDK; the records
+    above.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** not applicable (no fix).

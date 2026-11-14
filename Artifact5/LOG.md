@@ -42,7 +42,9 @@ CLAUDE.md describes.
   version. **Stage 2 passed 2026-11-14 (Run 1c, 0.3.1): connection,
   ping and pong between PC and laptop.** **Stage 3 passed 2026-11-14
   (0.3.2): the laptop receives the PC's history (231 frames) and opens
-  the same mission in replay mode.** Stage 4 next)
+  the same mission in replay mode.** Stage 4 Run 1 2026-11-14 (0.3.3):
+  the laptop follows live, all 24 sends matched, turn starts identical;
+  two full rounds, not three (Kc to decide))
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -3087,3 +3089,135 @@ addresses in the game's own lines not quoted.
     above.
   - **Misreads / rule breaks:** none.
   - **How It Was Verified:** not applicable (no fix).
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 4 code written (0.3.3, not built)
+On the PC, Claude Opus 5.5. No test this turn.
+
+- **Planned:** plans/m3-plan.md Stage 4 (live follow, view only), with
+  Kc's additions: log frames and size of every send, especially the
+  alien turn's; run through a pod activation and an alien turn with
+  activated enemies acting; say when to take matching screenshots.
+- **Researched (SDK):** stock multiplayer sends a partial history each
+  time the active side waits for input, one at a time until the other
+  side answers `HistoryReceived` (`X2TacticalMPGameRuleset.uc` L304-359,
+  L1350-1360); the inactive side's `XComMPReplayMgr` steps forward in
+  `Tick` whenever the history grows (L141-154); the GRI spawns the stock
+  replay manager (`XComGameReplicationInfo.uc` L159-170) and the
+  multiplayer GRI its own (`XComMPTacticalGRI.uc` L287);
+  `BuildingLatentGameState` is readable (`X2GameRuleset.uc` L108); the
+  network manager's outgoing queue (`OutGameData`, L63) holds each
+  bunch's bytes.
+- **Changed:**
+  - `X2TC_CoopReplayMgr.uc` (new): the guest's follower (details in the
+    plan's Results).
+  - `X2TC_CoopSession.uc`: follower install on the guest's tactical HUD
+    (only if the stock replay hasn't started; otherwise logged and left
+    as in Stage 3); `X2TC_Following` and `X2TC_HistoryReceived` remote
+    commands; partial-history delegate on the guest; the host's
+    partial-history sends in its poll with frames, turn and queued bytes
+    and bunches; the full history send now also logs its queued bytes;
+    `LogTurnBegins` for the "Coop sync" lines on both sides; header and
+    references.
+  - `X2TC_CoopListener.uc`: closes the stock replay screen when the
+    follower is in charge.
+  - `X2TC_VERSION` 0.3.3; `mod/README.md`; checklists/m3-stage4.md (new);
+    plans/m3-plan.md (Results).
+- **Problems:** none yet; not compiled. A Python check confirmed every
+  `local` comes before the first statement in each function of the
+  co-op classes. Open (Run 1 settles them): whether the HUD still opens
+  before the replay starts (if not, the stock replay stays and the log
+  says so); whether stepping every tick keeps up with an alien turn;
+  what the queued-bytes figure measures.
+- **Checks:** SDK lines read as cited; Grep and the Python check above.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 4 code)
+- **Prompt:** "Yes, Stage 4. Since this is the first real test of
+  Mr.Fear's history-size warning: log the number of frames and, if
+  available, the size of each send, especially the alien turn's. Run
+  long enough to include at least one pod activation (enemies revealed
+  and acting), not just quiet turns, since AI activity is what grows the
+  history fastest. And say in the checklist when to take a screenshot of
+  both screens showing the same moment."
+  - **Provided:** the follower class, the partial-history sends with
+    frames, turn, and queued bytes and bunches per send (the full send
+    too), the "Coop sync" turn lines, the stock replay screen closed,
+    version 0.3.3, the checklist with the pod-activation requirement and
+    four screenshot points, the records above, a commit message.
+  - **Misreads / rule breaks:** none known. The byte figure is the
+    network manager's queued data, which may not equal the bytes on the
+    wire; said so in the code, plan and checklist.
+  - **How It Was Verified:** not applicable (no fix; the build is Kc's).
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 4 Run 1, the laptop follows live
+On the PC, Claude Opus 5.5. Test by Kc (second launch; the first
+launch's logs were overwritten), both screens recorded (local video).
+**Game build ID 8270065 on both** (not re-reported). Mod 0.3.3; the
+three mods on both; pre-flight compare READY (I ran it on the saved
+logs; only `MP state` differs). Logs in `local\m3-logs\`:
+`stage4-pc-1.log` (2208 lines), `stage4-laptop-1.log` (497),
+`stage4-preflight-pc.log`, `stage4-preflight-laptop.log`.
+
+- **Planned:** checklists/m3-stage4.md.
+- **Result** (full numbers and line references in plans/m3-plan.md,
+  Results):
+  - Following works: follower installed, stock replay screen closed, no
+    Challenge screen; full history 227 frames (275,362 bytes queued);
+    24 partial histories, all acknowledged with `match=True`.
+  - 11 turn starts on each side, identical teams and frames: XCOM 1,
+    aliens 1, XCOM 2, aliens 2, start of XCOM 3. **Two full rounds, not
+    the checklist's three.**
+  - Two pod activations (XCOM turn 1, alien turn 1); Kc saw combat,
+    damage, a soldier bleeding out, the timer 7 → 6 on the laptop.
+  - Data delay 0.05-0.99 s per send (typically about 0.45 s), plus up to
+    1 s waiting for the PC's poll.
+  - Sizes: 44-195 KB queued per send, not proportional to frames; the
+    largest (195 KB) was in alien turn 2; 2.85 MB in all. **Mr.Fear's
+    freeze not seen at this size**; recorded as not seen yet.
+  - Cutscene stall: the reveal's data was on the laptop 0.65 s after the
+    PC created it, during the PC's 12-second reveal; the laptop resumed
+    when the next send arrived, 3-4 s after the PC's cutscene ended.
+    Guess: the laptop's reveal visualization waited for the replay to
+    step past the last frame it had.
+  - Variable delays: single actions arrive 0.1-2 s behind (split
+    second); batched sends (+84 and +75 frames at turn changes) are
+    played one after another (a few seconds). A guess from the timings.
+  - Unexplained: the follower's replay started at frame 0 (Stage 3's
+    stock replay: 192); the scene was right.
+  - **Guest has no pause menu while following** (Kc): Stage 5 or later
+    must give it at least a way to quit; added to the plan's risks.
+- **Changed:** plans/m3-plan.md (Results, risks), this entry, the M3
+  status line. No code change.
+- **Checks:** `tools/preflight_compare.py`; Python reads of both logs,
+  including a per-send table of send time, receipt time (each log's open
+  time plus the line's seconds), frames and bytes; PC log L880-930 and
+  L1040-1124 around the two scampers.
+- **Open for Kc:** whether two full rounds plus the start of a third is
+  enough for Stage 4, or a longer run is wanted.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 4 Run 1)
+- **Prompt:** "Stage 4 run done. Logs are saved. This was my second
+  launch; I recorded both screens this time. What I saw: [the laptop
+  followed live across turns including combat; froze on the first frame
+  of cutscenes and caught up a few seconds after; some actions within a
+  split second, others a few seconds; the laptop could pan the camera
+  but couldn't open the pause menu]. Read both logs against the Stage 4
+  table. Explain the cutscene stall and the variable delays from the
+  send/receive timings and frame counts, check the size of the alien
+  turn's sends against Mr.Fear's warning, and note the guest's lack of a
+  pause menu as something Stage 5 or later must handle (at least a way
+  to quit)."
+  - **Provided:** both logs read against the table; per-send timings and
+    sizes; the cutscene and delay explanations (labelled as guesses
+    where they are); the alien-turn sizes against Mr.Fear's warning; the
+    pause-menu item in the plan's risks; the turn-count shortfall
+    flagged for Kc.
+  - **Misreads / rule breaks:** none. One Bash call got no verdict from
+    the auto-mode check (tool-log shows it as `denied`); I stopped, and
+    ran it unchanged after Kc's "Try again".
+  - **How It Was Verified:** not applicable (no fix). The first attempt
+    at this LOG entry didn't apply (its anchor text appeared twice); the
+    second, with a unique anchor, did.
+- **Prompt:** "Try again"
+  - **Provided:** the same command, run once; it succeeded.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** the tool-log shows the retry `ok`.

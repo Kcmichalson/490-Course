@@ -177,7 +177,8 @@ submit in follow mode, including the native latent submit (Stage 5).
 ## 8. Known risks
 
 The guest must never simulate (join only on XCOM's turn with the host
-idle). Heavy history may freeze the guest (Mr.Fear; the prototype's lost
+idle). The guest has no pause menu while following (Stage 4): it needs
+at least a way to quit, from Stage 5 on. Heavy history may freeze the guest (Mr.Fear; the prototype's lost
 bursts). End of mission and a dropped connection are handled minimally
 (message, back to the main menu). Only the host saves. The Highlander
 dependency ties us to its version. Week 7 may not fit Stages 1-6; Stage
@@ -354,3 +355,101 @@ pre-flight compare. Checklist: checklists/m3-stage3.md.
   `UIChallengePostScreen` at laptop L472). Pressing play again replays
   and shows it again (L540). Expected for this path, and harmless; Stage
   4's own follower replaces the stock replay screen.
+
+**Stage 4 code (2026-11-14, 0.3.3, written, not built).**
+- `X2TC_CoopReplayMgr` (new, extends `XComReplayMgr`): replays from the
+  start state the stock way (proven in Stage 3), then in its `Following`
+  state steps forward whenever the history grows, like stock
+  multiplayer's `XComMPReplayMgr.PlayingReplay.Tick` (L141-154); never
+  stops the replay; logs "replayed to frame N" when caught up and every
+  player-turn start it passes.
+- `X2TC_CoopSession`: on the guest's tactical HUD (before the replay
+  starts), spawns the follower and assigns it to `GRI.ReplayMgr` (not a
+  class override; the multiplayer GRI does the same with its own
+  manager); the guest tells the host `X2TC_Following`; the host's poll
+  then sends `SendPartialHistory` whenever there are new frames and the
+  ruleset isn't building a latent game state, one at a time, each
+  answered by `X2TC_HistoryReceived` with the guest's frame count
+  (timeout 15 s). **Per send it logs the frames (before, after, added),
+  whose turn it was, and the bytes and bunches it added to the network
+  manager's outgoing queue** (Kc's request for Mr.Fear's warning; whether
+  that equals the bytes on the wire isn't known from the script source).
+  Both sides log `Coop sync (host|guest): turn begin, team T turn count
+  N, frame F` from the history itself, so the pairs can be matched
+  exactly.
+- `X2TC_CoopListener`: closes the stock replay screen on the guest when
+  the follower is in charge (no auto-play, no Challenge summary).
+- Checklist: checklists/m3-stage4.md (pre-flight; play until three full
+  turns, a pod activation and an alien turn with activated enemies
+  acting; four screenshot points on both screens).
+
+**Stage 4 Run 1 (test, 2026-11-14): the laptop follows live; two full
+rounds, not three.** Kc's second launch of the day (the first launch's
+logs were overwritten). Build 8270065 on both, mod 0.3.3, the three mods
+on both; pre-flight compare READY (only `MP state` differs). Logs
+`stage4-pc-1.log` (2208 lines), `stage4-laptop-1.log` (497),
+`stage4-preflight-*.log`; Kc recorded both screens (local video).
+- **Following works (tested):** follower installed before the replay
+  started (`follower installed (replaced XComReplayMgr)`, laptop L391),
+  stock replay screen closed (L404), no Challenge screen. The PC sent
+  the full history (227 frames, 275,362 bytes queued in 453 bunches,
+  PC L426) and then 24 partial histories (PC L547-2187); **all 24
+  acknowledged with `match=True`**.
+- **Turn pairs match exactly:** the PC logged 11 turn starts (frames 192,
+  315, 384, 404, 411, 429, 563, 598, 606, 613, 631) and the laptop the
+  same 11, same teams and frames. Teams: 8 XCOM, 16 aliens, 32 the Lost,
+  64 resistance, 1 neutral (the Skirmish's other player slots). That is
+  XCOM turn 1, alien turn 1, XCOM turn 2, alien turn 2, and the start of
+  XCOM turn 3 (the run ended 4 s after it). **Short of the checklist's
+  three full rounds**; Kc to decide whether that is enough.
+- **Pod activations:** two on the PC: during XCOM turn 1 (scamper at PC
+  84.1 s) and during alien turn 1 (102.1 s). Kc saw shots, explosions,
+  damage, a soldier bleeding out and the container timer go from 7 to 6
+  on the laptop.
+- **Data delay (send to receipt), from both clocks** (they agree to about
+  0.1 s: every acknowledgment reaches the PC 0.10 s after the laptop
+  logs the receipt): 0.05-0.99 s, about 0.45 s typically. Before that,
+  new frames wait up to 1 s for the PC's poll. So the laptop had each
+  action's data 0.1-2 s after the PC created it.
+- **Sizes (queued bytes per send):** 44-195 KB; not proportional to
+  frames (+1 frame: 63-94 KB; +84 frames: 174 KB), so each partial
+  history carries a large part beyond the new frames, which grew slowly
+  (+1-frame sends: 76 KB at frame 464, 94 KB at frame 668). Alien-turn
+  sends (team 16): 144, 114, 116, 115, 101, **195** (the largest of the
+  run, +2 frames, alien turn 2) and 119 KB, each received in 0.2-0.9 s
+  and acknowledged. All partials together: 2.85 MB in about 2.5 minutes.
+- **Mr.Fear's warning:** not reproduced at this size (two alien turns,
+  two pod activations, 668 frames). Recorded as "not seen yet", not as
+  disproved: a full campaign mission is longer, and a campaign history
+  carries the strategy layer too.
+- **Cutscene stall (Kc: frozen on the first frame, caught up a few
+  seconds after the cutscene ended):** the network wasn't the cause.
+  The PC created all reveal and scamper frames within 0.2 s (PC
+  84.0-84.2 s), sent them as partial 3 (+50 frames, PC 84.47 s), and
+  the laptop had them 0.65 s later, while the PC's reveal cutscene ran
+  until about 96 s (`Available Actions` at PC 96.07 s; Kc's clicks
+  during it were refused, `ABILITY ACTIVATION BLOCKED BY:
+  X2Action_RevealAIBegin`, PC L919-928). The laptop resumed around the
+  time partial 4 arrived (PC 99.47 s + 0.24 s), 3-4 s after the PC's
+  cutscene ended. **Guess:** the follower had stepped to the last frame
+  it had and stopped, and the reveal's visualization on the laptop
+  waited until the replay could step further, which only the next
+  frames allowed. To check in a later stage: log the guest's visualizer
+  busy state and replay frame while caught up.
+- **Variable delays (Kc: some actions within a split second, others a
+  few seconds):** the PC creates all of an action's frames at once and
+  then animates for seconds; the laptop starts the same animation when
+  the frames arrive (0.1-2 s later: the split-second cases). Some sends
+  carry several actions or a whole turn change at once (partial 8: +84
+  frames, the end of alien turn 1 and four turn starts; partial 23: +75),
+  which the laptop then plays one after another, falling behind until it
+  catches up; and the cutscene case above. A guess, consistent with the
+  timings.
+- **Unexplained, low impact:** the follower's replay started at frame 0
+  (laptop L400), where Stage 3's stock replay started at 192, and reached
+  frame 225 within 0.2 s. The scene was right. To watch.
+- **Guest has no pause menu while following (Kc).** Its input state is
+  the replay's, which doesn't open the pause menu. **Stage 5 or later
+  must give the guest at least a way to quit** (and handle the host
+  leaving, Stage 2's note). The laptop quit first here (connection closed
+  at 02:30:37.5 by its clock, the PC's at 02:30:37.6).

@@ -9,7 +9,8 @@
 //  Each writes X2TC lines to Launch.log; the address itself is never logged.
 //  On the guest, after it has opened the host's mission (Stage 3), the tactical HUD gets
 //  no HOST button; instead it and the game's replay screen (UIReplay) tell the session
-//  they opened.
+//  they opened. From Stage 4, the replay screen is closed when the session's follower
+//  (X2TC_CoopReplayMgr) has replaced the stock replay manager.
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -64,6 +65,15 @@ event OnInit(UIScreen Screen)
 		if (GuestSession != none)
 		{
 			GuestSession.OnGuestMissionScreen("replay screen");
+			// Stage 4: with our follower in charge, close the stock replay screen, so the
+			// ruleset's replay state doesn't press its play button and the Challenge
+			// summary doesn't open at the end (X2TacticalGameRuleset.uc L4993-5001,
+			// UIReplay.uc L374-382).
+			if (GuestSession.HasFollower())
+			{
+				`log("Coop guest: closing the stock replay screen (the follower drives the replay)", , 'X2TC');
+				Screen.CloseScreen();
+			}
 		}
 		else
 		{

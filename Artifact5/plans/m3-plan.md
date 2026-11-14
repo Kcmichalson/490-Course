@@ -211,3 +211,40 @@ afterwards; both logs show the same executable: engine 8917, changelist
 - Pre-flight compare: READY; only `MP state` differs, as expected.
 - Still open for Stage 2: whether direct IP connects while the laptop's
   Steam is offline.
+
+**Stage 2 code (2026-11-14, written, not built):** `X2TC_CoopSession`
+(server or client on port 7777 with no `steamsockets`, as the LAN lobby;
+the guest retries `ForceConnectionAttempt` every 5 s, six times; once the
+network manager lists a connection the guest pings every 3 s until a pong;
+connection state changes logged once a second) and `X2TC_CoopListener`
+(CO-OP: HOST on a single-player tactical HUD, CO-OP: JOIN on the main
+menu with the game's text box). The Highlander is declared required in
+the mod's `XComGame.ini`. Differences from the stage text above: no
+`PlayerJoined` delegate (the guest's "connected" comes from the
+connection list; avoids depending on that delegate's parameter types);
+the session is one named object in the transient package, looked up
+when needed (first build failed when it was kept in a runtime default
+value; LOG.md 2026-11-14), kept alive by the network manager's delegates
+so it should survive a map load (a guess until Stage 3). Checklist: checklists/m3-stage2.md (Run 1:
+Highlander on, dotted address).
+
+**Stage 2 Run 1 (test, 2026-11-14): connected; ping not sent (my bug).**
+Build 8270065 on both, mod 0.3.0 (Stage 2 build), Highlander v1.32.0 on
+both. Logs `stage2-pc-1.log`, `stage2-laptop-1.log`.
+- **Direct IP connects with a dotted address, the laptop in Steam
+  offline mode, the host in a single-player Skirmish mission, the
+  Highlander on.** PC: `Coop host: server created (port 7777)` (L401),
+  then the game's `NotifyAcceptedConnection` and `Coop host: connection
+  accepted (connection 0)` (L406), at 00:39:01 by the PC's clock; laptop:
+  `Coop guest: client created (address form: dotted)` (L184) at
+  00:39:01 by its clock. Without any `ForceConnectionAttempt`: the
+  connection came by itself about a second after `CreateClient`. It
+  stayed up until the PC quit (both logs close the connection at exit).
+  The prototype's "one decimal integer" claim doesn't hold here.
+- **Bug:** `Error: SetTimer() called on bStatic Actor WorldInfo_N` right
+  after "poll timer started" on both (PC L402, laptop L185): the poll
+  never ran, so no state changes, no ping, no pong. Fixed: the timer now
+  runs on the local player controller. Run 1b repeats the run.
+- No popup or visible change on either machine (Kc). Kc's second click
+  on JOIN was ignored as designed (`a co-op session is already running`,
+  laptop L190).

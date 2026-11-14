@@ -35,7 +35,10 @@ CLAUDE.md describes.
   2026-11-12 in Session 7, plans/m3-plan.md: single-player mission, host
   authoritative, guest follows, Highlander route for the guest's
   actions; mod 0.3.0. Stage 1 passed 2026-11-13: PC online and laptop
-  in Steam offline mode run together, pre-flight READY)
+  in Steam offline mode run together, pre-flight READY. Stage 2 Run 1
+  2026-11-14: direct IP connects (dotted address, laptop offline,
+  Highlander on); ping not sent because of a timer bug, fixed, Run 1b
+  next)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -2591,3 +2594,223 @@ lines, the online reference run), `stage1-laptop.log` (269, offline),
     (Results).
   - **Misreads / rule breaks:** none.
   - **How It Was Verified:** not applicable (no fix).
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 2 code written (not built)
+On the PC, Claude Opus 5.5. No test this turn.
+
+- **Planned:** plans/m3-plan.md Stage 2: CO-OP: HOST and CO-OP: JOIN,
+  a direct connection on port 7777, ping and pong by remote command,
+  connection-closed delegates on both; the Highlander declared required.
+- **Changed:**
+  - `X2TC_CoopSession.uc` (new): host `CreateServer` (port 7777, no
+    `steamsockets`, as `UIMPShell_Lobby.uc` L502-513), guest
+    `CreateClient` (address as typed, L515-523) and up to six
+    `ForceConnectionAttempt` calls 5 s apart (the shell's Steam client
+    path calls it once, `XComShellPresentationLayer.uc` L1173-1197);
+    remote command, accepted-connection and connection-closed delegates
+    (`XComGameStateNetworkManager.uc` L311-314, L435-438; a closed
+    connection with no delegate reopens the main menu, L440-445); a
+    one-second poll logging `HasServerConnection`, `HasClientConnection`
+    and the connection count when they change; the guest pings every 3 s
+    (up to ten) once a connection is listed, the host answers each with a
+    pong. Logs only the address's form (dotted, integer, other), never the
+    address or a name. Kept in its class's default object so it outlives
+    a map load (Stage 3).
+  - `X2TC_CoopListener.uc` (new): CO-OP: HOST on the tactical HUD of a
+    single-player game only; CO-OP: JOIN on the main menu, below the MP
+    TEST column, opening the game's text box (`UIInputDialog`,
+    `XComPresentationLayerBase.uc` L1609; `TInputDialogData`,
+    `UIInputDialogue.uc` L26).
+  - Mod `Config/XComGame.ini`: `[X2TacticalCoop CHModDependency]` with
+    `+RequiredMods="X2WOTCCommunityHighlander"` (Highlander
+    `CHModDependency.uc`, issue 524).
+  - `mod/README.md` (the two classes); plans/m3-plan.md (Results: Stage 2
+    code); checklists/m3-stage2.md (new: build, package, laptop install
+    with a hash check, Run 1 with the Highlander on and a dotted address).
+- **Decisions (mine, within the approved plan):** no `PlayerJoined`
+  delegate, to avoid depending on its `UniqueNetId` parameter in a mod
+  package; the guest's "connected" comes from the network manager's
+  connection list instead. One run per address form, logs read between
+  runs, since nothing shows on screen.
+- **Problems:** none yet; not compiled. The prototype's claim that the
+  host must be one decimal integer is untested; its byte order isn't
+  known (their source isn't in `local\refs\`).
+- **Checks:** SDK lines re-read as cited in the class headers. Build and
+  run: Kc, checklists/m3-stage2.md.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 2 code)
+- **Prompt:** "Yes, Stage 2" (the button under "Shall I write the Stage 2
+  connect code (CO-OP: HOST and JOIN, ping and pong)?")
+  - **Provided:** the two classes, the Highlander dependency entry, the
+    Stage 2 checklist, the records above, a commit message.
+  - **Misreads / rule breaks:** none known. Two small departures from the
+    plan's Stage 2 text (no `PlayerJoined`; the session in a default
+    object) are recorded in the plan's Results.
+  - **How It Was Verified:** not applicable (no fix yet; the build is
+    Kc's).
+
+### 2026-11-14 — Session 7 (continued): Stage 2 build error fixed (not rebuilt)
+On the PC, Claude Opus 5.5.
+
+- **Problem (Kc's build):** one compile error,
+  `X2TC_CoopSession.uc(80) : Error, 'Instance': Can't change default
+  values of non-config properties`. I had stored the single session in
+  `default.Instance` at run time; UnrealScript allows assigning
+  `default.X` at run time only for config variables. My mistake: I
+  wrote it from memory without checking that rule.
+- **Fix:** `GetSession()` now looks the session up by a fixed name in the
+  transient package with `FindObject("Transient.X2TC_CoopSession_Main",
+  ...)` and creates it with `new(none, "X2TC_CoopSession_Main")` the first
+  time. This is the Highlander's own pattern for objects it needs to find
+  again (`X2WOTCCH_ModDependencies.uc` L102-110, in `local\refs\`;
+  `FindObject` is `Core\Classes\Object.uc` L1920 in SrcOrig). New
+  `FindSession()` and `IsSessionActive()` look it up without creating
+  one; the JOIN button uses `IsSessionActive()`, so opening and cancelling
+  the address box creates nothing. The `Instance` variable is gone.
+- **Why this pattern:** the alternatives were a config variable (meant
+  for saved settings, and an object reference in config isn't a fit) or
+  a field on an object that lives for the whole game, which would need a
+  class override (the engine's objects have no free slot for a mod). The
+  lookup needs no override and no actor reference.
+- **What keeps it alive (guess, Stage 3 checks it):** the Highlander's
+  comment at L102-103 says garbage collection runs between frames, so an
+  object nobody references can disappear. Once HOST or JOIN starts, the
+  network manager's delegates point at the session, and the network
+  manager lives for the whole game (`GetGameStateNetworkManager`,
+  `XComGameStateNetworkManager.uc` L233), so the session should survive
+  a map load. The new line `X2TC: Coop: session object created` shows
+  each creation; a second one after a map load would mean it was
+  collected.
+- **Changed:** `X2TC_CoopSession.uc` (`GetSession`, new `FindSession`,
+  `IsSessionActive`, header), `X2TC_CoopListener.uc` (one line),
+  plans/m3-plan.md (Results note). checklists/m3-stage2.md unchanged.
+- **Checks:** Grep of the mod's classes: no `Instance` or `default.`
+  left. Not compiled here; Kc rebuilds (checklists/m3-stage2.md, Part A
+  step 3).
+
+### Session 7 prompt log (continued, 2026-11-14, build error)
+- **Prompt:** "The Stage 2 build failed with one error:
+  X2TC_CoopSession.uc(80) : Error, 'Instance': Can't change default
+  values of non-config properties [...] Fix it with a pattern that works
+  in UnrealScript (check how the SDK or the Highlander keeps a single
+  instance of a non-actor object [...]), explain the choice, and log the
+  error and fix in LOG.md. Then I'll rebuild."
+  - **Provided:** the fix above, the reasoning, these records.
+  - **Misreads / rule breaks:** the error was mine (an UnrealScript rule
+    I didn't check before writing the code).
+  - **How It Was Verified:** Grep shows no runtime default assignment
+    left; the compile check is Kc's rebuild.
+
+### 2026-11-14 — Session 7 (continued): Stage 2 rebuild; the laptop got the Stage 1 zip
+On the PC, Claude Opus 5.5. No logs saved from these runs (Kc's report).
+
+- **Kc's report:** the rebuild succeeded. With the Highlander on, it
+  showed a popup recommending the Alien Hunters compatibility mod "for
+  improved stability", without forcing anything. The PC's main menu
+  shows CO-OP: JOIN; the laptop's (after deleting the old mod folder and
+  unzipping the 0.3.0 zip) doesn't.
+- **Cause (found, not a guess):** the zip in `local\release\` is still
+  Stage 1's: `X2TacticalCoop-0.3.0.zip` dated 2026-11-12 12:29, its
+  `X2TacticalCoop.u` is 69,188 bytes and contains neither
+  `X2TC_CoopListener` nor `X2TC_CoopSession`, and the zip has no
+  `X2TC_Coop*.uc` source. The PC's built mod (game `Mods\X2TacticalCoop\Script\X2TacticalCoop.u`,
+  110,350 bytes, 2026-11-14 00:09) is the new build. `package_mod.py`
+  refuses to overwrite an existing zip of the same version without
+  `--force` (L164-168), so packaging 0.3.0 again stopped and left the
+  old zip, and the laptop got that. The hash check in the checklist
+  passed because the `.sha256.txt` next to it was just as old.
+- **My error:** checklists/m3-stage2.md said "the new zip replaces Stage
+  1's" and gave the command without `--force`, though the script I'd
+  read refuses that. Not an installation mistake by Kc.
+- **Fix:** checklist Part A step 5 now uses `--force` and says to check
+  the zip's date; Part B has a new step 5: run once and see CO-OP: JOIN
+  on the laptop before the test. `--force` is the script's route when the
+  old zip went only to a machine that gets the new one; the version stays
+  0.3.0 as Kc decided, so the version line alone can't tell the two
+  builds apart; the JOIN button (and `Coop: JOIN button added` in the
+  log) can.
+- **Alien Hunters compatibility mod:** a separate Workshop mod the
+  Highlander recommends for owners of the Alien Hunters DLC (DLC_2 is in
+  both machines' DLC list). Our mod doesn't touch Alien Hunters code;
+  left off on both machines for now (it would also change the mod list
+  both must match). Recorded, not decided for later stages.
+- **Changed:** checklists/m3-stage2.md, this entry. No code change.
+- **Checks:** Python read of the zip's file list and a byte search of its
+  `.u`; `ls` of `local\release\` and the game's built mod folder
+  (read-only); `package_mod.py` L161-168.
+
+### Session 7 prompt log (continued, 2026-11-14, laptop has no JOIN)
+- **Prompt:** "Highlander had a popup saying that I should enable the
+  alien hunters compatibility mod for improved stability but it didn't
+  force anything. Opening to the main menu on the laptop with
+  x2tacticalcoop extracted 0.3.0, there is no join co-op button on the
+  main menu, but there was on the PC. Maybe I installed it improperly?
+  [...]"
+  - **Provided:** the cause (the old zip, because the package command
+    lacked `--force`), the checklist fix, the Alien Hunters note.
+  - **Misreads / rule breaks:** the missing `--force` in my checklist was
+    my mistake.
+  - **How It Was Verified:** the zip's contents and dates against the
+    built mod; the fix is verified when the laptop shows CO-OP: JOIN
+    (checklist Part B step 5).
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 2 Run 1, direct IP connects; poll timer bug
+On the PC, Claude Opus 5.5. Test by Kc: PC (online) hosting from a
+Skirmish mission, laptop (Steam offline) joining with the PC's dotted
+LAN address. **Game build ID 8270065 on both** (unchanged since Stage 1;
+not re-reported). Mod 0.3.0 Stage 2 build on both (the laptop shows
+`Coop: JOIN button added`, so the repackaged zip arrived), Highlander
+v1.32.0 on both (`X2WOTCCommunityHighlander -- v1.32.0`, PC L116,
+laptop L113). Logs `local\m3-logs\stage2-pc-1.log` (565 lines),
+`stage2-laptop-1.log` (203). The game's own network lines in them
+contain LAN addresses; not quoted.
+
+- **Planned:** checklists/m3-stage2.md, Part C (Run 1).
+- **Result: the connection works; the ping test didn't run.**
+  - PC: `Coop: HOST button added to the tactical HUD` (L348), `Coop
+    host: server created (port 7777)` (L401), the game's
+    `NotifyAcceptedConnection` and `Coop host: connection accepted
+    (connection 0)` (L406) at 00:39:01 by the PC's clock.
+  - Laptop: `Coop: address entered (form: dotted)` (L182), `Coop guest:
+    client created (address form: dotted)` (L184) at 00:39:01 by its
+    clock (log opened 00:35:18, +223 s). So the connection was accepted
+    within about a second of `CreateClient`, with no
+    `ForceConnectionAttempt` (the poll that sends them never ran).
+  - It stayed up until the PC quit; both logs close the connection at
+    exit (PC L555-557, with our `connection closed` line; laptop
+    L194-196).
+  - **Findings (tested):** on 8270065, the network manager's direct
+    connection works between a single-player tactical game and a main
+    menu, with a dotted address, with the guest's Steam offline and the
+    Highlander on. The prototype's claim that the host must be one
+    decimal integer doesn't hold in this setup (their setup was two
+    instances on one PC).
+  - **Bug (mine):** `Error: SetTimer() called on bStatic Actor
+    WorldInfo_N` right after `poll timer started` on both (PC L402,
+    laptop L185). WorldInfo is a static actor and refuses timers, so the
+    poll never ran: no state lines after the first, no ping, no pong.
+  - Kc: nothing visible happened on either machine, as expected; the
+    second JOIN click was ignored as designed (laptop L189-190).
+- **Fix:** `X2TC_CoopSession.StartPoll` sets the timer on the local
+  player controller (`WorldInfo.GetALocalPlayerController()`), which is
+  an ordinary actor on both the main menu and the tactical map. The
+  timer ends with the map; Stage 3 restarts it after a map load.
+- **Changed:** `X2TC_CoopSession.uc` (StartPoll, header);
+  plans/m3-plan.md (Results); checklists/m3-stage2.md (Run 1b); this
+  entry and the M3 status line.
+- **Problems:** the timer bug above. Not compiled yet.
+- **Checks:** Python reads of both logs (line numbers above); clock
+  times from each log's open time plus the line's seconds.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 2 Run 1)
+- **Prompt:** "Logs are there. Everything went as expected, clicking
+  join coop didn't do anything."
+  - **Provided:** the logs read: the connection works (the main open
+    question of Stage 2), the ping didn't run because of my timer bug;
+    the fix; Run 1b in the checklist.
+  - **Misreads / rule breaks:** none on reading. The bug was mine: I set
+    a timer on WorldInfo without checking that it is a static actor
+    (the existing trace listener uses screens, which I didn't copy).
+  - **How It Was Verified:** the bug is shown by the `SetTimer() called
+    on bStatic Actor` lines; the fix is verified when Run 1b's logs show
+    the poll's `state` lines and the ping and pong.

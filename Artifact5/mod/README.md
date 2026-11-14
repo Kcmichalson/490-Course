@@ -13,7 +13,8 @@ the SDK (see CLAUDE.md, "Legal and community limits").
 .scripts/build.ps1                 build entry point
 .scripts/X2ModBuildCommon/         community build scripts (MIT)
 X2TacticalCoop/X2TacticalCoop.x2proj        title and description
-X2TacticalCoop/Config/                      declares and loads the script package; DLCIdentifier
+X2TacticalCoop/Config/                      declares and loads the script package; DLCIdentifier;
+                                            the Community Highlander as a required mod (M3)
 X2TacticalCoop/Localization/                localization (.int) files
 X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes:
     X2TC_MainMenuListener                     main menu: MULTIPLAYER button (M2), return to the MP menu
@@ -23,6 +24,10 @@ X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes:
     X2TC_MPTraceListener                      M2 diagnostics: X2TC lines per screen, MP state, MP criteria
     X2TC_MatchTraceListener                   M2 diagnostics: X2TC lines for lobby state, tactical HUD, turns
     X2DownloadableContentInfo_X2TacticalCoop  DLC info: X2TC lines when templates are created (loaded, version)
+    X2TC_CoopSession                          M3: direct connection between two games (host server,
+                                              guest client), ping and pong by remote command
+    X2TC_CoopListener                         M3: CO-OP: HOST (tactical HUD, single player) and
+                                              CO-OP: JOIN (main menu, address box) buttons
 ```
 
 ## Launching

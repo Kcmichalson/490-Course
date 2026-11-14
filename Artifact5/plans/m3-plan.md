@@ -39,7 +39,11 @@ arrive" needs one authority anyway.
   can't give input in follow mode or its action applies locally; the
   failing log line becomes the reason.
 - **New dependency (approved):** the Community Highlander v1.32.0
-  (Workshop, free, MIT) on both machines.
+  (Workshop, free, MIT) on both machines. From Stage 3 also its
+  "[WOTC] Alien Hunters Community Highlander" plugin (same repository and
+  license), because both machines own Alien Hunters (Kc, 2026-11-14). It
+  isn't declared required in the mod's config: players without Alien
+  Hunters must not use it (its own readme).
 - **All M2 results were without the Highlander.** Stage 2's first run is
   also the first test of the travel and connection code with the
   Highlander on. A failure there may come from the Highlander, not from
@@ -48,9 +52,11 @@ arrive" needs one authority anyway.
 
 ## 3. Version
 
-Every M3 build is **0.3.0** (`X2TC_VERSION`). A rebuild for another
-machine is packaged again with the same check (`tools/package_mod.py`
-stops if the build doesn't match the source).
+M3 builds are **0.3.x** (`X2TC_VERSION`). From 2026-11-14 (Kc's
+decision after Stage 2 Run 1b), every build shared to another machine
+gets the next patch version (0.3.1, 0.3.2, ...), so the `X2TC: version`
+line and the pre-flight compare show which build ran; packaging then
+needs no `--force`.
 
 ## 4. Stages
 
@@ -248,3 +254,69 @@ both. Logs `stage2-pc-1.log`, `stage2-laptop-1.log`.
 - No popup or visible change on either machine (Kc). Kc's second click
   on JOIN was ignored as designed (`a co-op session is already running`,
   laptop L190).
+
+**Stage 2 Run 1b (test, 2026-11-14): the PC's fix works; the laptop ran
+the old build.** Logs `stage2-pc-2.log`, `stage2-laptop-2.log`.
+- PC: no timer error; the poll runs (`state server=True client=False
+  connections=0 at 0s`, L403; `connection accepted (connection 0)`,
+  L405; `connections=1 at 181s`, L406). Accepted at 01:02:25 by the PC's
+  clock, the laptop's `client created` at 01:02:25 by its clock: the
+  connection again came within a second, dotted address.
+- Laptop: still `Error: SetTimer() called on bStatic Actor WorldInfo_0`
+  (L185), which only the Run 1 build can log. The zip in
+  `local\release\` (00:53) and the PC's built script both contain the
+  fix and not the old text (byte search), so the laptop's mod folder
+  held the Run 1 build. No ping, no pong.
+- Kc: the laptop's game "hung at the title" after JOIN. Its log has no
+  line between `state ... at 0s` (266 s) and a normal `appRequestExit`
+  at 398 s. Kc, asked: it stayed on the menu (no click tried) and quit
+  normally; not a freeze.
+- Next: Run 1c with version 0.3.1 (checklists/m3-stage2.md).
+
+**Stage 2 Run 1c (test, 2026-11-14): pass.** Mod 0.3.1 on both
+(`X2TC: version 0.3.1`, PC L123, laptop L120), Highlander v1.32.0 on
+both, build 8270065. Logs `stage2-pc-3.log`, `stage2-laptop-3.log`.
+- PC: `server created (port 7777)` (L588), `connection accepted
+  (connection 0)` (L592, 01:26:12 by its clock), `connections=1 at 12s`
+  (L593), `ping 1 received, pong sent` (L594).
+- Laptop: `client created (address form: dotted)` (L184, 01:26:12 by its
+  clock), `connection attempt 1 of 6, sent=True` (L188, at 5 s),
+  `connections=1 at 6s` and `connected` (L189-190), `ping 1 sent`
+  (L191), `pong 1 received (at 7s)` (L192), 0.03 s after the ping.
+- The host accepted the connection at once, but the guest's own
+  connection list showed it only right after the first
+  `ForceConnectionAttempt`. Whether the attempt is needed or just
+  coincided is a guess; the retry stays.
+- **When the host quit,** the guest logged our `connection closed`
+  (L195), but the game also handled it as a connection error: the
+  viewport client's `NotifyConnectionError` queued a message
+  (`XComGameViewportClient.uc` L24-39, L69-85), the player controller
+  went to `ReturnToMPMainMenu` (`Can't destroy a null online session`,
+  L211-215) and reloaded the shell with `?closed` (L238); then M2's
+  lobby-exit fix in `X2TC_MainMenuListener` took it to the multiplayer
+  menu (L277-286). Kc saw a dialog: "you have been returned to the title
+  screen because the active gamer profile changed" with Cancel/Accept.
+  Our delegate doesn't stop the game's own path; the player controller's
+  `bIgnoreNetworkMessages` does (L32, L76). Handling a dropped
+  connection properly belongs to the later stages' risk list (message,
+  back to the main menu), not Stage 2.
+- Both logs show the Highlander's `DLC_2 -- NOT LOADED - REQUIRED` and
+  "Required packages were not loaded": the Alien Hunters compatibility
+  mod left off (2026-11-14 decision). No effect seen so far.
+
+**Stage 3 code (2026-11-14, 0.3.2, written, not built).** After its pong
+the guest sends `X2TC_RequestHistory`; the host answers once with
+`SendHistory` (whole history, logged frame count and plot). The guest's
+`OnReceiveHistory` reads the battle data's map command and opens
+`<map command>?LoadingSave` with `bInitiateReplayAfterLoad` set: the
+game's own "replay after load" path (the debug Challenge Mode screen
+does exactly this, `UIDebugChallengeMode.uc` L375-383), so the guest's
+ruleset starts a replay instead of playing. **Change from the stage text
+above:** follow mode in Stage 3 is the stock replay (starting from the
+mission's first frame, with the game's replay bar), not yet our own
+follower; `X2TC_CoopReplayMgr` stays in Stage 4, where the guest has to
+follow to the latest frame live. On the guest, the tactical HUD gets no
+HOST button, and the HUD or replay screen tells the session it survived
+the map load (and restarts its poll). **Alien Hunters Highlander on
+both machines from Stage 3 (Kc, 2026-11-14)**, checked in the
+pre-flight compare. Checklist: checklists/m3-stage3.md.

@@ -13,6 +13,17 @@
 //  game reopens the main menu when a connection closes
 //  (XComGameStateNetworkManager.uc L440-445).
 //
+//  Stage 3 (snapshot): once the guest has its pong it asks for the host's history by
+//  remote command; the host sends its whole history (SendHistory). The guest's network
+//  manager replaces the guest's history with it (the multiplayer lobby only sets a flag
+//  on receipt, UIMPShell_Lobby.uc L820-830), and the guest opens the mission's map from
+//  it in the game's own replay mode: bInitiateReplayAfterLoad and the map command with
+//  "?LoadingSave", as the debug Challenge Mode screen does (UIDebugChallengeMode.uc
+//  L375-383). The guest's ruleset then starts a replay instead of playing
+//  (X2TacticalGameRuleset.uc L3063-3077), so it never simulates. When the guest's
+//  tactical screens open, the session logs that it survived the map load and restarts
+//  its timer.
+//
 //  One session per game: GetSession() looks it up by a fixed name in the transient
 //  package and creates it there the first time, the pattern the Highlander uses for its
 //  dependency objects (X2WOTCCH_ModDependencies.uc L102-110). A runtime default value
@@ -36,8 +47,17 @@
 //    XComGame\Classes\UIMPShell_Lobby.uc  (the same CreateServer/CreateClient calls, L502-523)
 //    XComGame\Classes\XComShellPresentationLayer.uc (ForceConnectionAttempt after a
 //                                                    client is created, L1173-1197)
-//    Engine\Classes\Actor.uc              (SetTimer with an object L2164)
+//    Engine\Classes\Actor.uc              (SetTimer with an object L2164; ConsoleCommand L1699)
 //    Engine\Classes\WorldInfo.uc          (GetALocalPlayerController)
+//    XComGame\Classes\XComGameStateNetworkManager.uc (SendHistory and OnReceiveHistory
+//                                                     L320-323)
+//    XComGame\Classes\XComGameStateHistory.uc  (GetNumGameStates)
+//    XComGame\Classes\XComGameState_BattleData.uc (m_strMapCommand, MapData.PlotMapName;
+//        set by Skirmish as "open <plot>?game=XComGame.XComTacticalGame",
+//        UITLE_SkirmishModeMenu.uc L282)
+//    XComGame\Classes\XComTacticalGRI.uc      (InitBattle: LoadGame when the history has
+//                                              no pending start state, L330-357)
+//    XComGame\Classes\XComReplayMgr.uc        (bInReplay, CurrentHistoryFrame L12-14)
 //---------------------------------------------------------------------------------------
 
 class X2TC_CoopSession extends Object;
@@ -47,6 +67,7 @@ const COOP_PORT = 7777;
 // Remote command names. Other listeners (the game's own) see them too and ignore them.
 const CMD_PING = "X2TC_Ping";
 const CMD_PONG = "X2TC_Pong";
+const CMD_REQUEST_HISTORY = "X2TC_RequestHistory";
 
 // Guest: seconds between connection attempts, and how many.
 const CONNECT_RETRY_SECONDS = 5;
@@ -79,6 +100,12 @@ var int LastAttemptSecond;
 var int PingsSent;
 var int LastPingSecond;
 
+// Stage 3.
+var bool bHistoryRequested;   // guest: asked the host for its history
+var bool bHistorySent;        // host: sent it once
+var bool bLoadingMission;     // guest: received it and opened the map
+var bool bMissionTimerStarted; // guest: poll restarted on the mission map
+
 // The session's object name in the transient package.
 const SESSION_OBJECT_NAME = "X2TC_CoopSession_Main";
 
@@ -110,6 +137,19 @@ static function bool IsSessionActive()
 
 	Session = FindSession();
 	return Session != none && Session.IsActive();
+}
+
+// The session if it exists and is the guest's, otherwise none.
+static function X2TC_CoopSession FindGuestSession()
+{
+	local X2TC_CoopSession Session;
+
+	Session = FindSession();
+	if (Session != none && Session.Role == eCoopRole_Guest)
+	{
+		return Session;
+	}
+	return none;
 }
 
 function bool IsActive()
@@ -254,14 +294,12 @@ function AddDelegates(XComGameStateNetworkManager NetworkMgr)
 	NetworkMgr.AddReceiveRemoteCommandDelegate(OnRemoteCommand);
 	NetworkMgr.AddNotifyAcceptedConnectionDelegate(OnAcceptedConnection);
 	NetworkMgr.AddNotifyConnectionClosedDelegate(OnConnectionClosed);
+	NetworkMgr.AddReceiveHistoryDelegate(OnReceiveHistory);
 	bDelegatesAdded = true;
 }
 
 function StartPoll()
 {
-	local WorldInfo World;
-	local PlayerController TimerOwner;
-
 	Seconds = 0;
 	ConnectAttempts = 0;
 	LastAttemptSecond = 0;
@@ -273,10 +311,18 @@ function StartPoll()
 	bLastClient = false;
 	LastConnections = -1;
 
-	// The timer runs on the local player controller: WorldInfo is a static actor and
-	// refuses timers (Stage 2 Run 1: "SetTimer() called on bStatic Actor WorldInfo").
-	// The controller belongs to the current map, so the timer ends with it; Stage 3
-	// restarts it after a map load.
+	StartTimer();
+}
+
+// Starts the once-a-second poll on the current map. The timer runs on the local player
+// controller: WorldInfo is a static actor and refuses timers (Stage 2 Run 1: "SetTimer()
+// called on bStatic Actor WorldInfo"). The controller belongs to the current map, so
+// the timer ends with it; OnGuestMissionScreen starts it again after a map load.
+function StartTimer()
+{
+	local WorldInfo World;
+	local PlayerController TimerOwner;
+
 	World = class'WorldInfo'.static.GetWorldInfo();
 	if (World != none)
 	{
@@ -318,7 +364,8 @@ function Poll()
 		`log("Coop" @ RoleName() $ ": state server=" $ bServer @ "client=" $ bClient @ "connections=" $ NumConnections @ "at" @ Seconds $ "s", , 'X2TC');
 	}
 
-	if (Role == eCoopRole_Guest)
+	// After the mission map is open, the guest only logs state changes.
+	if (Role == eCoopRole_Guest && !bLoadingMission)
 	{
 		if (NumConnections == 0)
 		{
@@ -370,6 +417,16 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	local array<byte> Params, Reply;
 	local int Number;
 
+	if (Command == CMD_REQUEST_HISTORY)
+	{
+		`log("Coop" @ RoleName() $ ": history request received", , 'X2TC');
+		if (Role == eCoopRole_Host)
+		{
+			SendHistoryToGuest();
+		}
+		return;
+	}
+
 	if (Command != CMD_PING && Command != CMD_PONG)
 	{
 		return;
@@ -391,8 +448,129 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		{
 			bPongReceived = true;
 			`log("Coop" @ RoleName() $ ": pong" @ Number @ "received (at" @ Seconds $ "s)", , 'X2TC');
+			if (Role == eCoopRole_Guest)
+			{
+				RequestHistory();
+			}
 		}
 	}
+}
+
+// Guest (Stage 3): ask the host for its whole history, once.
+function RequestHistory()
+{
+	local array<byte> NoParams;
+
+	if (bHistoryRequested)
+	{
+		return;
+	}
+	bHistoryRequested = true;
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_REQUEST_HISTORY, NoParams);
+	`log("Coop guest: history requested", , 'X2TC');
+}
+
+// Host (Stage 3): send the whole history to the guest, once per session.
+function SendHistoryToGuest()
+{
+	local XComGameStateHistory History;
+
+	if (bHistorySent)
+	{
+		`log("Coop host: history already sent; ignoring the request", , 'X2TC');
+		return;
+	}
+
+	History = `XCOMHISTORY;
+	bHistorySent = true;
+	`log("Coop host: sending history, frames=" $ History.GetNumGameStates() @ "plot=" $ GetPlotName(History), , 'X2TC');
+	`XCOMNETMANAGER.SendHistory(History, `XEVENTMGR);
+	`log("Coop host: history sent (queued), frames=" $ History.GetNumGameStates(), , 'X2TC');
+}
+
+// Guest (Stage 3): the host's history has arrived (the network manager has already
+// loaded it; the lobby treats this call the same way, UIMPShell_Lobby.uc L820-824).
+// Open the mission's map from it in the game's replay mode.
+function OnReceiveHistory(XComGameStateHistory InHistory, X2EventManager EventManager)
+{
+	local XComGameStateHistory History;
+	local XComGameState_BattleData BattleData;
+	local PlayerController PC;
+	local string MapCommand;
+
+	History = `XCOMHISTORY;
+	`log("Coop" @ RoleName() $ ": history received, frames=" $ History.GetNumGameStates() @ "(delegate's history is the game's:" @ (InHistory == History) $ ")", , 'X2TC');
+
+	if (Role != eCoopRole_Guest)
+	{
+		return;
+	}
+	if (bLoadingMission)
+	{
+		`log("Coop guest: mission already loading; ignoring this history", , 'X2TC');
+		return;
+	}
+
+	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
+	if (BattleData == none || BattleData.m_strMapCommand == "")
+	{
+		`log("Coop guest: the history has no battle data or map command; not loading", , 'X2TC');
+		return;
+	}
+
+	PC = class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController();
+	if (PC == none)
+	{
+		`log("Coop guest: no local player controller to open the map", , 'X2TC');
+		return;
+	}
+
+	bLoadingMission = true;
+	MapCommand = BattleData.m_strMapCommand $ "?LoadingSave";
+	`log("Coop guest: history received, frames=" $ History.GetNumGameStates() @ "plot=" $ GetPlotName(History) $ "; opening it in replay mode:" @ MapCommand, , 'X2TC');
+	// The game's own "replay after load" switch (UIDebugChallengeMode.uc L379-382).
+	`ONLINEEVENTMGR.bInitiateReplayAfterLoad = true;
+	PC.ConsoleCommand(MapCommand);
+}
+
+// Guest (Stage 3): called by X2TC_CoopListener when a tactical screen opens on the
+// guest. Logs that the session survived the map load, the replay state and frame, and
+// restarts the poll timer once.
+function OnGuestMissionScreen(string ScreenName)
+{
+	local XComTacticalGRI TacticalGRI;
+	local XComReplayMgr ReplayMgr;
+	local string ReplayText;
+
+	TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
+	ReplayText = "no replay manager";
+	if (TacticalGRI != none && TacticalGRI.ReplayMgr != none)
+	{
+		ReplayMgr = TacticalGRI.ReplayMgr;
+		ReplayText = "in replay=" $ ReplayMgr.bInReplay @ "replay frame=" $ ReplayMgr.CurrentHistoryFrame;
+	}
+
+	`log("Coop guest:" @ ScreenName @ "opened; session kept (loading mission=" $ bLoadingMission $ ", connections=" $ `XCOMNETMANAGER.Connections.Length $ "), frames=" $ `XCOMHISTORY.GetNumGameStates() $ "," @ ReplayText, , 'X2TC');
+
+	if (bLoadingMission && !bMissionTimerStarted)
+	{
+		bMissionTimerStarted = true;
+		LastConnections = -1;
+		StartTimer();
+	}
+}
+
+// The mission's plot name from the battle data, or "unknown". (Not personal data.)
+static function string GetPlotName(XComGameStateHistory History)
+{
+	local XComGameState_BattleData BattleData;
+
+	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
+	if (BattleData == none || BattleData.MapData.PlotMapName == "")
+	{
+		return "unknown";
+	}
+	return BattleData.MapData.PlotMapName;
 }
 
 function OnAcceptedConnection(int ConnectionIdx)

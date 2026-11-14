@@ -928,3 +928,27 @@ not re-checked line by line. Session 7 re-read everything in 10-12.
 its action with finding 11 and forwards it; finding 12 keeps it from
 applying locally; no class override unless Stage 5 shows the guest can't
 give input in follow mode or its action still applies.
+
+### Stage 3 design (2026-11-14, source only)
+13. **The guest can open the host's mission in the game's replay mode.**
+    The network manager loads a received history itself: the
+    multiplayer lobby's `ReceiveHistory` only sets a flag before loading
+    the map from it (`UIMPShell_Lobby.uc` L807-830). `InitBattle` without
+    a standard load and with no pending start state calls `LoadGame`
+    (`XComTacticalGRI.uc` L298-357). With
+    `ONLINEEVENTMGR.bInitiateReplayAfterLoad` set, the loaded ruleset
+    opens the replay screen and calls `ReplayMgr.StartReplay` from the
+    mission's start state instead of continuing play
+    (`X2TacticalGameRuleset.uc` L3063-3077; `XComReplayMgr.uc` L44-68).
+    The debug Challenge Mode screen uses exactly this to replay an
+    in-memory history: `bInitiateReplayAfterLoad = true` and
+    `ConsoleCommand(BattleData.m_strMapCommand $ "?LoadingSave")`
+    (`UIDebugChallengeMode.uc` L375-383). Skirmish sets the map command
+    to `open <plot>?game=XComGame.XComTacticalGame`
+    (`UITLE_SkirmishModeMenu.uc` L282) and runs it with `ConsoleCommand`
+    (L2671), which works on 8270065 (M3 Stage 1).
+14. **The Alien Hunters Highlander** is a plugin in the Highlander's own
+    repository (`Components\DLC2CommunityHighlander`, same MIT license);
+    its readme says it is required with the Alien Hunters DLC and must
+    not be used without it (`ReadMe.txt`). Without it the Highlander
+    logs `DLC_2 -- NOT LOADED - REQUIRED` (M3 Stage 2 logs).

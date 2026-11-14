@@ -7,6 +7,9 @@
 //    - CO-OP: JOIN on the main menu: opens the game's text box for the host's address
 //      (an IP address or its one-number form), then starts the guest side.
 //  Each writes X2TC lines to Launch.log; the address itself is never logged.
+//  On the guest, after it has opened the host's mission (Stage 3), the tactical HUD gets
+//  no HOST button; instead it and the game's replay screen (UIReplay) tell the session
+//  they opened.
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -16,6 +19,8 @@
 //    XComGame\Classes\UIScreenListener.uc         (ScreenClass, OnInit)
 //    XComGame\Classes\UIShell.uc                  (main menu; m_bDisableActions)
 //    XComGame\Classes\UITacticalHUD.uc            (the tactical screen)
+//    XComGame\Classes\UIReplay.uc                 (the replay screen; pushed by
+//                                                  XComPresentationLayerBase.UIReplayScreen L2253)
 //    XComGame\Classes\XComMPTacticalGame.uc       (extends XComTacticalGame, L5)
 //    XComGame\Classes\UIButton.uc                 (InitButton, SetText L72, DisableButton)
 //    XComGame\Classes\UIPanel.uc                  (AnchorTopRight, SetPosition, DisableNavigation)
@@ -30,6 +35,10 @@ const ADDRESS_MAX_CHARS = 40;
 
 event OnInit(UIScreen Screen)
 {
+	local X2TC_CoopSession GuestSession;
+
+	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
+
 	if (UIShell(Screen) != none)
 	{
 		AddButton(Screen, 'X2TC_CoopJoinButton', "CO-OP: JOIN", OnJoinClicked, 290);
@@ -37,8 +46,29 @@ event OnInit(UIScreen Screen)
 	}
 	else if (UITacticalHUD(Screen) != none && IsSinglePlayerTactical(Screen))
 	{
-		AddButton(Screen, 'X2TC_CoopHostButton', "CO-OP: HOST", OnHostClicked, 260);
-		`log("Coop: HOST button added to the tactical HUD", , 'X2TC');
+		if (GuestSession != none)
+		{
+			// The guest's copy of the host's mission (Stage 3): no HOST button here.
+			GuestSession.OnGuestMissionScreen("tactical HUD");
+		}
+		else
+		{
+			AddButton(Screen, 'X2TC_CoopHostButton', "CO-OP: HOST", OnHostClicked, 260);
+			`log("Coop: HOST button added to the tactical HUD", , 'X2TC');
+		}
+	}
+	else if (UIReplay(Screen) != none)
+	{
+		// The game's replay screen, which its replay mode opens (Stage 3). With no guest
+		// session here, the session object was lost in the map load (or this is not co-op).
+		if (GuestSession != none)
+		{
+			GuestSession.OnGuestMissionScreen("replay screen");
+		}
+		else
+		{
+			`log("Coop: replay screen opened, no guest session found (session object exists=" $ (class'X2TC_CoopSession'.static.FindSession() != none) $ ")", , 'X2TC');
+		}
 	}
 }
 

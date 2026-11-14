@@ -106,6 +106,31 @@ refused by the game. After the fix:
 
 On screen it looks the same as Run 1; the difference is in the logs.
 
+## Run 1c (version 0.3.1, 2026-11-14)
+
+Run 1b's laptop loaded the Run 1 build (its log still had the timer
+error). From now on each shared build gets its own version (Kc,
+2026-11-14), so the logs show which build ran.
+1. **PC:** Build (Part A step 3). Load check (step 4): the log must show
+   `X2TC: version 0.3.1`. Package **without** `--force`:
+
+   ```
+   python tools\package_mod.py --mods-dir "D:\SteamLibrary\steamapps\common\XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods" --version 0.3.1
+   ```
+
+   It writes `local\release\X2TacticalCoop-0.3.1.zip` and its
+   `.sha256.txt`. Copy only those two to the laptop.
+2. **Laptop:** close the game and AML. Check the hash (Part B step 2,
+   with the 0.3.1 file names). In the game's `XComGame\Mods\` folder,
+   delete `X2TacticalCoop`, unzip the 0.3.1 zip, and check that
+   `Mods\X2TacticalCoop\Script\X2TacticalCoop.u` has today's time. If AML
+   lists more than one X2TacticalCoop, tell me before going on.
+3. **Laptop:** run once to the main menu, quit, and look in its
+   `Launch.log` for `X2TC: version 0.3.1`. If it says 0.3.0, the old
+   folder is still being loaded: stop and tell me.
+4. Part C steps 1-8 again, saving the logs as `stage2-pc-3.log` and
+   `stage2-laptop-3.log`.
+
 ## What I'll look for
 
 | Machine | Lines |

@@ -37,8 +37,11 @@ CLAUDE.md describes.
   actions; mod 0.3.0. Stage 1 passed 2026-11-13: PC online and laptop
   in Steam offline mode run together, pre-flight READY. Stage 2 Run 1
   2026-11-14: direct IP connects (dotted address, laptop offline,
-  Highlander on); ping not sent because of a timer bug, fixed, Run 1b
-  next)
+  Highlander on); ping not sent because of a timer bug. Run 1b: PC's
+  fix works, laptop ran the old build; builds now get their own patch
+  version. **Stage 2 passed 2026-11-14 (Run 1c, 0.3.1): connection,
+  ping and pong between PC and laptop.** Stage 3 code written
+  2026-11-14 (0.3.2), not built)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -2814,3 +2817,213 @@ contain LAN addresses; not quoted.
   - **How It Was Verified:** the bug is shown by the `SetTimer() called
     on bStatic Actor` lines; the fix is verified when Run 1b's logs show
     the poll's `state` lines and the ping and pong.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 2 Run 1b, PC fixed, laptop on the old build
+On the PC, Claude Opus 5.5. Test by Kc, same setup as Run 1. Build ID
+8270065 on both (not re-reported). Logs `local\m3-logs\stage2-pc-2.log`
+(509 lines), `stage2-laptop-2.log` (201). LAN addresses in the game's
+own lines not quoted.
+
+- **Planned:** checklists/m3-stage2.md, Run 1b.
+- **Result:**
+  - **PC: the timer fix works (tested).** No `SetTimer` error; `poll
+    timer started` (L402), `state server=True client=False
+    connections=0 at 0s` (L403), the game's `NotifyAcceptedConnection`
+    and `connection accepted (connection 0)` (L404-405) at 01:02:25 by
+    the PC's clock, `connections=1 at 181s` (L406). Closed at exit
+    (L499-501).
+  - **Laptop: ran the Run 1 build.** `Error: SetTimer() called on
+    bStatic Actor WorldInfo_0` (L185) again, which the fixed code can't
+    produce (it no longer sets a timer on WorldInfo). The current
+    `local\release\X2TacticalCoop-0.3.0.zip` (00:53) and the PC's built
+    `X2TacticalCoop.u` (00:52, 111,085 bytes) both contain the fix's log
+    text and not the old one (byte search). So the folder the laptop's
+    game loaded still had the Run 1 build. Kc also keeps the Run 1 zip
+    as `X2TacticalCoop-0.3.0-stage2run1.zip`; which file went where on
+    the laptop isn't known. Every build reports `version 0.3.0`, so the
+    logs can't tell the builds apart; only the timer error did.
+  - Connection again within a second of `CreateClient` (laptop 01:02:25
+    by its clock), dotted address, laptop offline. Second confirmation
+    of Run 1's finding.
+  - **Kc: the laptop's game "hung at the title" after JOIN.** Its log
+    has nothing between `state ... at 0s` (L187, 266 s) and a normal
+    `appRequestExit(0)` and clean shutdown at 398 s (L190-200). In Run 1
+    the menu answered a click 3 s after JOIN (laptop L189-190). Whether
+    the menu froze, or only stayed on the title (the checklist says not
+    to click), is asked of Kc.
+- **Changed:** plans/m3-plan.md (Results), this entry. No code change.
+- **Problems:** the laptop's build; the possible hang (unclear).
+- **Checks:** Python reads of both logs; a byte search of the zip's and
+  the PC's `X2TacticalCoop.u` for the old and new log text.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 2 Run 1b)
+- **Prompt:** "Logs uploaded with the new zip. Laptop game hung at the
+  title after cliicking join coop as expected"
+  - **Provided:** the logs read; the PC's fix confirmed; the laptop's old
+    build shown by its log; two questions (what the hang was; whether to
+    give each shared build its own version).
+  - **Misreads / rule breaks:** none. "As expected" is ambiguous next to
+    "hung"; asked rather than guessed.
+  - **How It Was Verified:** the timer fix on the PC by its log (no
+    error, poll lines present).
+- **Prompt (answers to two questions):** the laptop "Stayed on the menu"
+  (nothing changed on screen, no click tried, quit normally); versioning
+  "Yes, 0.3.1 next".
+  - **Provided:** the hang recorded as not a freeze; **decision (Kc,
+    2026-11-14): every build shared to another machine gets the next
+    patch version**, starting with 0.3.1 (`X2TC_VERSION` changed, the
+    only code change); plans/m3-plan.md section 3 and Results;
+    checklists/m3-stage2.md Run 1c (package 0.3.1 without `--force`,
+    check `version 0.3.1` in the laptop's log before the test; logs
+    `stage2-pc-3.log`, `stage2-laptop-3.log`).
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** not applicable (no fix); Run 1c's laptop
+    log will show `version 0.3.1`.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 2 passed (Run 1c, ping and pong)
+On the PC, Claude Opus 5.5. Test by Kc: PC (online) hosting from a
+Skirmish mission, laptop (Steam offline) joining with the PC's dotted
+LAN address. **Game build ID 8270065 on both** (not re-reported). Mod
+**0.3.1** on both (`X2TC: version 0.3.1`, PC L123, laptop L120),
+Highlander v1.32.0 on both. Logs `local\m3-logs\stage2-pc-3.log` (673
+lines), `stage2-laptop-3.log` (393). LAN addresses in the game's own
+lines not quoted.
+
+- **Planned:** checklists/m3-stage2.md, Run 1c.
+- **Result: Stage 2 passes** (plans/m3-plan.md, Results).
+  - PC: `server created (port 7777)` (L588), `connection accepted
+    (connection 0)` (L592) at 01:26:12 by its clock, `connections=1 at
+    12s` (L593), `ping 1 received, pong sent` (L594).
+  - Laptop: `client created (address form: dotted)` (L184) at 01:26:12
+    by its clock, `connection attempt 1 of 6, sent=True` (L188),
+    `connected (connections=1 at 6s)` (L190), `ping 1 sent` (L191),
+    `pong 1 received (at 7s)` (L192), 0.03 s after the ping.
+  - **Findings (tested, 8270065):** two games can open a direct
+    connection with the game's network manager outside any multiplayer
+    match, from a single-player tactical mission to a main menu, with a
+    dotted LAN address, the guest's Steam offline and the Highlander on,
+    and exchange the mod's own remote commands both ways.
+  - The guest's connection list showed the connection right after its
+    first `ForceConnectionAttempt` (5 s), though the host had accepted at
+    once. Whether the attempt is needed: a guess; the retry stays.
+- **When the host quit (Kc's observation and the laptop's log):** the
+  laptop logged our `Coop guest: connection closed (connection 0)`
+  (L195); the game then treated it as a connection error too: the
+  viewport client queued a message (`NotifyConnectionError`,
+  `XComGameViewportClient.uc` L24-39, L69-85), the player controller
+  started `ReturnToMPMainMenu` (`Can't destroy a null online session`,
+  L211-215), the shell reloaded with `?closed` (L238), and M2's
+  lobby-exit fix (`X2TC_MainMenuListener.ReturnToMPMenuIfAsked`) took it
+  to the multiplayer menu (L277-286). Kc saw a dialog, "you have been
+  returned to the title screen because the active gamer profile
+  changed", with Cancel and Accept; Accept left the multiplayer menu,
+  and the game quit normally. Not a Stage 2 problem; recorded for the
+  "dropped connection" risk in later stages: our delegate doesn't stop
+  the game's own handling; the player controller's
+  `bIgnoreNetworkMessages` does (`XComGameViewportClient.uc` L32, L76),
+  and M2's lobby fix will also fire after a co-op drop.
+- **Highlander note:** both logs show `DLC_2 -- NOT LOADED - REQUIRED`
+  and "Required packages were not loaded" (PC L120-121, laptop
+  L117-118): the Alien Hunters compatibility mod, left off by the
+  2026-11-14 decision. No effect seen.
+- Kc first started and left one Skirmish mission on the PC (`?closed`
+  shell load at L407) before hosting from a second one; no effect.
+- **Changed:** plans/m3-plan.md (Results), this entry and the M3 status
+  line. No code change.
+- **Checks:** Python reads and Grep of both logs (line numbers above);
+  SDK `XComGameViewportClient.uc` L20-90 and
+  `XComPlayerController.uc` L1206-1236.
+- **Next:** Stage 3 (the guest receives the host's history and loads the
+  mission), code first.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 2 Run 1c)
+- **Prompt:** "Logs are there. I clicked 'join co-op. on the laptop.
+  nothing happend as exepcted. After a minute i closed the PC XCOM 2
+  instance with close to desktop but as soon as I did that, the Laptop
+  was booted to the multiplayer menu with the message 'you have been
+  returned to the title screen because the active gamer profile changel
+  with cancel / accept buttons. Clicked accept, left me in the
+  multiplayer menu with the create/search match buttons. Quit normally
+  after."
+  - **Provided:** both logs read: Stage 2 passes (ping and pong); the
+    host-quit sequence explained from the log and the SDK; the records
+    above.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** the timer fix (Run 1b) and the versioning
+    decision are confirmed by this run: `version 0.3.1` and the poll's
+    lines on both machines.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 3 code written (0.3.2, not built)
+On the PC, Claude Opus 5.5. No test this turn.
+
+- **Planned:** plans/m3-plan.md Stage 3: the host sends its history, the
+  guest loads the same mission and never simulates.
+- **Researched (source only; research/sdk-findings.md findings 13-14):**
+  the network manager loads a received history itself (the lobby only
+  sets a flag); `InitBattle` then calls `LoadGame`; with
+  `bInitiateReplayAfterLoad` set, the ruleset opens the replay screen and
+  replays from the mission's start state instead of playing; the debug
+  Challenge Mode screen launches exactly that from an in-memory history
+  (`UIDebugChallengeMode.uc` L375-383).
+- **Changed:**
+  - `X2TC_CoopSession.uc`: `X2TC_RequestHistory` remote command (guest
+    sends it once after its pong); host `SendHistoryToGuest` (once,
+    `SendHistory` with the game's history and event manager, logs frame
+    count and plot); guest `OnReceiveHistory` delegate (checks the
+    battle data's map command, sets `bInitiateReplayAfterLoad`, runs
+    `<map command>?LoadingSave` with `ConsoleCommand` on the local
+    player controller); `OnGuestMissionScreen` (logs that the session
+    survived the map load, the frame count and the replay state, and
+    restarts the poll once); `StartTimer` split out of `StartPoll`; the
+    guest's retries and pings stop once the mission is loading;
+    `FindGuestSession`, `GetPlotName`. Header updated.
+  - `X2TC_CoopListener.uc`: on the guest, the tactical HUD gets no HOST
+    button and tells the session it opened; `UIReplay` screens do the
+    same, or log that no guest session was found (the session object
+    was lost in the map load).
+  - `X2TC_VERSION` 0.3.2.
+  - checklists/m3-stage3.md (new); plans/m3-plan.md (Stage 3 code note,
+    Alien Hunters Highlander as a dependency); research/sdk-findings.md
+    (findings 13-14).
+- **Decision (mine, within the plan):** Stage 3's follow mode is the
+  game's stock replay, which starts at the mission's first frame; our
+  own follower (`X2TC_CoopReplayMgr`) stays in Stage 4, where following
+  to the latest frame live is the point. Recorded in the plan.
+- **Decision (Kc, 2026-11-14, mid-task):** the [WOTC] Alien Hunters
+  Community Highlander is ticked on both machines from Stage 3 on and
+  checked in the pre-flight compare. My check found no reason against:
+  it's a plugin in the Highlander's own repository (MIT, Workshop id
+  2534737016 per `PublishedFileId.ID` there), its readme says it is
+  required with the Alien Hunters DLC (both machines have DLC_2), and it
+  clears the `DLC_2 -- NOT LOADED - REQUIRED` line. Points recorded:
+  the laptop needs Steam online once to download it; it is not declared
+  required in our mod's config, because players without Alien Hunters
+  must not use it; the compare already lists mod names, so no tool
+  change is needed.
+- **Problems:** none yet; not compiled. Open (each settled by Run 1):
+  whether the guest's main menu keeps the received history until the
+  map loads; whether the connection survives the guest's `open`; whether
+  the session object survives the map load; whether the stock replay
+  bar appears and what it does.
+- **Checks:** SDK and Highlander lines read as cited; Grep of the mod's
+  classes for the new names.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 3 code)
+- **Prompt:** "Yes, Stage 3" (the button under "Shall I write the Stage 3
+  code (host sends its history, guest loads the mission)?")
+  - **Provided:** the Stage 3 code, version 0.3.2, the Stage 3
+    checklist, the records above, a commit message.
+  - **Misreads / rule breaks:** none known. The change from the plan's
+    Stage 3 text (stock replay instead of our follower) is recorded in
+    the plan's Results.
+  - **How It Was Verified:** not applicable (no fix; the build is Kc's).
+- **Prompt (mid-task):** "Since Stage 3 sends a whole tactical history,
+  I'd rather rule out Alien Hunters content mismatches now: plan for the
+  [WOTC] Alien Hunters Community Highlander to be ticked on both
+  machines from Stage 3 on, and check it in the pre-flight compare. Tell
+  me if you see a reason not to."
+  - **Provided:** the check (its repository, license, readme), no reason
+    against, the caveats above; the checklist's Parts A-C include it.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** not applicable; the pre-flight compare in
+    Part C checks it.

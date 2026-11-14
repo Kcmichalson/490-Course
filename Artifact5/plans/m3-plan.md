@@ -190,4 +190,24 @@ dependency ties us to its version. Week 7 may not fit Stages 1-6; Stage
 
 ## Results
 
-(Filled in per stage.)
+**Stage 1, option 1 (test, 2026-11-13): pass.** Mod 0.3.0 on both, no
+Highlander. Build ID: 8270065 on both (laptop's reported by Kc
+afterwards; both logs show the same executable: engine 8917, changelist
+1100000). Logs in
+`local\m3-logs\` (not committed).
+- Both games ran at the same time: PC log 23:44:50 to about 23:47:55,
+  laptop (Steam offline) 23:43:50 to about 23:47:57, by each machine's
+  clock. Kc: no interruption on either through the Skirmish test.
+- Steam on the PC showed the account playing XCOM on the laptop despite
+  offline mode; Kc picked "this device" and AML launched the PC's game.
+  The laptop's log has `STEAMWORKS initialized` but no `Logged in as`
+  line (the PC's does).
+- Multiplayer menu: laptop `MP state network=True online=False` (Quick
+  Match and Leaderboards greyed out, Kc); PC `network=True online=True`
+  (both clickable). Ranked Match disabled on both.
+- PC Skirmish: `LoadMap: Plot_WLD_GP_Forge_02?game=XComGame.XComTacticalGame`,
+  `Tactical HUD opened, game XComTacticalGame, multiplayer=False`. Turns
+  aren't in the log (the trace logs turns in multiplayer only).
+- Pre-flight compare: READY; only `MP state` differs, as expected.
+- Still open for Stage 2: whether direct IP connects while the laptop's
+  Steam is offline.

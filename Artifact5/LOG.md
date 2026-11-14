@@ -34,7 +34,8 @@ CLAUDE.md describes.
 - [ ] M3: Two humans on one team (plan drafted in Session 6, approved
   2026-11-12 in Session 7, plans/m3-plan.md: single-player mission, host
   authoritative, guest follows, Highlander route for the guest's
-  actions; mod 0.3.0. Stage 1 checklist written, not yet run)
+  actions; mod 0.3.0. Stage 1 passed 2026-11-13: PC online and laptop
+  in Steam offline mode run together, pre-flight READY)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -2534,3 +2535,59 @@ On the PC, Claude Opus 5.5. No test this session.
   - **How It Was Verified:** carriage return: `file` reported "CR, LF"
     line terminators on sdk-findings.md; after the fix a Python check
     found no `\r` and a Read of L834-853 shows the path intact.
+
+### 2026-11-13 — Session 7 (continued): M3 Stage 1 result, the loop works
+On the PC, Claude Opus 5.5. Test by Kc on the PC and the laptop, same
+Steam account, mod 0.3.0 (built and packaged on the PC), no Highlander.
+**Game build ID: 8270065 on both** (laptop's reported by Kc after the
+result was first recorded). Logs in
+`local\m3-logs\` (not committed): `stage1-laptop-online.log` (498
+lines, the online reference run), `stage1-laptop.log` (269, offline),
+`stage1-pc.log` (799). They hold the Steam persona name; not quoted.
+
+- **Planned:** plans/m3-plan.md Stage 1, option 1 (checklists/m3-stage1.md).
+- **Result: pass.** Details in plans/m3-plan.md, "Results".
+  - Both games ran together: PC log 23:44:50 to about 23:47:55 (exit at
+    L791), laptop 23:43:50 to about 23:47:57 (L261), by each machine's
+    clock. Kc: no interruption through the Skirmish test.
+  - Steam on the PC still saw the account playing XCOM on the laptop
+    (Kc); choosing "this device" let AML start the PC's game. The
+    laptop's log has `STEAMWORKS initialized 1` (L20) and no `Logged in
+    as` line; the PC's has one (L99).
+  - Multiplayer menu on both (`UIMPShell_MainMenu`): laptop `MP state
+    network=True online=False` (L198), Quick Match and Leaderboards
+    greyed out (Kc); PC `network=True online=True` (L218), both
+    clickable. Ranked Match disabled on both (Kc).
+  - PC Skirmish: `LoadMap: Plot_WLD_GP_Forge_02?game=XComGame.XComTacticalGame`
+    (L285), `Tactical HUD opened, game XComTacticalGame,
+    multiplayer=False` (L423). The trace logs turns only in multiplayer,
+    so the turn itself isn't in the log; it rests on Kc's report.
+  - Pre-flight compare (Kc ran it): READY, every value the same except
+    `MP state` (online True vs False), the expected difference.
+- **Changed:** plans/m3-plan.md (Results), the M3 status line, this
+  entry. No code change.
+- **Problems:** none. Open for Stage 2: whether direct IP works while the
+  laptop's Steam is offline (its online check is False).
+- **Checks:** Grep and Python reads of all three logs (line numbers
+  above); `buildid` 8270065 in the PC's `appmanifest_268500.acf`.
+
+### Session 7 prompt log (continued, 2026-11-13, Stage 1 result)
+- **Prompt:** "Despite [the] laptop being offline, my PC recognized it
+  playing XCOM. I was able to select 'this device' on steam and AML was
+  able to launch it anyway. clicking multiplayer on laptop loads
+  multiplayer, quick match and leaderboards greed out. PC loads to
+  multiplayer menu, with quick match and leaderboards clickable. Ranked
+  Match still disabled on both. Games continued running without
+  interruption through the skirmish test." [Plus the pre-flight compare
+  output: READY, `MP state` online=True vs online=False.]
+  - **Provided:** the three logs read against the checklist; the result
+    recorded above and in the plan.
+  - **Misreads / rule breaks:** none. The laptop's name from Kc's message
+    is left out of committed files. The laptop's build ID wasn't in the
+    report; recorded as missing, not assumed.
+  - **How It Was Verified:** not applicable (no fix).
+- **Prompt:** "laptop build id is 8270065"
+  - **Provided:** the build ID added to this entry and to plans/m3-plan.md
+    (Results).
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** not applicable (no fix).

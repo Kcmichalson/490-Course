@@ -12,6 +12,10 @@
 //  they opened. From Stage 4, the replay screen is closed when the session's follower
 //  (X2TC_CoopReplayMgr) has replaced the stock replay manager. From Stage 5 the guest's
 //  tactical HUD has CO-OP: LEAVE (X2TC_CoopSession.LeaveAsGuest) where HOST would be.
+//  From Stage 6 both HUDs get CO-OP: END TURN (host: ends the turn, asking first while
+//  the partner's soldiers can act; guest: tells the host it is ready) and a status line
+//  (a UIText named X2TC_CoopStatus that X2TC_CoopTurnUI sets), and CO-OP: SQUAD, which
+//  opens X2TC_CoopSquadScreen.
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -28,6 +32,7 @@
 //    XComGame\Classes\UIPanel.uc                  (AnchorTopRight, SetPosition, DisableNavigation)
 //    XComGame\Classes\UIInputDialogue.uc          (TInputDialogData L26, callbacks L59-61)
 //    XComGame\Classes\XComPresentationLayerBase.uc (UIInputDialog L1609, PlayUISound L2761)
+//    XComGame\Classes\UIText.uc                   (InitText L25, SetWidth L104)
 //---------------------------------------------------------------------------------------
 
 class X2TC_CoopListener extends UIScreenListener dependson(UIInputDialogue);
@@ -59,19 +64,27 @@ event OnInit(UIScreen Screen)
 			AddButton(Screen, 'X2TC_CoopNextButton', "CO-OP: NEXT SOLDIER", OnNextSoldierClicked, 310);
 			// Run 6 fallback: hover the destination, then click this; the host builds the path.
 			AddButton(Screen, 'X2TC_CoopMoveButton', "CO-OP: MOVE TO CURSOR (M)", OnMoveToCursorClicked, 360);
-			// Run 8 (0.4.2): the competing fixes for normal moves, switched on screen
-			// (X2TC_CoopReplayMgr.ToggleFix); the label shows the current setting.
-			AddButton(Screen, 'X2TC_CoopFixA', "FIX A CACHE: ON", OnFixClicked, 420);
-			AddButton(Screen, 'X2TC_CoopFixB', "FIX B HISTORY: OFF", OnFixClicked, 470);
-			AddButton(Screen, 'X2TC_CoopFixC', "FIX C WORLD: OFF", OnFixClicked, 520);
-			// Run 9 (0.4.3): a freshly spawned pathing pawn in place of the controller's.
-			AddButton(Screen, 'X2TC_CoopFixD', "FIX D FRESH PAWN: ON", OnFixClicked, 570);
-			`log("Coop: LEAVE and NEXT SOLDIER buttons added to the guest's tactical HUD", , 'X2TC');
+			// Stage 6 (0.5.0): the guest's END TURN only tells the host it is ready.
+			AddButton(Screen, 'X2TC_CoopGuestEndTurn', "CO-OP: END TURN (READY)", OnGuestEndTurnClicked, 420);
+			// Run 9 (0.4.3): fix D, a freshly spawned pathing pawn, settled normal moves; its
+			// switch stays for comparison. Fixes A-C (Run 8) keep their defaults (A on, B
+			// and C off) without buttons from 0.5.0.
+			AddButton(Screen, 'X2TC_CoopFixD', "FIX D FRESH PAWN: ON", OnFixClicked, 470);
+			// The co-op squad screen (owners and settings; view only unless allowed).
+			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 520);
+			AddStatusText(Screen, 580);
+			`log("Coop: LEAVE, NEXT SOLDIER, MOVE, END TURN and FIX D buttons added to the guest's tactical HUD", , 'X2TC');
 		}
 		else
 		{
 			AddButton(Screen, 'X2TC_CoopHostButton', "CO-OP: HOST" @ VersionTag(), OnHostClicked, 260);
-			`log("Coop: HOST button added to the tactical HUD", , 'X2TC');
+			// Stage 6 (0.5.0): ends XCOM's turn, asking first while the partner's soldiers
+			// can act (Backspace does the same once hosting).
+			AddButton(Screen, 'X2TC_CoopHostEndTurn', "CO-OP: END TURN", OnHostEndTurnClicked, 310);
+			// The co-op squad screen: soldier owners and the co-op settings.
+			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 360);
+			AddStatusText(Screen, 420);
+			`log("Coop: HOST and END TURN buttons added to the tactical HUD", , 'X2TC');
 		}
 	}
 	else if (UIReplay(Screen) != none)
@@ -127,6 +140,56 @@ function AddButton(UIScreen Screen, name ButtonName, string Label, delegate<UIBu
 	NewButton.SetPosition(-340, Y);
 	// Mouse only: keep it out of keyboard and controller navigation.
 	NewButton.DisableNavigation();
+}
+
+// Stage 6: the co-op status line (X2TC_CoopTurnUI.SetStatusText), hidden until used.
+function AddStatusText(UIScreen Screen, float Y)
+{
+	local UIText StatusText;
+
+	StatusText = Screen.Spawn(class'UIText', Screen);
+	StatusText.InitText(class'X2TC_CoopTurnUI'.const.STATUS_TEXT_NAME, "");
+	StatusText.AnchorTopRight();
+	StatusText.SetPosition(-340, Y);
+	StatusText.SetWidth(320);
+	StatusText.Hide();
+}
+
+// The co-op squad screen, on either machine.
+function OnSquadClicked(UIButton Button)
+{
+	PlayClickSound(Button);
+	class'X2TC_CoopSquadScreen'.static.Open();
+}
+
+// Stage 6: the guest is ready to end XCOM's turn.
+function OnGuestEndTurnClicked(UIButton Button)
+{
+	local X2TC_CoopSession GuestSession;
+
+	PlayClickSound(Button);
+	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
+	if (GuestSession == none)
+	{
+		`log("Coop: guest END TURN clicked, but no guest session", , 'X2TC');
+		return;
+	}
+	GuestSession.GuestEndTurnPressed();
+}
+
+// Stage 6: the host's END TURN (the co-op check, then the game's own end turn).
+function OnHostEndTurnClicked(UIButton Button)
+{
+	local X2TC_CoopSession Session;
+
+	PlayClickSound(Button);
+	Session = class'X2TC_CoopSession'.static.FindSession();
+	if (Session == none || Session.RoleName() != "host")
+	{
+		`log("Coop: host END TURN clicked before HOST; use the game's own End Turn", , 'X2TC');
+		return;
+	}
+	Session.HostEndTurnRequested("button");
 }
 
 function PlayClickSound(UIButton Button)

@@ -30,6 +30,10 @@
 //  the end-of-battle observer) is switched off, and every tutorial function it replaces
 //  logs once when called, so anything tutorial-specific that fires shows in Launch.log.
 //
+//  Stage 6 (0.5.0): selection (NEXT SOLDIER, Tab, the automatic skip) only lands on the
+//  guest's own soldiers (X2TC_CoopOwnership, P2) and moves off P1's; the start and end
+//  of XCOM's input phase are passed to the session (its "ready" lasts one turn).
+//
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\XComReplayMgr.uc     (StartReplay L44-68, StepReplayForward,
 //                                           CurrentHistoryFrame, StepForwardStopFrame, bInReplay)
@@ -75,6 +79,7 @@ var int LastRefreshFrame;
 var name LastSeenInputState;
 var float LastAbilityTime; // its WorldInfo.RealTimeSeconds
 var array<name> LoggedTutorialCalls; // tutorial functions already logged once
+var int LastSkipFromUnitID; // Stage 6: the P1 soldier the selection last moved off (retried after new frames)
 
 simulated event StartReplay(int SessionStartStateIndex)
 {
@@ -139,6 +144,7 @@ state WaitForPlayerInput
 		else if (bBehind)
 		{
 			bBehind = false;
+			LastSkipFromUnitID = 0;
 			`log("Coop guest: replayed to frame" @ CurrentHistoryFrame @ "(history frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
 		}
 
@@ -192,6 +198,7 @@ function UpdateGuestInput()
 		bInputPhase = true;
 		bInTutorial = true;
 		`log("Coop follower: XCOM input phase begins (tutorial mode on, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
+		TellSessionInputPhase(true);
 	}
 	else if (!bWantPhase && bInputPhase)
 	{
@@ -199,6 +206,7 @@ function UpdateGuestInput()
 		bInputPhase = false;
 		bInTutorial = false;
 		`log("Coop follower: XCOM input phase ends (tutorial mode off, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
+		TellSessionInputPhase(false);
 	}
 
 	if (bGuestInputOn)
@@ -225,6 +233,32 @@ function UpdateGuestInput()
 	if (bWant != bGuestInputOn)
 	{
 		SetGuestInput(TacticalController, bWant);
+	}
+}
+
+// Stage 6: a soldier the guest may select: its own (P2's), or any with the squad
+// screen's "Soldier ownership" off.
+function bool GuestMayControl(XComGameState_Unit UnitState)
+{
+	local X2TC_CoopSession Session;
+
+	Session = class'X2TC_CoopSession'.static.FindGuestSession();
+	if (Session != none && !Session.OwnershipOn())
+	{
+		return true;
+	}
+	return class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_GUEST;
+}
+
+// Stage 6: the guest's "ready to end the turn" lasts one XCOM turn.
+function TellSessionInputPhase(bool bBegins)
+{
+	local X2TC_CoopSession Session;
+
+	Session = class'X2TC_CoopSession'.static.FindGuestSession();
+	if (Session != none)
+	{
+		Session.OnGuestInputPhase(bBegins);
 	}
 }
 
@@ -533,11 +567,17 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 		return;
 	}
 	ActiveUnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
-	if (ActiveUnitState == none || ActiveUnitState.NumAllActionPoints() > 0)
+	// Stage 6: also move off a P1 soldier (the game may select one by itself).
+	if (ActiveUnitState == none || (ActiveUnitState.NumAllActionPoints() > 0 && GuestMayControl(ActiveUnitState)))
 	{
 		return;
 	}
-	// Try each XCOM unit once, through the same selection the NEXT SOLDIER button uses.
+	if (ActiveUnitState.ObjectID == LastSkipFromUnitID && ActiveUnitState.NumAllActionPoints() > 0)
+	{
+		return; // already tried to move off this P1 soldier; no P2 soldier could be selected
+	}
+	LastSkipFromUnitID = ActiveUnitState.ObjectID;
+	// Try each P2 soldier once, through the same selection the NEXT SOLDIER button uses.
 	for (i = 0; i < 8; i++)
 	{
 		if (SelectGuestUnit(TacticalController, 1) <= 0)
@@ -547,7 +587,7 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 		UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
 		if (UnitState != none && UnitState.NumAllActionPoints() > 0)
 		{
-			`log("Coop follower: unit" @ ActiveUnitState.ObjectID @ "has no actions left; selected unit" @ UnitState.ObjectID, , 'X2TC');
+			`log("Coop follower: unit" @ ActiveUnitState.ObjectID @ "is P1's or has no actions left; selected unit" @ UnitState.ObjectID, , 'X2TC');
 			return;
 		}
 		if (UnitState == ActiveUnitState)
@@ -648,17 +688,19 @@ function int SelectGuestUnit(XComTacticalController TacticalController, int Dire
 	local XComGameState_Unit UnitState;
 	local int i, Start, Index;
 
+	// Stage 6: only the soldiers the guest may control.
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
 		if (UnitState.GetTeam() == eTeam_XCom && !UnitState.IsDead() && !UnitState.IsIncapacitated()
-			&& !UnitState.bRemovedFromPlay && !UnitState.GetMyTemplate().bIsCosmetic)
+			&& !UnitState.bRemovedFromPlay && !UnitState.GetMyTemplate().bIsCosmetic
+			&& GuestMayControl(UnitState))
 		{
 			Units.AddItem(UnitState);
 		}
 	}
 	if (Units.Length == 0)
 	{
-		`log("Coop follower: no XCOM unit to select", , 'X2TC');
+		`log("Coop follower: no soldier the guest may control (none given to P2 on the squad screen?)", , 'X2TC');
 		return 0;
 	}
 

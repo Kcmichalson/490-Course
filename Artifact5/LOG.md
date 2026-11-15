@@ -61,8 +61,9 @@ CLAUDE.md describes.
   pawn visible, move-mode path frozen, spent units skipped; 0.4.1
   refreshes the reachable-tiles cache. 0.4.2: M key/right-click, fix
   toggles, 0.5 s state log. Run 8: M key and right-click move soldiers,
-  click-to-move still fails; 0.4.3 fix D (fresh pathing pawn), Run 9 is
-  the last in the time-box; Stage 6 approved, waiting)
+  click-to-move still fails; 0.4.3 fix D (fresh pathing pawn). Run 9:
+  fix D works, right-click moves; Stage 5 settled. Stage 6 (shared turn,
+  owners, banner, end-turn rules) written as 0.5.0, Run 1 next)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -3852,3 +3853,106 @@ the Stage 6 rules. plans/m3-plan.md: decisions 16 (SPEC note) and 17
   also updated SPEC section 3's "Ending the turn" row, which otherwise
   contradicted the new rules (said in the reply). **How It Was
   Verified:** reread of the edited SPEC sections.
+
+### 2026-11-15 — Session 7 (continued): Stage 5 Run 9, moves settled; Stage 6 code (0.5.0, not built)
+Claude Opus 5.5, PC. Test by Kc (Run 9), 0.4.3 on both, build 8270065
+(not re-reported); laptop log L406-430. **Result:** fix D works: the blue
+line follows the mouse and right-click moves (left-click doesn't, which
+Kc wants anyway); D off hides the line, D on brings it back; six moves
+(7, 9, 5, 7, 7, 10 tiles) applied. **Stage 5 settled.** **Changed
+(0.5.0):** new `X2TC_CoopOwnership` (alternating owners, unit value) and
+`X2TC_CoopTurnUI` (FRIENDLY ACTION banner, status line, End Turn icon);
+session: owners on FOLLOWING, P1-unit refusal, banner both sides,
+`X2TC_GuestReady`, host End Turn question, host selection off P2; input:
+Tab (guest), Backspace/End (host, only while the question is needed);
+follower: P2-only selection, phase hooks; listener: END TURN buttons and
+status line, FIX A/B/C buttons removed; mod/README.md; checklist
+checklists/m3-stage6.md; plan Results. **Problems:** none in the checks;
+two guesses listed in the checklist (host net mode and the game's own MP
+end-turn box; the host can still order a P2 soldier the game selects once
+P1 is out of actions). **Checks:** syntax script (0 problems) and locals
+check (0) on all classes; SDK `XComTacticalController.uc` L189, L1350-1419,
+`XComTacticalInput.uc` L2417-2472, `UIDialogueBox.uc` L19, `UIText.uc`
+L25, L37, L104, `XComPresentationLayerBase.uc` L1477, `DefaultInput.ini`
+(read only) Tab and End bindings.
+- **Prompt:** "Fix D works to show the line. Turned it off at 12:34 [...]
+  It's right clicking with the blue line that works, not left quick [...]
+  Also I would like to assign tab to the next soldier function as is in
+  normal gameplay. End turn on laptop still has no effect and still no
+  marker for allied activity." **Provided:** Run 9 recorded, Stage 5
+  settled; Stage 6 written with Tab included (END TURN and the banner are
+  Stage 6). **Misreads / rule breaks:** none found. Two changes from the
+  plan, both noted in it: the guest's banner now comes from reading the
+  new frames' ability contexts, not a flag set after its own action; and
+  End is caught along with Backspace, because it also ends the turn in
+  the game. **How It Was Verified:** syntax and locals checks above; the
+  in-game behaviour is Kc's to test.
+
+### 2026-11-15 — Session 7 (continued): co-op squad screen requested; plan drafted (not approved)
+Claude Opus 5.5, PC. No test, no code. **Checked (SDK):** `UIList.uc`
+(L50 InitList, a vertical list that scrolls), `UIMechaListItem.uc`
+(UpdateDataSpinner L417, UpdateDataCheckbox L543, SetDisabled L593),
+`UICheckbox.uc` L27. Draft plan in the reply, waiting for approval.
+- **Prompt:** "Also please include a UI to assign players to each
+  character [...] by default only the host should be able to access it
+  and by default all characters belong to the host. It should be
+  scrollable vertically like the existing barracks soldier lineup [...]
+  checkboxes that enable/disable soldier ownership (on by default [...])
+  and a checkbox that allows the non-host to manually end the turn [...]"
+  **Provided:** three questions, then the draft plan. **Misreads / rule
+  breaks:** none; I asked about "only the host should be able to access
+  it" instead of guessing. **How It Was Verified:** n/a.
+- **Answers:** "View all, host edits" (both can open it, only the host
+  edits by default, plus a "Partner may edit" checkbox); "Fold into 0.5.0
+  now"; settings "Session only, by command". **Provided:** the draft plan
+  built on those answers. **Misreads / rule breaks:** none. **How It Was
+  Verified:** n/a.
+
+### 2026-11-15 — Session 7 (continued): squad screen approved and written (0.5.0, not built)
+Claude Opus 5.5, PC. No test. **Changed:** new `X2TC_CoopSquadScreen`;
+`X2TC_CoopOwnership` (host owns all by default, `SetOwner` with
+`eCleanup_BeginTactical`); session (session-only settings, four new
+commands, queued owner changes, ownership-off paths); follower, input,
+listener, TurnUI; mod/README.md; checklists/m3-stage6.md (squad-screen
+steps 3 and 9); plans/m3-plan.md (approved plan saved, a proposal noted).
+**Checks:** syntax script (0) and locals check (0) on all classes; SDK
+`UIList.uc` L5-16, L50-75, `UIMechaListItem.uc` L56-85, L417-447,
+L543-623, `UICharacterPool.uc` L80-140, `UICheckbox.uc` L17, `UIBGBox.uc`
+L18, `UIPanel.uc` L427, `UIScreen.uc` L38-138, `UIScreenStack.uc` L317,
+`UIUtilities_Input.uc` (B, Esc, right mouse), `XComGameState_Unit.uc`
+L205, L1239-1242, L2229, L3460, L4575, `XComGameState_CampaignSettings.uc`
+L15-16, `Object.uc` (StaticSaveConfig).
+- **Prompt:** "1 through 3 approved. 4 I'm worried it would make the mod
+  required if the host decided to continue the campaign in singleplayer.
+  Not a large concern but preferable if it is addable/removable
+  mid-campaign" **Provided:** from the source, the owner value is the
+  game's own unit data with no mod class, so it shouldn't make the mod
+  required (not tested). To leave nothing behind anyway, it's cleared at
+  the next mission's start. I took 1-3 plus that choice for 4 as approval,
+  saved the plan, and wrote the screen. **Misreads / rule breaks:** I
+  chose the cleanup option for 4 myself, as the safest reading of your
+  preference (said in the reply). **How It Was Verified:** checks above;
+  in-game behaviour is Kc's to test.
+- **Prompt (sent mid-task):** "but it would also be very good if the mod
+  could track what soldiers were originally the host/partners and somehow
+  save it without baking it into the save" **Provided:** not coded; a
+  proposal in the reply (the mod's own small settings file on the PC,
+  keyed by the campaign's ID and the soldier). It writes a new file to
+  your config folder, so it needs your OK. **Misreads / rule breaks:**
+  none. **How It Was Verified:** n/a.
+- **Prompt:** "And this config file would work when someone else installs
+  the mod? The intention is to publish this in thefuturee" **Provided:**
+  yes in principle (the file is created per player, by the game, on first
+  write), with three caveats to test: a mod update might reset it, it
+  stays on the host's PC (no cloud copy), and it may be left behind after
+  an uninstall. All from general Unreal Engine 3 behaviour, not tested
+  here, and labelled as guesses. **Misreads / rule breaks:** none. **How
+  It Was Verified:** n/a (no test yet).
+- **Prompt:** "Yes, add it" **Provided:** new `X2TC_CoopOwnerMemory`
+  (per-campaign owner list in the mod's own config file, keyed by the
+  campaign's start time and the soldier's object ID); shipped empty
+  `Config\XComX2TacticalCoopOwners.ini`; session: remembered P2 soldiers
+  given back at HOST, every applied owner change remembered;
+  checklist step 10; mod/README.md; plan. Syntax (0) and locals (0)
+  checks. **Misreads / rule breaks:** none. **How It Was Verified:**
+  checks above; in-game behaviour is Kc's to test.

@@ -8,7 +8,10 @@
 //    - a right-click on the map, only while the game's own path is empty (when the
 //      normal path works, right-click is left to the game).
 //  Both act only while the guest's follower has its input on (XCOM's turn, caught up);
-//  every other key and click passes through untouched. The host builds the path
+//  every other key and click passes through untouched.
+//  Stage 6 (0.5.0): Tab on the guest selects its next soldier (during XCOM's input
+//  phase); Backspace and End on the host go through the co-op End Turn check while the
+//  partner's soldiers can still act and it isn't ready (X2TC_CoopSession). The host builds the path
 //  (X2TC_CoopSession, X2PathSolver.BuildPath).
 //
 //  How: an Interaction inserted at the front of the game viewport's global interactions
@@ -57,16 +60,60 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 	local X2TC_CoopReplayMgr Follower;
 	local XComTacticalGRI TacticalGRI;
 	local XComTacticalController TacticalController;
+	local X2TC_CoopSession Session;
 
-	if (EventType != IE_Released || (Key != MOVE_KEY && Key != 'RightMouseButton'))
+	// The squad screen handles its own keys and clicks (a right-click there closes it
+	// and must not move a soldier).
+	if (class'X2TC_CoopSquadScreen'.static.FindOpen() != none)
 	{
 		return false;
+	}
+
+	// Stage 6, host: Backspace and End end the turn (XComTacticalInput.uc Key_Backspace
+	// L2462, Key_End L2468, Back_Button L2417-2442, on release). While the host should be
+	// asked first, they go through the co-op check instead; otherwise the game has them.
+	if (Key == 'BackSpace' || Key == 'End')
+	{
+		Session = class'X2TC_CoopSession'.static.FindSession();
+		if (Session == none || Session.RoleName() != "host" || !Session.bGuestFollowing
+			|| !Session.HostShouldAskBeforeEndTurn() || IsDialogShowing())
+		{
+			return false;
+		}
+		if (EventType == IE_Released)
+		{
+			`log("Coop input:" @ Key @ "-> co-op End Turn check", , 'X2TC');
+			Session.HostEndTurnRequested(string(Key));
+		}
+		return true;
 	}
 
 	TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
 	if (TacticalGRI != none)
 	{
 		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+	}
+
+	// Stage 6, guest: Tab selects the next of the guest's soldiers, as in normal play
+	// (the game's own cycling is off with a tutorial-style replay manager,
+	// XComTacticalController.uc L540-544).
+	if (Key == 'Tab')
+	{
+		if (Follower == none || !Follower.bInputPhase)
+		{
+			return false;
+		}
+		if (EventType == IE_Pressed)
+		{
+			`log("Coop input: Tab -> next soldier", , 'X2TC');
+			Follower.SelectNextGuestUnit();
+		}
+		return true;
+	}
+
+	if (EventType != IE_Released || (Key != MOVE_KEY && Key != 'RightMouseButton'))
+	{
+		return false;
 	}
 	if (Follower == none || !Follower.bGuestInputOn)
 	{
@@ -86,4 +133,13 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 	`log("Coop input:" @ Key @ "-> move to cursor", , 'X2TC');
 	Follower.MoveActiveUnitToCursor();
 	return true;
+}
+
+// True while a dialog box is up (our End Turn question included), so its own keys work.
+function bool IsDialogShowing()
+{
+	local XComPlayerController PC;
+
+	PC = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	return PC != none && PC.Pres != none && PC.Pres.UIIsShowingDialog();
 }

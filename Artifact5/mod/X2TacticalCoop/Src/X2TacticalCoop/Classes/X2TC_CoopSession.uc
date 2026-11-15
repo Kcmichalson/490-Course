@@ -43,6 +43,21 @@
 //  (SendGuestAbility: template, source, primary target, target locations); the host
 //  finds the matching available action and applies it with ActivateAbility.
 //
+//  Stage 6 (shared turn): every soldier belongs to the host until the co-op squad
+//  screen (X2TC_CoopSquadScreen) gives it to the partner (X2TC_CoopOwnership); the host
+//  refuses guest actions on P1's soldiers while "Soldier ownership" is on. The screen's
+//  three settings (ownership, partner may end the turn, partner may edit) are the
+//  host's for this session only, sent to the guest by command; the partner's edits,
+//  when allowed, go to the host, which applies them. Both sides
+//  show FRIENDLY ACTION (X2TC_CoopTurnUI) while the other player's soldier acts. Only the
+//  host ends XCOM's turn: the guest's END TURN sends "ready"; the host's End Turn (our
+//  button, Backspace) asks first while the guest's soldiers can act and it isn't ready,
+//  with the HUD's own End Turn icon disabled meanwhile. The host's selection is kept off
+//  P2's soldiers.
+//    XComGame\Classes\XComTacticalController.uc (PerformEndTurn L1350, Visualizer_SelectUnit)
+//    XComGame\Classes\XGGameData.uc           (EPlayerEndTurnType L605)
+//    XComGame\Classes\UIDialogueBox.uc        (TDialogueBoxData, ActionCallback L69)
+//
 //  One session per game: GetSession() looks it up by a fixed name in the transient
 //  package and creates it there the first time, the pattern the Highlander uses for its
 //  dependency objects (X2WOTCCH_ModDependencies.uc L102-110). A runtime default value
@@ -91,7 +106,7 @@
 //    Engine\Classes\PlayerController.uc       (bIgnoreNetworkMessages L214)
 //---------------------------------------------------------------------------------------
 
-class X2TC_CoopSession extends Object dependson(UIDialogueBox);
+class X2TC_CoopSession extends Object dependson(UIDialogueBox, XGGameData);
 
 const COOP_PORT = 7777;
 
@@ -111,6 +126,19 @@ const CMD_MOVE_RESULT = "X2TC_MoveResult"; // host: 1 applied / 0 refused, then 
 // Stage 5b: template name, source unit ID, primary target ID, location count, then X, Y, Z
 // per location (rounded to whole units).
 const CMD_GUEST_ABILITY = "X2TC_GuestAbility";
+// Stage 6: the guest is ready to end XCOM's turn (it ends nothing by itself).
+const CMD_GUEST_READY = "X2TC_GuestReady";
+const BANNER_MIN_SECONDS = 1.5;            // both: the FRIENDLY ACTION banner shows at least this long
+// Co-op squad screen (X2TC_CoopSquadScreen). The settings are the host's, for this
+// session only (Kc, 2026-11-15), sent to the guest by command.
+const CMD_SETTINGS = "X2TC_Settings";          // host: ownership, partner may end turn, partner may edit (0/1 each)
+const CMD_SET_OWNER = "X2TC_SetOwner";         // guest: unit ID, owner (when it may edit)
+const CMD_SET_SETTING = "X2TC_SetSetting";     // guest: setting index, 0/1 (when it may edit)
+const CMD_GUEST_END_TURN = "X2TC_GuestEndTurn"; // guest: end XCOM's turn (when allowed)
+const SETTING_OWNERSHIP = 0;
+const SETTING_PARTNER_END_TURN = 1;
+const SETTING_PARTNER_EDIT = 2;
+const OWN_ACTION_SECONDS = 5.0;            // guest, ownership off: its own soldier's frames this soon after its order aren't "friendly"
 const MOVE_RETRY_SECONDS = 10;             // host: how long a move may wait for an idle ruleset
 const HITCH_SECONDS = 1.5;                 // both: a poll gap longer than this is logged
 const FAST_SEND_SECONDS = 0.2;             // host: how often new frames are checked for sending (Run 6)
@@ -186,6 +214,25 @@ var int PendingAbilitySecond;
 var int AbilitiesReceived;     // host
 var int AbilitiesSent;         // guest
 var bool bVersionMismatch;     // both: the other side's mod version differs (from 0.3.8)
+
+// Stage 6.
+var bool bOwnersAssigned;      // host: the owners have been logged for this session
+var bool bGuestReady;          // host: the guest pressed END TURN this XCOM turn
+var bool bReadySent;           // guest: END TURN pressed this XCOM turn
+var bool bBannerShown;         // both: the FRIENDLY ACTION banner is up
+var float BannerShownTime;     // both: WorldInfo.RealTimeSeconds when it came up
+var ETeam LastTurnTeam;        // host: whose turn it was at the last fast tick
+var int LastHostSkippedUnitID; // host: last guest-owned unit moved off the host's selection
+var bool bEndTurnIconDisabled; // host: we disabled the HUD's End Turn icon
+
+// Co-op squad screen settings (host's; the guest keeps a copy from CMD_SETTINGS).
+var bool bOwnershipOn;         // owners enforced (default on)
+var bool bPartnerMayEndTurn;   // the guest's END TURN ends XCOM's turn (default off)
+var bool bPartnerMayEdit;      // the guest may change owners and settings (default off)
+var array<int> PendingOwnerUnitIDs; // host: owner changes waiting for an idle ruleset
+var array<int> PendingOwnerValues;
+var int LastOwnActionUnitID;   // guest: the unit of its last order
+var float LastOwnActionTime;   // guest: WorldInfo.RealTimeSeconds of that order
 var float LastPollRealTime;    // both: WorldInfo.RealTimeSeconds at the last poll
 var int GuestExpectedFrames;   // guest: history frames after the last history from the host
 var int GuestLastWarnedFrames; // guest: frame count of the last "grew by itself" warning
@@ -280,6 +327,10 @@ function bool StartHost()
 
 	Role = eCoopRole_Host;
 	`log("Coop host: server created (port" @ COOP_PORT $ ")", , 'X2TC');
+	// Stage 6: Backspace on the host goes through the co-op End Turn check.
+	class'X2TC_CoopInput'.static.Install();
+	// Owners remembered from earlier missions of this campaign (X2TC_CoopOwnerMemory).
+	HostRecallOwners();
 	StartPoll();
 	return true;
 }
@@ -431,10 +482,468 @@ function StartTimer()
 // waiting for the one-second poll; the in-flight and latent checks still apply.
 function FastSend()
 {
+	if (Role == eCoopRole_Host && PendingOwnerUnitIDs.Length > 0)
+	{
+		HostApplyPendingOwners();
+	}
 	if (Role == eCoopRole_Host && bGuestFollowing)
 	{
 		HostMaybeSendPartial(`XCOMNETMANAGER);
+		HostTurnUI();
 	}
+	else if (Role == eCoopRole_Guest && bFollowerInstalled)
+	{
+		GuestTurnUI();
+	}
+}
+
+// Host (Stage 6), five times a second: reset "ready" when the turn changes, keep the
+// End Turn icon disabled only while the host should be asked first, show the status
+// line, hide the banner when the guest's action is done, and keep the host's selection
+// off the guest's soldiers.
+function HostTurnUI()
+{
+	local ETeam TurnTeam;
+
+	TurnTeam = CurrentTurnTeam();
+	if (TurnTeam != LastTurnTeam)
+	{
+		LastTurnTeam = TurnTeam;
+		if (bGuestReady)
+		{
+			bGuestReady = false;
+			`log("Coop turn: new turn (team" @ int(TurnTeam) $ "); the partner's \"ready\" is cleared", , 'X2TC');
+		}
+		class'X2TC_CoopTurnUI'.static.SetStatusText("");
+	}
+
+	// Only touch the icon to disable it, and to put back what we disabled; the game keeps
+	// managing it otherwise.
+	if (HostShouldAskBeforeEndTurn())
+	{
+		if (class'X2TC_CoopTurnUI'.static.SetEndTurnIconEnabled(false))
+		{
+			bEndTurnIconDisabled = true;
+		}
+	}
+	else if (bEndTurnIconDisabled)
+	{
+		bEndTurnIconDisabled = false;
+		class'X2TC_CoopTurnUI'.static.SetEndTurnIconEnabled(true);
+	}
+	MaybeHideBanner();
+	if (TurnTeam == eTeam_XCom && OwnershipOn())
+	{
+		KeepHostSelectionOwn();
+	}
+}
+
+// Host: true while ending XCOM's turn should first ask: the guest's soldiers can still
+// act and the guest hasn't pressed END TURN this turn (Kc, 2026-11-14).
+function bool HostShouldAskBeforeEndTurn()
+{
+	return OwnershipOn() && CurrentTurnTeam() == eTeam_XCom && !bGuestReady && class'X2TC_CoopOwnership'.static.GuestHasActions();
+}
+
+// Host: the game's own "next unit with actions" can select a guest-owned soldier
+// (X2TacticalGameRuleset.ActionsAvailable, L4650-4675); move the selection to the host's
+// own next soldier with actions.
+function KeepHostSelectionOwn()
+{
+	local XComTacticalController TacticalController;
+	local XComGameState_Unit ActiveUnit, UnitState;
+
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController == none || class'XComGameStateVisualizationMgr'.static.VisualizerBusy())
+	{
+		return;
+	}
+	ActiveUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
+	if (ActiveUnit == none || class'X2TC_CoopOwnership'.static.GetOwner(ActiveUnit) != class'X2TC_CoopOwnership'.const.OWNER_GUEST)
+	{
+		return;
+	}
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if (class'X2TC_CoopOwnership'.static.IsOwnableSoldier(UnitState) && !UnitState.IsIncapacitated()
+			&& class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_HOST
+			&& UnitState.NumAllActionPoints() > 0 && TacticalController.Visualizer_SelectUnit(UnitState))
+		{
+			if (LastHostSkippedUnitID != ActiveUnit.ObjectID)
+			{
+				LastHostSkippedUnitID = ActiveUnit.ObjectID;
+				`log("Coop owners: host selection moved off P2's unit" @ ActiveUnit.ObjectID @ "to P1's unit" @ UnitState.ObjectID, , 'X2TC');
+			}
+			return;
+		}
+	}
+}
+
+// Guest (Stage 6), five times a second: hide the banner when the partner's action is done.
+function GuestTurnUI()
+{
+	MaybeHideBanner();
+}
+
+// Both: show the FRIENDLY ACTION banner (Kc's design, plans/m3-plan.md Stage 6).
+function ShowBanner(string Why)
+{
+	BannerShownTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	if (!bBannerShown)
+	{
+		bBannerShown = true;
+		`log("Coop UI: FRIENDLY ACTION (" $ Why $ ")", , 'X2TC');
+		class'X2TC_CoopTurnUI'.static.ShowFriendlyBanner();
+	}
+}
+
+// Both: hide it once it has shown long enough and nothing is animating (on the guest,
+// also once its replay has caught up).
+function MaybeHideBanner()
+{
+	local X2TC_CoopReplayMgr Follower;
+	local XComTacticalGRI TacticalGRI;
+
+	if (!bBannerShown)
+	{
+		return;
+	}
+	if (class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - BannerShownTime < BANNER_MIN_SECONDS
+		|| class'XComGameStateVisualizationMgr'.static.VisualizerBusy())
+	{
+		return;
+	}
+	if (Role == eCoopRole_Guest)
+	{
+		TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
+		if (TacticalGRI != none)
+		{
+			Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+		}
+		if (Follower != none && Follower.bBehind)
+		{
+			return;
+		}
+	}
+	bBannerShown = false;
+	class'X2TC_CoopTurnUI'.static.HideFriendlyBanner();
+}
+
+// Host (Stage 6): our END TURN button and Backspace come here. Asks first while the
+// guest's soldiers can still act and the guest isn't ready; otherwise ends the turn the
+// way the HUD's own icon does (XComTacticalController.PerformEndTurn L1350).
+function HostEndTurnRequested(string Source)
+{
+	local XComPlayerController PC;
+	local TDialogueBoxData DialogData;
+
+	PC = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (PC == none)
+	{
+		return;
+	}
+	if (!HostShouldAskBeforeEndTurn())
+	{
+		`log("Coop turn: host ends XCOM's turn (" $ Source $ ", partner ready=" $ bGuestReady $ ")", , 'X2TC');
+		XComTacticalController(PC).PerformEndTurn(ePlayerEndTurnType_PlayerInput);
+		return;
+	}
+	`log("Coop turn: host End Turn (" $ Source $ ") while the partner's soldiers can act; asking", , 'X2TC');
+	DialogData.eType = eDialog_Normal;
+	DialogData.strTitle = "CO-OP: END TURN?";
+	DialogData.strText = "Your partner's soldiers can still act. End the turn anyway?";
+	DialogData.strAccept = "End turn";
+	DialogData.strCancel = "Cancel";
+	DialogData.fnCallback = OnEndTurnDialog;
+	PC.Pres.UIRaiseDialog(DialogData);
+}
+
+function OnEndTurnDialog(name eAction)
+{
+	local XComTacticalController TacticalController;
+
+	if (eAction != 'eUIAction_Accept')
+	{
+		`log("Coop turn: host chose not to end the turn", , 'X2TC');
+		return;
+	}
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController != none)
+	{
+		`log("Coop turn: host ends XCOM's turn anyway (the partner's soldiers could still act)", , 'X2TC');
+		TacticalController.PerformEndTurn(ePlayerEndTurnType_PlayerInput);
+	}
+}
+
+// Host (Stage 6): a further guest action clears "ready" (Kc, 2026-11-15).
+function ClearGuestReady(string Why)
+{
+	if (!bGuestReady)
+	{
+		return;
+	}
+	bGuestReady = false;
+	`log("Coop turn: the partner's \"ready\" is cleared (" $ Why $ ")", , 'X2TC');
+	class'X2TC_CoopTurnUI'.static.SetStatusText("");
+}
+
+// Guest (Stage 6): its own action clears its "ready" (the host clears its copy when the
+// action arrives).
+function ClearReadySent()
+{
+	if (!bReadySent)
+	{
+		return;
+	}
+	bReadySent = false;
+	`log("Coop turn: guest acted again; no longer ready to end the turn", , 'X2TC');
+	class'X2TC_CoopTurnUI'.static.SetStatusText("");
+}
+
+// Guest (Stage 6): its END TURN button: tell the host it's ready; it ends nothing.
+function GuestEndTurnPressed()
+{
+	local array<byte> NoParams;
+
+	if (Role != eCoopRole_Guest)
+	{
+		return;
+	}
+	if (!GuestCanSignalReady())
+	{
+		`log("Coop turn: guest END TURN ignored (not XCOM's input phase)", , 'X2TC');
+		return;
+	}
+	NoParams.Length = 0;
+	if (bPartnerMayEndTurn)
+	{
+		// Squad screen setting: the partner ends XCOM's turn itself.
+		`XCOMNETMANAGER.SendRemoteCommand(CMD_GUEST_END_TURN, NoParams);
+		`log("Coop turn: guest asked the host to end XCOM's turn (Partner may end the turn is on)", , 'X2TC');
+		return;
+	}
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_GUEST_READY, NoParams);
+	bReadySent = true;
+	`log("Coop turn: guest is ready to end the turn (told the host)", , 'X2TC');
+	class'X2TC_CoopTurnUI'.static.SetStatusText("Waiting for the host to end the turn");
+}
+
+// Guest (Stage 6): the follower's XCOM input phase began or ended; "ready" is per turn.
+function OnGuestInputPhase(bool bBegins)
+{
+	bReadySent = false;
+	class'X2TC_CoopTurnUI'.static.SetStatusText("");
+}
+
+// ---- Co-op squad screen (plans/m3-plan.md, approved 2026-11-15) ----
+
+function bool IsHost()
+{
+	return Role == eCoopRole_Host;
+}
+
+// Owners count only while the host's "Soldier ownership" setting is on.
+function bool OwnershipOn()
+{
+	return bOwnershipOn;
+}
+
+// The host always edits; the guest only with "Partner may edit".
+function bool CanEdit()
+{
+	return Role == eCoopRole_Host || (Role == eCoopRole_Guest && bPartnerMayEdit);
+}
+
+function bool GetSetting(int Index)
+{
+	switch (Index)
+	{
+		case SETTING_OWNERSHIP: return bOwnershipOn;
+		case SETTING_PARTNER_END_TURN: return bPartnerMayEndTurn;
+		case SETTING_PARTNER_EDIT: return bPartnerMayEdit;
+	}
+	return false;
+}
+
+function string SettingsText()
+{
+	return "ownership=" $ bOwnershipOn @ "partner may end turn=" $ bPartnerMayEndTurn @ "partner may edit=" $ bPartnerMayEdit;
+}
+
+// The squad screen's owner change. Host: queued and applied when idle. Guest: sent to the
+// host when it may edit.
+function RequestOwner(int UnitID, int Owner, string Who)
+{
+	local array<byte> Params;
+
+	if (Role == eCoopRole_Guest)
+	{
+		if (!bPartnerMayEdit)
+		{
+			return;
+		}
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(UnitID, Params);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Owner, Params);
+		`XCOMNETMANAGER.SendRemoteCommand(CMD_SET_OWNER, Params);
+		`log("Coop owners: asked the host to give unit" @ UnitID @ "to" @ class'X2TC_CoopOwnership'.static.OwnerText(Owner), , 'X2TC');
+		return;
+	}
+	if (Role != eCoopRole_Host)
+	{
+		return;
+	}
+	`log("Coop owners: change requested by" @ Who $ ": unit" @ UnitID @ "->" @ class'X2TC_CoopOwnership'.static.OwnerText(Owner), , 'X2TC');
+	PendingOwnerUnitIDs.AddItem(UnitID);
+	PendingOwnerValues.AddItem(Owner);
+	HostApplyPendingOwners();
+}
+
+// Host: soldiers remembered as the partner's in earlier missions of this campaign go back
+// to the partner (Kc, 2026-11-15). Everyone else stays the host's.
+function HostRecallOwners()
+{
+	local array<XComGameState_Unit> Squad;
+	local int i, Remembered;
+
+	class'X2TC_CoopOwnerMemory'.static.LogSummary();
+	class'X2TC_CoopOwnership'.static.GetSquad(Squad);
+	for (i = 0; i < Squad.Length; i++)
+	{
+		Remembered = class'X2TC_CoopOwnerMemory'.static.Recall(Squad[i].ObjectID);
+		if (Remembered == class'X2TC_CoopOwnership'.const.OWNER_GUEST
+			&& class'X2TC_CoopOwnership'.static.GetOwner(Squad[i]) != Remembered)
+		{
+			RequestOwner(Squad[i].ObjectID, Remembered, "memory");
+		}
+	}
+}
+
+// Host: applies queued owner changes once nothing is building or animating (approved
+// question 2: owners may change mid-turn, only while nothing acts).
+function HostApplyPendingOwners()
+{
+	local X2TacticalGameRuleset Rules;
+
+	Rules = `TACTICALRULES;
+	if (Rules == none || Rules.BuildingLatentGameState || class'XComGameStateVisualizationMgr'.static.VisualizerBusy())
+	{
+		return;
+	}
+	while (PendingOwnerUnitIDs.Length > 0)
+	{
+		if (class'X2TC_CoopOwnership'.static.SetOwner(PendingOwnerUnitIDs[0], PendingOwnerValues[0]))
+		{
+			// Kept for later missions of this campaign, outside the save.
+			class'X2TC_CoopOwnerMemory'.static.Remember(PendingOwnerUnitIDs[0], PendingOwnerValues[0]);
+		}
+		PendingOwnerUnitIDs.Remove(0, 1);
+		PendingOwnerValues.Remove(0, 1);
+	}
+	RefreshSquadScreen();
+	if (bGuestFollowing)
+	{
+		HostMaybeSendPartial(`XCOMNETMANAGER);
+	}
+}
+
+// The squad screen's checkbox change. Host: applied and sent. Guest: sent to the host
+// when it may edit.
+function RequestSetting(int Index, bool bValue, string Who)
+{
+	local array<byte> Params;
+
+	if (Role == eCoopRole_Guest)
+	{
+		if (!bPartnerMayEdit)
+		{
+			return;
+		}
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Index, Params);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bValue ? 1 : 0, Params);
+		`XCOMNETMANAGER.SendRemoteCommand(CMD_SET_SETTING, Params);
+		`log("Coop settings: asked the host to set" @ Index @ "to" @ bValue, , 'X2TC');
+		return;
+	}
+	if (Role != eCoopRole_Host)
+	{
+		return;
+	}
+	if (Who == "partner" && Index == SETTING_PARTNER_EDIT)
+	{
+		`log("Coop settings: refused: only the host changes \"Partner may edit\"", , 'X2TC');
+		SendSettings();
+		return;
+	}
+	switch (Index)
+	{
+		case SETTING_OWNERSHIP: bOwnershipOn = bValue; break;
+		case SETTING_PARTNER_END_TURN: bPartnerMayEndTurn = bValue; break;
+		case SETTING_PARTNER_EDIT: bPartnerMayEdit = bValue; break;
+		default: return;
+	}
+	`log("Coop settings: changed by" @ Who $ ":" @ SettingsText(), , 'X2TC');
+	SendSettings();
+	RefreshSquadScreen();
+}
+
+// Host: the settings to the guest (when it follows; after each change).
+function SendSettings()
+{
+	local array<byte> Params;
+
+	if (Role != eCoopRole_Host || !bGuestFollowing)
+	{
+		return;
+	}
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bOwnershipOn ? 1 : 0, Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bPartnerMayEndTurn ? 1 : 0, Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bPartnerMayEdit ? 1 : 0, Params);
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_SETTINGS, Params);
+	`log("Coop settings: sent to the partner:" @ SettingsText(), , 'X2TC');
+}
+
+// Host: the guest's END TURN with "Partner may end the turn" on (no question).
+function HostEndTurnForPartner()
+{
+	local XComTacticalController TacticalController;
+
+	if (!bPartnerMayEndTurn || CurrentTurnTeam() != eTeam_XCom)
+	{
+		`log("Coop turn: the partner's End Turn refused (allowed=" $ bPartnerMayEndTurn $ "," @ CurrentTurnText() $ ")", , 'X2TC');
+		return;
+	}
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController != none)
+	{
+		`log("Coop turn: the partner ends XCOM's turn", , 'X2TC');
+		TacticalController.PerformEndTurn(ePlayerEndTurnType_PlayerInput);
+	}
+}
+
+// Both: redraw an open squad screen (owners or settings changed).
+function RefreshSquadScreen()
+{
+	local X2TC_CoopSquadScreen SquadScreen;
+
+	SquadScreen = class'X2TC_CoopSquadScreen'.static.FindOpen();
+	if (SquadScreen != none)
+	{
+		SquadScreen.RefreshRows();
+	}
+}
+
+// Guest (Stage 6): its END TURN button only makes sense during its input phase.
+function bool GuestCanSignalReady()
+{
+	local XComTacticalGRI TacticalGRI;
+	local X2TC_CoopReplayMgr Follower;
+
+	TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
+	if (TacticalGRI != none)
+	{
+		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+	}
+	return Follower != none && Follower.bInputPhase;
 }
 
 // Timer function, once a second: logs connection state changes; on the guest, retries
@@ -564,6 +1073,69 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		return;
 	}
 
+	if (Command == CMD_SETTINGS)
+	{
+		if (Role == eCoopRole_Guest)
+		{
+			Params = RawParams;
+			bOwnershipOn = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0;
+			bPartnerMayEndTurn = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0;
+			bPartnerMayEdit = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0;
+			`log("Coop settings: from the host:" @ SettingsText(), , 'X2TC');
+			class'X2TC_CoopTurnUI'.static.SetGuestEndTurnLabel(bPartnerMayEndTurn);
+			if (bPartnerMayEndTurn && bReadySent)
+			{
+				ClearReadySent();
+			}
+			RefreshSquadScreen();
+		}
+		return;
+	}
+
+	if (Command == CMD_SET_OWNER || Command == CMD_SET_SETTING)
+	{
+		if (Role == eCoopRole_Host)
+		{
+			Params = RawParams;
+			Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+			if (!bPartnerMayEdit)
+			{
+				`log("Coop settings: refused a change from the partner (Partner may edit is off)", , 'X2TC');
+				SendSettings(); // puts the guest's screen back
+				return;
+			}
+			if (Command == CMD_SET_OWNER)
+			{
+				RequestOwner(Number, class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params), "partner");
+			}
+			else
+			{
+				RequestSetting(Number, class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0, "partner");
+			}
+		}
+		return;
+	}
+
+	if (Command == CMD_GUEST_END_TURN)
+	{
+		if (Role == eCoopRole_Host)
+		{
+			HostEndTurnForPartner();
+		}
+		return;
+	}
+
+	if (Command == CMD_GUEST_READY)
+	{
+		if (Role == eCoopRole_Host)
+		{
+			bGuestReady = true;
+			`log("Coop turn: the partner is ready to end the turn (" $ CurrentTurnText() $ ")", , 'X2TC');
+			class'X2TC_CoopTurnUI'.static.SetStatusText("Partner is ready to end the turn");
+		}
+		return;
+	}
+
 	if (Command == CMD_MOVE_RESULT)
 	{
 		Params = RawParams;
@@ -584,6 +1156,14 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 			// Log the turn starts the guest will replay from the start state, to pair them.
 			HostTurnScanFrame = Number - 1;
 			HostScanTurns();
+			// Stage 6 (squad screen): owners are the host's until changed; log them once,
+			// and give the guest the settings.
+			if (!bOwnersAssigned)
+			{
+				bOwnersAssigned = true;
+				class'X2TC_CoopOwnership'.static.LogOwners();
+			}
+			SendSettings();
 		}
 		return;
 	}
@@ -869,9 +1449,10 @@ function OnFollowerStarted(int StartFrame)
 function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager EventManager)
 {
 	local array<byte> Params;
-	local int Frames;
+	local int Frames, PreviousFrames;
 
 	Frames = `XCOMHISTORY.GetNumGameStates();
+	PreviousFrames = GuestExpectedFrames;
 	GuestExpectedFrames = Frames;
 	PartialsReceived++;
 	`log("Coop" @ RoleName() $ ": partial history" @ PartialsReceived @ "received, frames=" $ Frames, , 'X2TC');
@@ -881,6 +1462,65 @@ function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager 
 	}
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Frames, Params);
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_HISTORY_RECEIVED, Params);
+
+	// Stage 6: the host's own soldier acted in these frames: show FRIENDLY ACTION.
+	if (PreviousFrames > 0 && HasHostSoldierAction(PreviousFrames, Frames - 1))
+	{
+		ShowBanner("the host's soldier acted, frames" @ PreviousFrames @ "->" @ Frames);
+	}
+	// Owners may have changed in these frames.
+	RefreshSquadScreen();
+}
+
+// Guest (Stage 6): true if any frame in FromFrame..ToFrame is an ability (moves are the
+// StandardMove ability) used by a P1 soldier during XCOM's turn. Interrupts during the
+// aliens' turn (overwatch shots) don't count.
+function bool HasHostSoldierAction(int FromFrame, int ToFrame)
+{
+	local XComGameStateHistory History;
+	local XComGameState GameState;
+	local XComGameStateContext_Ability AbilityContext;
+	local XComGameState_Unit UnitState;
+	local int Frame;
+
+	if (CurrentTurnTeam() != eTeam_XCom)
+	{
+		return false;
+	}
+	History = `XCOMHISTORY;
+	for (Frame = Max(FromFrame, 0); Frame <= ToFrame && Frame < History.GetNumGameStates(); Frame++)
+	{
+		GameState = History.GetGameStateFromHistory(Frame);
+		if (GameState == none)
+		{
+			continue;
+		}
+		AbilityContext = XComGameStateContext_Ability(GameState.GetContext());
+		if (AbilityContext == none)
+		{
+			continue;
+		}
+		UnitState = XComGameState_Unit(History.GetGameStateForObjectID(AbilityContext.InputContext.SourceObject.ObjectID, eReturnType_Reference, Frame));
+		if (!class'X2TC_CoopOwnership'.static.IsOwnableSoldier(UnitState))
+		{
+			continue;
+		}
+		if (OwnershipOn())
+		{
+			if (class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_HOST)
+			{
+				return true;
+			}
+		}
+		// Ownership off (approved question 1, a guess to test): any soldier, except the
+		// one the guest ordered itself in the last few seconds.
+		else if (UnitState.ObjectID != LastOwnActionUnitID
+			|| class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - LastOwnActionTime > OWN_ACTION_SECONDS)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 // Host (Stage 4): send the new frames if there are any, one send at a time, not while
@@ -1096,6 +1736,9 @@ function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
 		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Tiles[i].Z, Params);
 	}
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_GUEST_MOVE, Params);
+	ClearReadySent();
+	LastOwnActionUnitID = UnitID;
+	LastOwnActionTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
 	MovesSent++;
 	LastGuestMoveUnitID = UnitID;
 	`log("Coop guest: captured move" @ MovesSent @ "(unit" @ UnitID $ "," @ Tiles.Length @ "tiles), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
@@ -1147,6 +1790,9 @@ function SendGuestAbility(XComGameStateContext_Ability AbilityContext, int Frame
 		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Round(Loc.Z), Params);
 	}
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_GUEST_ABILITY, Params);
+	ClearReadySent();
+	LastOwnActionUnitID = AbilityContext.InputContext.SourceObject.ObjectID;
+	LastOwnActionTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
 	AbilitiesSent++;
 	`log("Coop guest: captured ability" @ AbilitiesSent @ AbilityContext.InputContext.AbilityTemplateName @ "(unit" @ AbilityContext.InputContext.SourceObject.ObjectID $ ", target" @ AbilityContext.InputContext.PrimaryTarget.ObjectID $ "," @ AbilityContext.InputContext.TargetLocations.Length @ "locations), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
 }
@@ -1181,7 +1827,8 @@ function ReceiveGuestAbility(array<byte> RawParams)
 	AbilitiesReceived++;
 	bAbilityPending = true;
 	PendingAbilitySecond = Seconds;
-	`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "received (unit" @ PendingAbilitySourceID $ ", target" @ PendingAbilityTargetID $ "," @ Count @ "locations); owner check: Stage 6", , 'X2TC');
+	`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "received (unit" @ PendingAbilitySourceID $ ", target" @ PendingAbilityTargetID $ "," @ Count @ "locations)", , 'X2TC');
+	ClearGuestReady("the partner acted again");
 	TryApplyGuestAbility();
 }
 
@@ -1204,6 +1851,12 @@ function TryApplyGuestAbility()
 	if (UnitState == none || UnitState.GetTeam() != eTeam_XCom || UnitState.IsDead())
 	{
 		RefuseGuestAbility("unit" @ PendingAbilitySourceID @ "is not a living XCOM unit");
+		return;
+	}
+	if (OwnershipOn() && class'X2TC_CoopOwnership'.static.GetOwner(UnitState) != class'X2TC_CoopOwnership'.const.OWNER_GUEST)
+	{
+		`log("Coop rejected: unit" @ PendingAbilitySourceID @ "is P1's, action from P2", , 'X2TC');
+		RefuseGuestAbility("unit" @ PendingAbilitySourceID @ "belongs to P1");
 		return;
 	}
 	if (CurrentTurnTeam() != eTeam_XCom)
@@ -1292,6 +1945,7 @@ function TryApplyGuestAbility()
 		`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "applied (unit" @ PendingAbilitySourceID $ ", target index" @ TargetIndex $ ", waited" @ (Seconds - PendingAbilitySecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
 		SendMoveResult(true, string(PendingAbilityName) @ "unit" @ PendingAbilitySourceID);
 		HostMaybeSendPartial(`XCOMNETMANAGER); // Run 6: don't wait for the next poll
+		ShowBanner("P2's" @ PendingAbilityName @ "unit" @ PendingAbilitySourceID);
 	}
 	else
 	{
@@ -1335,7 +1989,8 @@ function ReceiveGuestMove(array<byte> RawParams)
 	MovesReceived++;
 	bMovePending = true;
 	PendingMoveSecond = Seconds;
-	`log("Coop host: guest move" @ MovesReceived @ "received (unit" @ PendingMoveUnitID $ "," @ Count @ "tiles); owner check: Stage 6", , 'X2TC');
+	`log("Coop host: guest move" @ MovesReceived @ "received (unit" @ PendingMoveUnitID $ "," @ Count @ "tiles)", , 'X2TC');
+	ClearGuestReady("the partner acted again");
 	TryApplyGuestMove();
 }
 
@@ -1360,6 +2015,12 @@ function TryApplyGuestMove()
 	if (UnitState == none || UnitState.GetTeam() != eTeam_XCom || UnitState.IsDead())
 	{
 		RefuseGuestMove("unit" @ PendingMoveUnitID @ "is not a living XCOM unit");
+		return;
+	}
+	if (OwnershipOn() && class'X2TC_CoopOwnership'.static.GetOwner(UnitState) != class'X2TC_CoopOwnership'.const.OWNER_GUEST)
+	{
+		`log("Coop rejected: unit" @ PendingMoveUnitID @ "is P1's, action from P2", , 'X2TC');
+		RefuseGuestMove("unit" @ PendingMoveUnitID @ "belongs to P1");
 		return;
 	}
 	if (CurrentTurnTeam() != eTeam_XCom)
@@ -1428,6 +2089,7 @@ function TryApplyGuestMove()
 		`log("Coop host: guest move" @ MovesReceived @ "applied (unit" @ PendingMoveUnitID $ ", waited" @ (Seconds - PendingMoveSecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
 		SendMoveResult(true, "unit" @ PendingMoveUnitID);
 		HostMaybeSendPartial(`XCOMNETMANAGER); // Run 6: don't wait for the next poll
+		ShowBanner("P2's move, unit" @ PendingMoveUnitID);
 	}
 	else
 	{
@@ -1517,9 +2179,22 @@ function ResetSession()
 	AbilitiesSent = 0;
 	LastGuestMoveUnitID = 0;
 	bVersionMismatch = false;
+	bOwnersAssigned = false;
+	bGuestReady = false;
+	bReadySent = false;
+	bBannerShown = false;
+	bEndTurnIconDisabled = false;
+	// Session-only settings (Kc, 2026-11-15): back to the defaults.
+	bOwnershipOn = true;
+	bPartnerMayEndTurn = false;
+	bPartnerMayEdit = false;
+	PendingOwnerUnitIDs.Length = 0;
+	PendingOwnerValues.Length = 0;
+	LastOwnActionUnitID = 0;
 }
 
 defaultproperties
 {
 	Role = eCoopRole_None
+	bOwnershipOn = true
 }

@@ -28,11 +28,23 @@ X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes:
                                               guest client), ping and pong by remote command
     X2TC_CoopListener                         M3: CO-OP: HOST (tactical HUD, single player) and
                                               CO-OP: JOIN (main menu, address box) buttons
-    X2TC_CoopInput                            M3: the guest's M key and right-click for move to cursor
-                                              (an Interaction in the game viewport)
+    X2TC_CoopInput                            M3: the guest's M key, right-click and Tab; the host's
+                                              Backspace/End co-op End Turn check (an Interaction in
+                                              the game viewport)
     X2TC_CoopReplayMgr                        M3: the guest's replay manager (tutorial-style from
                                               Stage 5); follows the host's history, captures the
                                               guest's actions, switches the guest's input
+    X2TC_CoopOwnership                        M3 Stage 6: which player owns each soldier (unit value
+                                              X2TC_Owner, P1 host by default / P2 partner)
+    X2TC_CoopOwnerMemory                      M3 Stage 6: the host's per-campaign list of soldiers given
+                                              to the partner, in the mod's own config file
+                                              (Config\XComX2TacticalCoopOwners.ini ships empty; never
+                                              change it between releases), not in the save
+    X2TC_CoopSquadScreen                      M3 Stage 6: the co-op squad screen (owner per soldier,
+                                              scrolling list; ownership, partner end turn, partner
+                                              edit checkboxes)
+    X2TC_CoopTurnUI                           M3 Stage 6: FRIENDLY ACTION banner, co-op status line,
+                                              the host's End Turn icon state
 ```
 
 ## Launching

@@ -944,3 +944,110 @@ PHASE buttons and the End Turn block above:**
   shared turn in M4) is superseded; M4's remaining work is SPEC.md's
   same-turn check itself (five turns, no desync, actions in arrival
   order), which these M3 runs already partly exercise.
+
+**Run 9 result (0.4.3, Kc, 2026-11-15): fix D settles moves.** With FIX D
+on, the blue path line follows the mouse and a **right-click** on it
+moves the soldier (left-click doesn't; Kc: right-click is how it should
+be). Switched off at about 12:34 (about 10 s after the second move), the
+line stopped showing; switched back on about 10 s later, it showed again
+(laptop log L406-430). Laptop moves of 7, 9, 5, 7, 7 and 10 tiles were
+captured and all applied by the host. **Stage 5 is settled: normal
+right-click moves, with M as a fallback.** Kc also asked for **Tab = next
+soldier** as in normal play. END TURN on the laptop still did nothing and
+no ally-activity marker showed (both Stage 6, not coded yet then).
+
+**Stage 6 code (0.5.0, 2026-11-15):** checklists/m3-stage6.md.
+- `X2TC_CoopOwnership` (new): owner per soldier, `AssignOwners` (one change
+  state, alternating by object ID), `GuestHasActions`.
+- `X2TC_CoopTurnUI` (new): the FRIENDLY ACTION banner through
+  `UITurnOverlay`, the status line, the host's End Turn icon state.
+- `X2TC_CoopSession`: owners assigned on FOLLOWING; guest moves and
+  abilities on P1's soldiers refused (`Coop rejected: ...`); banner on the
+  host when a guest action is applied, and on the guest when a partial
+  history holds an ability (moves included) by a P1 soldier during XCOM's
+  turn (read from the frames' contexts, which is simpler than the
+  "frames it didn't cause" flag planned above); hidden after at least
+  1.5 s once the visualizer is idle (and, on the guest, caught up);
+  `X2TC_GuestReady` command; "ready" cleared by a further guest action
+  and at each turn change; the host's End Turn icon disabled only while
+  the question is needed, and given back afterwards; the question dialog
+  (`PerformEndTurn` on "End turn"); the host's selection moved off P2's
+  soldiers. `X2TC_CoopInput` installed on the host too.
+- `X2TC_CoopInput`: Tab on the guest (next P2 soldier, during XCOM's input
+  phase); Backspace and End on the host (both end the turn in the game,
+  `XComTacticalInput.uc` L2462-2472) go to the question only while it is
+  needed, otherwise to the game.
+- `X2TC_CoopReplayMgr`: selection only on P2's soldiers, and moved off a
+  P1 soldier; input phase start and end passed to the session.
+- `X2TC_CoopListener`: END TURN buttons and the status line on both HUDs;
+  FIX A/B/C buttons removed (A stays on, B and C off), FIX D kept.
+- Not verified from source (in the checklist as guesses): whether the
+  host's net mode is standalone (if not, `PerformEndTurn` also raises the
+  game's own multiplayer end-turn box, `XComTacticalController.uc`
+  L1358-1366); nothing refuses the host's own orders to a P2 soldier the
+  game selects once P1 is out of actions.
+
+**Co-op squad screen (approved by Kc, 2026-11-15; folded into 0.5.0
+before its first run).** Kc's request: a screen to assign soldiers to
+players, which both players can open, editable only by the host by
+default, with every soldier belonging to the host by default, scrolling
+vertically for squads larger than 6, plus checkboxes for ownership (on by
+default; off = both players can move every soldier) and for letting the
+partner end the turn ("in case the host has to step away").
+- **Screen** `X2TC_CoopSquadScreen` (new, a UIScreen pushed on the
+  tactical screen stack): opened by **CO-OP: SQUAD** on both HUDs. One row
+  per XCOM soldier (name, class) with a P1 (host) / P2 (partner) spinner,
+  in the game's scrolling `UIList` of `UIMechaListItem` rows (the
+  character pool's pattern, `UICharacterPool.uc` L83-119, L266-268); three
+  checkbox rows: **Soldier ownership** (on), **Partner may end the turn**
+  (off), **Partner may edit** (off); a CLOSE button, Esc and right-click
+  close it. Rows the viewer may not change are greyed out
+  (`UIMechaListItem.SetDisabled` L593) and their callbacks do nothing.
+- **Answers (Kc):** both view, the host edits, plus a "Partner may edit"
+  checkbox; fold into 0.5.0; the three settings are session only (held
+  by the host, sent by remote command, reset each time the PC hosts).
+- **Owners:** every soldier belongs to the host until changed, which
+  replaces the alternating split. Unit value `X2TC_Owner`, written by the
+  host in a change state when the ruleset and visualizer are idle (queued
+  otherwise), reaching the guest in the partial histories. The partner's
+  edits (when allowed) go to the host by command; the host applies them.
+- **Ownership off:** no refusal on the host, no selection limits on either
+  side, no End Turn question.
+- **Partner may end the turn:** the guest's button reads **CO-OP: END
+  TURN** and ends XCOM's turn through the host without the question;
+  otherwise it is the "ready" signal.
+- **Smaller questions, approved defaults (1-3):** (1) with ownership off,
+  the guest shows FRIENDLY ACTION for any XCOM soldier's action except the
+  soldier it ordered itself in the last 5 s (a guess to test); (2) owners
+  may change mid-turn, only when nothing is acting; (3) the guest's
+  Backspace/End don't end the turn (polish list).
+- **(4) Kc: rather not make the mod required for a campaign continued in
+  single player; "addable/removable mid-campaign" preferred.** Unit values
+  are the game's own name-to-number map on the unit
+  (`XComGameState_Unit.uc` L205, L1239-1242), with no reference to a mod
+  class, so a save holding one shouldn't need the mod (from source; not
+  tested). To leave nothing behind anyway, the value uses
+  `eCleanup_BeginTactical`, which the game clears when the next mission
+  starts (`XComGameState_Unit.uc` L2229): owners last for one mission (and
+  its saves), and keeping them across a campaign is an M5 decision.
+- **Written (0.5.0, not built):** `X2TC_CoopSquadScreen` (new);
+  `X2TC_CoopOwnership` (`AssignOwners` replaced by `GetSquad`, `SetOwner`,
+  `LogOwners`); session (settings, the four commands `X2TC_Settings`,
+  `X2TC_SetOwner`, `X2TC_SetSetting`, `X2TC_GuestEndTurn`, queued owner
+  changes, ownership-off paths, guest banner rule); follower
+  (`GuestMayControl`); input (keys pass through while the screen is
+  open); listener (CO-OP: SQUAD on both HUDs); TurnUI (the guest's END
+  TURN label). "Partner may edit" can only be changed by the host.
+- **Owner memory (Kc's request, approved 2026-11-15: "Yes, add it"):** the
+  host remembers which soldiers were given to the partner, per campaign,
+  outside the save. `X2TC_CoopOwnerMemory` (new, `config(X2TacticalCoopOwners)`)
+  keeps entries (campaign start time, the game's campaign UID,
+  `XComGameState_CampaignSettings.uc` L15; unit object ID; owner), written
+  with `StaticSaveConfig` whenever the host applies an owner change, and
+  read at HOST, which gives remembered P2 soldiers back to the partner.
+  The mod ships `Config\XComX2TacticalCoopOwners.ini` with no entries.
+  Guesses to test (checklist step 10): the game writes the player's copy
+  in their own config folder; a changed default file could reset it, so
+  the shipped file must never change between releases; it stays on the
+  host's PC; Skirmish may have no campaign ID (then nothing is
+  remembered).

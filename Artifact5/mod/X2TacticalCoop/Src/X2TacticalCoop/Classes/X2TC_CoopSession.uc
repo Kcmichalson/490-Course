@@ -39,6 +39,10 @@
 //  disconnect, main menu); the host then stops sending and plays on. Both sides log
 //  gaps over 1.5 s between polls, and each send logs the data types it queued.
 //
+//  Stage 5b (pulled into Stage 5 Run 4): captured abilities go the same way
+//  (SendGuestAbility: template, source, primary target, target locations); the host
+//  finds the matching available action and applies it with ActivateAbility.
+//
 //  One session per game: GetSession() looks it up by a fixed name in the transient
 //  package and creates it there the first time, the pattern the Highlander uses for its
 //  dependency objects (X2WOTCCH_ModDependencies.uc L102-110). A runtime default value
@@ -87,7 +91,7 @@
 //    Engine\Classes\PlayerController.uc       (bIgnoreNetworkMessages L214)
 //---------------------------------------------------------------------------------------
 
-class X2TC_CoopSession extends Object;
+class X2TC_CoopSession extends Object dependson(UIDialogueBox);
 
 const COOP_PORT = 7777;
 
@@ -103,9 +107,13 @@ const PARTIAL_ACK_TIMEOUT_SECONDS = 15;
 
 // Stage 5.
 const CMD_GUEST_MOVE = "X2TC_GuestMove";   // guest: unit ID, tile count, then X, Y, Z per tile
-const CMD_MOVE_RESULT = "X2TC_MoveResult"; // host: 1 applied / 0 refused, then the reason
+const CMD_MOVE_RESULT = "X2TC_MoveResult"; // host: 1 applied / 0 refused, then the reason (moves and abilities)
+// Stage 5b: template name, source unit ID, primary target ID, location count, then X, Y, Z
+// per location (rounded to whole units).
+const CMD_GUEST_ABILITY = "X2TC_GuestAbility";
 const MOVE_RETRY_SECONDS = 10;             // host: how long a move may wait for an idle ruleset
 const HITCH_SECONDS = 1.5;                 // both: a poll gap longer than this is logged
+const FAST_SEND_SECONDS = 0.2;             // host: how often new frames are checked for sending (Run 6)
 // The guest's way back to the main menu (the same command tested from the main menu in
 // M2 Stage 1e; the game uses a shell map with XComShell when a connection drops,
 // XComGameStateNetworkManager.uc L441-445).
@@ -166,6 +174,18 @@ var array<TTile> PendingMoveTiles;
 var int PendingMoveSecond;     // host: Seconds when it arrived
 var int MovesReceived;         // host
 var int MovesSent;             // guest
+var int LastGuestMoveUnitID;   // guest: the unit of the last move sent
+
+// Stage 5b.
+var bool bAbilityPending;      // host: a guest ability waiting to be applied
+var name PendingAbilityName;
+var int PendingAbilitySourceID;
+var int PendingAbilityTargetID;
+var array<vector> PendingAbilityLocations;
+var int PendingAbilitySecond;
+var int AbilitiesReceived;     // host
+var int AbilitiesSent;         // guest
+var bool bVersionMismatch;     // both: the other side's mod version differs (from 0.3.8)
 var float LastPollRealTime;    // both: WorldInfo.RealTimeSeconds at the last poll
 var int GuestExpectedFrames;   // guest: history frames after the last history from the host
 var int GuestLastWarnedFrames; // guest: frame count of the last "grew by itself" warning
@@ -399,8 +419,22 @@ function StartTimer()
 		return;
 	}
 	TimerOwner.SetTimer(1.0, true, nameof(Poll), self);
-	`log("Coop" @ RoleName() $ ": poll timer started", , 'X2TC');
+	// Run 6 (0.3.9): the host also checks for new frames five times a second, so a
+	// change reaches the guest sooner (Run 5: about 2 s from the guest's order to its
+	// screen, up to 1 s of it waiting for this poll).
+	TimerOwner.SetTimer(FAST_SEND_SECONDS, true, nameof(FastSend), self);
+	`log("Coop" @ RoleName() $ ": poll timer started (fast send every" @ FAST_SEND_SECONDS $ "s)", , 'X2TC');
 	Poll();
+}
+
+// Timer function (Run 6): the host sends new frames to a following guest without
+// waiting for the one-second poll; the in-flight and latent checks still apply.
+function FastSend()
+{
+	if (Role == eCoopRole_Host && bGuestFollowing)
+	{
+		HostMaybeSendPartial(`XCOMNETMANAGER);
+	}
 }
 
 // Timer function, once a second: logs connection state changes; on the guest, retries
@@ -438,6 +472,10 @@ function Poll()
 		if (bMovePending)
 		{
 			TryApplyGuestMove();
+		}
+		if (bAbilityPending)
+		{
+			TryApplyGuestAbility();
 		}
 		HostMaybeSendPartial(NetworkMgr);
 	}
@@ -495,8 +533,10 @@ function SendPing(XComGameStateNetworkManager NetworkMgr)
 	PingsSent++;
 	LastPingSecond = Seconds;
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(PingsSent, Params);
+	// Run 5 (0.3.8): the mod's version rides along, so a mismatched pair is caught at JOIN.
+	class'XComGameStateNetworkManager'.static.AddCommandParam_String(ModVersion(), Params);
 	NetworkMgr.SendRemoteCommand(CMD_PING, Params);
-	`log("Coop guest: ping" @ PingsSent @ "sent", , 'X2TC');
+	`log("Coop guest: ping" @ PingsSent @ "sent (version" @ ModVersion() $ ")", , 'X2TC');
 }
 
 function OnRemoteCommand(string Command, array<byte> RawParams)
@@ -504,6 +544,7 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	local XComGameStateNetworkManager NetworkMgr;
 	local array<byte> Params, Reply;
 	local int Number;
+	local string OtherVersion;
 
 	if (Command == CMD_GUEST_MOVE)
 	{
@@ -514,11 +555,21 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		return;
 	}
 
+	if (Command == CMD_GUEST_ABILITY)
+	{
+		if (Role == eCoopRole_Host)
+		{
+			ReceiveGuestAbility(RawParams);
+		}
+		return;
+	}
+
 	if (Command == CMD_MOVE_RESULT)
 	{
 		Params = RawParams;
 		Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
-		`log("Coop" @ RoleName() $ ": move result from the host:" @ (Number == 1 ? "applied" : "refused") $ "," @ class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params) @ "(frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+		`log("Coop" @ RoleName() $ ": action result from the host:" @ (Number == 1 ? "applied" : "refused") $ "," @ class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params) @ "(frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+		ClearGuestUnitMoving();
 		return;
 	}
 
@@ -567,25 +618,68 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	Params = RawParams;
 	Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
 
+	// Both carry the sender's mod version after the number (empty from builds before 0.3.8).
+	OtherVersion = class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params);
+
 	if (Command == CMD_PING)
 	{
 		NetworkMgr = `XCOMNETMANAGER;
 		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Number, Reply);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_String(ModVersion(), Reply);
 		NetworkMgr.SendRemoteCommand(CMD_PONG, Reply);
-		`log("Coop" @ RoleName() $ ": ping" @ Number @ "received, pong sent", , 'X2TC');
+		bVersionMismatch = (OtherVersion != ModVersion());
+		`log("Coop" @ RoleName() $ ": ping" @ Number @ "received (guest version" @ OtherVersion $ ", mine" @ ModVersion() $ "), pong sent", , 'X2TC');
+		if (bVersionMismatch)
+		{
+			`log("Coop host: VERSION MISMATCH: the guest runs" @ OtherVersion @ "and this PC" @ ModVersion() $ "; the history will not be sent", , 'X2TC');
+		}
 	}
 	else
 	{
 		if (!bPongReceived)
 		{
 			bPongReceived = true;
-			`log("Coop" @ RoleName() $ ": pong" @ Number @ "received (at" @ Seconds $ "s)", , 'X2TC');
+			`log("Coop" @ RoleName() $ ": pong" @ Number @ "received (at" @ Seconds $ "s; host version" @ OtherVersion $ ", mine" @ ModVersion() $ ")", , 'X2TC');
 			if (Role == eCoopRole_Guest)
 			{
-				RequestHistory();
+				if (OtherVersion != ModVersion())
+				{
+					bVersionMismatch = true;
+					`log("Coop guest: VERSION MISMATCH: the host runs" @ OtherVersion @ "and this PC" @ ModVersion() $ "; not joining", , 'X2TC');
+					ShowGuestMessage("CO-OP: VERSION MISMATCH", "This PC runs X2TacticalCoop" @ ModVersion() @ "and the host runs" @ OtherVersion $ ". Install the same build on both and join again.");
+				}
+				else
+				{
+					RequestHistory();
+				}
 			}
 		}
 	}
+}
+
+// The mod's version (X2DownloadableContentInfo_X2TacticalCoop.X2TC_VERSION).
+static function string ModVersion()
+{
+	return class'X2DownloadableContentInfo_X2TacticalCoop'.const.X2TC_VERSION;
+}
+
+// Guest: a message box on the current screen (UIRaiseDialog, XComPresentationLayerBase.uc
+// L1443; TDialogueBoxData, UIDialogueBox.uc L24-38).
+function ShowGuestMessage(string Title, string Text)
+{
+	local XComPlayerController PC;
+	local TDialogueBoxData DialogData;
+
+	PC = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (PC == none || PC.Pres == none)
+	{
+		return;
+	}
+	DialogData.eType = eDialog_Warning;
+	DialogData.strTitle = Title;
+	DialogData.strText = Text;
+	DialogData.strAccept = "OK";
+	PC.Pres.UIRaiseDialog(DialogData);
 }
 
 // Guest (Stage 3): ask the host for its whole history, once.
@@ -598,6 +692,7 @@ function RequestHistory()
 		return;
 	}
 	bHistoryRequested = true;
+	NoParams.Length = 0; // assigned before use, as stock code does (X2TacticalMPGameRuleset.uc L343)
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_REQUEST_HISTORY, NoParams);
 	`log("Coop guest: history requested", , 'X2TC');
 }
@@ -612,6 +707,11 @@ function SendHistoryToGuest()
 	if (bHistorySent)
 	{
 		`log("Coop host: history already sent; ignoring the request", , 'X2TC');
+		return;
+	}
+	if (bVersionMismatch)
+	{
+		`log("Coop host: history request refused: version mismatch (see the ping line)", , 'X2TC');
 		return;
 	}
 
@@ -956,6 +1056,7 @@ function OnConnectionClosed(int ConnectionIdx)
 		bGuestFollowing = false;
 		bPartialInFlight = false;
 		bMovePending = false;
+		bAbilityPending = false;
 		`log("Coop host: the guest is gone; partial history sends stopped, the mission goes on", , 'X2TC');
 	}
 }
@@ -996,7 +1097,214 @@ function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
 	}
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_GUEST_MOVE, Params);
 	MovesSent++;
+	LastGuestMoveUnitID = UnitID;
 	`log("Coop guest: captured move" @ MovesSent @ "(unit" @ UnitID $ "," @ Tiles.Length @ "tiles), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
+}
+
+// Guest (Stage 5 Run 3): the controller marks a unit as moving when it submits a path
+// (XComTacticalController.PerformPath L1104-1109) and refuses further orders for it while
+// the mark is set (L1098). The guest's own submit is never applied, so clear the mark
+// when the host answers; an applied move then plays from the host's frames. The tutorial
+// does the same after a refused submission (XComTutorialMgr.ResetUnitIsMoving L590-593).
+function ClearGuestUnitMoving()
+{
+	local XComGameState_Unit UnitState;
+	local XGUnit UnitVisualizer;
+
+	if (Role != eCoopRole_Guest || LastGuestMoveUnitID <= 0)
+	{
+		return;
+	}
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(LastGuestMoveUnitID));
+	if (UnitState != none)
+	{
+		UnitVisualizer = XGUnit(UnitState.GetVisualizer());
+	}
+	if (UnitVisualizer != none && UnitVisualizer.m_bIsMoving)
+	{
+		UnitVisualizer.m_bIsMoving = false;
+		`log("Coop guest: cleared the moving mark on unit" @ LastGuestMoveUnitID, , 'X2TC');
+	}
+}
+
+// Guest (Stage 5b): send a captured ability (template, source, primary target, target
+// locations) to the host.
+function SendGuestAbility(XComGameStateContext_Ability AbilityContext, int FramesNow)
+{
+	local array<byte> Params;
+	local int i;
+	local vector Loc;
+
+	class'XComGameStateNetworkManager'.static.AddCommandParam_String(string(AbilityContext.InputContext.AbilityTemplateName), Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(AbilityContext.InputContext.SourceObject.ObjectID, Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(AbilityContext.InputContext.PrimaryTarget.ObjectID, Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(AbilityContext.InputContext.TargetLocations.Length, Params);
+	for (i = 0; i < AbilityContext.InputContext.TargetLocations.Length; i++)
+	{
+		Loc = AbilityContext.InputContext.TargetLocations[i];
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Round(Loc.X), Params);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Round(Loc.Y), Params);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Round(Loc.Z), Params);
+	}
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_GUEST_ABILITY, Params);
+	AbilitiesSent++;
+	`log("Coop guest: captured ability" @ AbilitiesSent @ AbilityContext.InputContext.AbilityTemplateName @ "(unit" @ AbilityContext.InputContext.SourceObject.ObjectID $ ", target" @ AbilityContext.InputContext.PrimaryTarget.ObjectID $ "," @ AbilityContext.InputContext.TargetLocations.Length @ "locations), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
+}
+
+// Host (Stage 5b): a guest ability arrived; keep it and try to apply it.
+function ReceiveGuestAbility(array<byte> RawParams)
+{
+	local array<byte> Params;
+	local int i, Count;
+	local vector Loc;
+
+	if (bAbilityPending)
+	{
+		SendMoveResult(false, "another guest ability is still waiting");
+		return;
+	}
+
+	Params = RawParams;
+	PendingAbilityName = name(class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params));
+	PendingAbilitySourceID = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+	PendingAbilityTargetID = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+	Count = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+	PendingAbilityLocations.Length = 0;
+	for (i = 0; i < Count; i++)
+	{
+		Loc.X = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+		Loc.Y = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+		Loc.Z = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+		PendingAbilityLocations.AddItem(Loc);
+	}
+
+	AbilitiesReceived++;
+	bAbilityPending = true;
+	PendingAbilitySecond = Seconds;
+	`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "received (unit" @ PendingAbilitySourceID $ ", target" @ PendingAbilityTargetID $ "," @ Count @ "locations); owner check: Stage 6", , 'X2TC');
+	TryApplyGuestAbility();
+}
+
+// Host (Stage 5b): apply the pending guest ability through
+// XComGameStateContext_Ability.ActivateAbility (L1334-1373) with the host's own available
+// action for it (X2TacticalGameRuleset.GetGameRulesCache_Unit L545), so the host's state
+// and roll decide the result.
+function TryApplyGuestAbility()
+{
+	local X2TacticalGameRuleset Rules;
+	local XComGameState_Unit UnitState;
+	local StateObjectReference AbilityRef;
+	local GameRulesCache_Unit UnitCache;
+	local AvailableAction Action;
+	local int i, ActionIndex, TargetIndex, FramesBefore;
+	local string BusyReason;
+
+	Rules = `TACTICALRULES;
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(PendingAbilitySourceID));
+	if (UnitState == none || UnitState.GetTeam() != eTeam_XCom || UnitState.IsDead())
+	{
+		RefuseGuestAbility("unit" @ PendingAbilitySourceID @ "is not a living XCOM unit");
+		return;
+	}
+	if (CurrentTurnTeam() != eTeam_XCom)
+	{
+		RefuseGuestAbility("not XCOM's turn (" $ CurrentTurnText() $ ")");
+		return;
+	}
+
+	BusyReason = "";
+	if (Rules == none)
+	{
+		BusyReason = "no tactical ruleset";
+	}
+	else if (Rules.BuildingLatentGameState)
+	{
+		BusyReason = "ruleset building a game state";
+	}
+	else if (class'XComGameStateVisualizationMgr'.static.VisualizerBusy())
+	{
+		BusyReason = "visualizer busy";
+	}
+	if (BusyReason != "")
+	{
+		if (Seconds - PendingAbilitySecond >= MOVE_RETRY_SECONDS)
+		{
+			RefuseGuestAbility("still busy after" @ MOVE_RETRY_SECONDS $ "s (" $ BusyReason $ ")");
+		}
+		return;
+	}
+
+	AbilityRef = UnitState.FindAbility(PendingAbilityName);
+	if (AbilityRef.ObjectID <= 0 || !Rules.GetGameRulesCache_Unit(UnitState.GetReference(), UnitCache))
+	{
+		RefuseGuestAbility("unit" @ PendingAbilitySourceID @ "has no" @ PendingAbilityName);
+		return;
+	}
+	ActionIndex = -1;
+	for (i = 0; i < UnitCache.AvailableActions.Length; i++)
+	{
+		if (UnitCache.AvailableActions[i].AbilityObjectRef.ObjectID == AbilityRef.ObjectID)
+		{
+			ActionIndex = i;
+			break;
+		}
+	}
+	if (ActionIndex < 0)
+	{
+		RefuseGuestAbility(PendingAbilityName @ "is not in unit" @ PendingAbilitySourceID $ "'s available actions");
+		return;
+	}
+	Action = UnitCache.AvailableActions[ActionIndex];
+	if (Action.AvailableCode != 'AA_Success')
+	{
+		RefuseGuestAbility(PendingAbilityName @ "not available:" @ Action.AvailableCode);
+		return;
+	}
+
+	// The guest's primary target among the host's targets; for abilities without one
+	// (overwatch, evac, location-targeted), the first entry if there is one.
+	TargetIndex = -1;
+	if (PendingAbilityTargetID > 0)
+	{
+		for (i = 0; i < Action.AvailableTargets.Length; i++)
+		{
+			if (Action.AvailableTargets[i].PrimaryTarget.ObjectID == PendingAbilityTargetID)
+			{
+				TargetIndex = i;
+				break;
+			}
+		}
+		if (TargetIndex < 0)
+		{
+			RefuseGuestAbility("target" @ PendingAbilityTargetID @ "is not a valid target of" @ PendingAbilityName @ "on the host");
+			return;
+		}
+	}
+	else if (Action.AvailableTargets.Length > 0)
+	{
+		TargetIndex = 0;
+	}
+
+	FramesBefore = `XCOMHISTORY.GetNumGameStates();
+	bAbilityPending = false;
+	if (class'XComGameStateContext_Ability'.static.ActivateAbility(Action, TargetIndex, PendingAbilityLocations))
+	{
+		`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "applied (unit" @ PendingAbilitySourceID $ ", target index" @ TargetIndex $ ", waited" @ (Seconds - PendingAbilitySecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
+		SendMoveResult(true, string(PendingAbilityName) @ "unit" @ PendingAbilitySourceID);
+		HostMaybeSendPartial(`XCOMNETMANAGER); // Run 6: don't wait for the next poll
+	}
+	else
+	{
+		`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "not applied: ActivateAbility returned false", , 'X2TC');
+		SendMoveResult(false, string(PendingAbilityName) $ ": ActivateAbility returned false");
+	}
+}
+
+function RefuseGuestAbility(string Reason)
+{
+	bAbilityPending = false;
+	`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "refused:" @ Reason, , 'X2TC');
+	SendMoveResult(false, string(PendingAbilityName) $ ":" @ Reason);
 }
 
 // Host (Stage 5): a guest move arrived; keep it and try to apply it.
@@ -1044,6 +1352,7 @@ function TryApplyGuestMove()
 	local PathingInputData Path;
 	local string BusyReason;
 	local int FramesBefore;
+	local TTile Destination;
 
 	Rules = `TACTICALRULES;
 	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(PendingMoveUnitID));
@@ -1057,6 +1366,20 @@ function TryApplyGuestMove()
 	{
 		RefuseGuestMove("not XCOM's turn (" $ CurrentTurnText() $ ")");
 		return;
+	}
+	if (PendingMoveTiles.Length == 1)
+	{
+		// Run 6: a destination only (the guest's MOVE TO CURSOR): the host builds the path
+		// with the game's path solver, limited to the unit's range (X2PathSolver.BuildPath
+		// L77, as the AI does, X2AIBTDefaultActions.uc L1250).
+		Destination = PendingMoveTiles[0];
+		PendingMoveTiles.Length = 0;
+		if (!class'X2PathSolver'.static.BuildPath(UnitState, UnitState.TileLocation, Destination, PendingMoveTiles, true) || PendingMoveTiles.Length < 2)
+		{
+			RefuseGuestMove("no path in range to tile" @ class'X2TC_CoopReplayMgr'.static.TileText(Destination));
+			return;
+		}
+		`log("Coop host: built a path of" @ PendingMoveTiles.Length @ "tiles to" @ class'X2TC_CoopReplayMgr'.static.TileText(Destination), , 'X2TC');
 	}
 	if (PendingMoveTiles.Length < 2)
 	{
@@ -1104,6 +1427,7 @@ function TryApplyGuestMove()
 	{
 		`log("Coop host: guest move" @ MovesReceived @ "applied (unit" @ PendingMoveUnitID $ ", waited" @ (Seconds - PendingMoveSecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
 		SendMoveResult(true, "unit" @ PendingMoveUnitID);
+		HostMaybeSendPartial(`XCOMNETMANAGER); // Run 6: don't wait for the next poll
 	}
 	else
 	{
@@ -1189,6 +1513,10 @@ function ResetSession()
 	LastPollRealTime = 0;
 	GuestExpectedFrames = 0;
 	GuestLastWarnedFrames = 0;
+	bAbilityPending = false;
+	AbilitiesSent = 0;
+	LastGuestMoveUnitID = 0;
+	bVersionMismatch = false;
 }
 
 defaultproperties

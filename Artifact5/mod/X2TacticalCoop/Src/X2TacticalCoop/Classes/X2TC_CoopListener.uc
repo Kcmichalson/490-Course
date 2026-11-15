@@ -43,7 +43,7 @@ event OnInit(UIScreen Screen)
 
 	if (UIShell(Screen) != none)
 	{
-		AddButton(Screen, 'X2TC_CoopJoinButton', "CO-OP: JOIN", OnJoinClicked, 290);
+		AddButton(Screen, 'X2TC_CoopJoinButton', "CO-OP: JOIN" @ VersionTag(), OnJoinClicked, 290);
 		`log("Coop: JOIN button added to" @ string(Screen.Class.Name), , 'X2TC');
 	}
 	else if (UITacticalHUD(Screen) != none && IsSinglePlayerTactical(Screen))
@@ -53,12 +53,24 @@ event OnInit(UIScreen Screen)
 			// The guest's copy of the host's mission (Stage 3): no HOST button here.
 			GuestSession.OnGuestMissionScreen("tactical HUD");
 			// Stage 5: the guest's way out, from the start.
-			AddButton(Screen, 'X2TC_CoopLeaveButton', "CO-OP: LEAVE", OnLeaveClicked, 260);
-			`log("Coop: LEAVE button added to the guest's tactical HUD", , 'X2TC');
+			AddButton(Screen, 'X2TC_CoopLeaveButton', "CO-OP: LEAVE" @ VersionTag(), OnLeaveClicked, 260);
+			// Stage 5 Run 2: the game's own unit cycling is off with a tutorial-style
+			// replay manager (XComTacticalController.uc L540-544).
+			AddButton(Screen, 'X2TC_CoopNextButton', "CO-OP: NEXT SOLDIER", OnNextSoldierClicked, 310);
+			// Run 6 fallback: hover the destination, then click this; the host builds the path.
+			AddButton(Screen, 'X2TC_CoopMoveButton', "CO-OP: MOVE TO CURSOR (M)", OnMoveToCursorClicked, 360);
+			// Run 8 (0.4.2): the competing fixes for normal moves, switched on screen
+			// (X2TC_CoopReplayMgr.ToggleFix); the label shows the current setting.
+			AddButton(Screen, 'X2TC_CoopFixA', "FIX A CACHE: ON", OnFixClicked, 420);
+			AddButton(Screen, 'X2TC_CoopFixB', "FIX B HISTORY: OFF", OnFixClicked, 470);
+			AddButton(Screen, 'X2TC_CoopFixC', "FIX C WORLD: OFF", OnFixClicked, 520);
+			// Run 9 (0.4.3): a freshly spawned pathing pawn in place of the controller's.
+			AddButton(Screen, 'X2TC_CoopFixD', "FIX D FRESH PAWN: ON", OnFixClicked, 570);
+			`log("Coop: LEAVE and NEXT SOLDIER buttons added to the guest's tactical HUD", , 'X2TC');
 		}
 		else
 		{
-			AddButton(Screen, 'X2TC_CoopHostButton', "CO-OP: HOST", OnHostClicked, 260);
+			AddButton(Screen, 'X2TC_CoopHostButton', "CO-OP: HOST" @ VersionTag(), OnHostClicked, 260);
 			`log("Coop: HOST button added to the tactical HUD", , 'X2TC');
 		}
 	}
@@ -75,8 +87,11 @@ event OnInit(UIScreen Screen)
 			// UIReplay.uc L374-382).
 			if (GuestSession.HasFollower())
 			{
-				`log("Coop guest: closing the stock replay screen (the follower drives the replay)", , 'X2TC');
-				Screen.CloseScreen();
+				// Run 7 (0.4.0): closed 0.2 s later rather than inside its own OnInit, which
+				// may have left it in the screen stack (the pathing pawn hides itself while
+				// it is there; X2TC_CoopReplayMgr.KeepPathingVisible also checks).
+				`log("Coop guest: closing the stock replay screen in 0.2 s (the follower drives the replay)", , 'X2TC');
+				Screen.SetTimer(0.2, false, 'CloseScreen');
 			}
 		}
 		else
@@ -84,6 +99,13 @@ event OnInit(UIScreen Screen)
 			`log("Coop: replay screen opened, no guest session found (session object exists=" $ (class'X2TC_CoopSession'.static.FindSession() != none) $ ")", , 'X2TC');
 		}
 	}
+}
+
+// "(v0.3.8)": the mod's version on the CO-OP buttons, so each machine's build can be
+// checked on screen (Kc, 2026-11-14).
+static function string VersionTag()
+{
+	return "(v" $ class'X2TC_CoopSession'.static.ModVersion() $ ")";
 }
 
 // A single-player tactical game (XComTacticalGame but not the multiplayer subclass).
@@ -121,9 +143,88 @@ function OnHostClicked(UIButton Button)
 	PlayClickSound(Button);
 	if (class'X2TC_CoopSession'.static.GetSession().StartHost())
 	{
-		Button.SetText("CO-OP: HOSTING");
+		Button.SetText("CO-OP: HOSTING" @ VersionTag());
 		Button.DisableButton();
 	}
+}
+
+// Stage 5 Run 2: select the guest's next XCOM soldier.
+function OnNextSoldierClicked(UIButton Button)
+{
+	local X2TC_CoopReplayMgr Follower;
+	local XComTacticalGRI TacticalGRI;
+
+	PlayClickSound(Button);
+	TacticalGRI = XComTacticalGRI(Button.WorldInfo.GRI);
+	if (TacticalGRI != none)
+	{
+		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+	}
+	if (Follower == none)
+	{
+		`log("Coop: NEXT SOLDIER clicked, but no follower", , 'X2TC');
+		return;
+	}
+	Follower.SelectNextGuestUnit();
+}
+
+// Run 8: switch one of the follower's fixes; the button's name says which.
+function OnFixClicked(UIButton Button)
+{
+	local X2TC_CoopReplayMgr Follower;
+	local XComTacticalGRI TacticalGRI;
+	local bool bNow;
+
+	PlayClickSound(Button);
+	TacticalGRI = XComTacticalGRI(Button.WorldInfo.GRI);
+	if (TacticalGRI != none)
+	{
+		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+	}
+	if (Follower == none)
+	{
+		`log("Coop: FIX clicked, but no follower", , 'X2TC');
+		return;
+	}
+	switch (Button.MCName)
+	{
+		case 'X2TC_CoopFixA':
+			bNow = Follower.ToggleFix('A');
+			Button.SetText("FIX A CACHE:" @ (bNow ? "ON" : "OFF"));
+			break;
+		case 'X2TC_CoopFixB':
+			bNow = Follower.ToggleFix('B');
+			Button.SetText("FIX B HISTORY:" @ (bNow ? "ON" : "OFF"));
+			break;
+		case 'X2TC_CoopFixC':
+			bNow = Follower.ToggleFix('C');
+			Button.SetText("FIX C WORLD:" @ (bNow ? "ON" : "OFF"));
+			break;
+		case 'X2TC_CoopFixD':
+			bNow = Follower.ToggleFix('D');
+			Button.SetText("FIX D FRESH PAWN:" @ (bNow ? "ON" : "OFF"));
+			break;
+	}
+}
+
+// Run 6: move the guest's selected soldier to the tile under the 3D cursor.
+function OnMoveToCursorClicked(UIButton Button)
+{
+	local X2TC_CoopReplayMgr Follower;
+	local XComTacticalGRI TacticalGRI;
+
+	PlayClickSound(Button);
+	TacticalGRI = XComTacticalGRI(Button.WorldInfo.GRI);
+	if (TacticalGRI != none)
+	{
+		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+	}
+	if (Follower == none)
+	{
+		`log("Coop: MOVE TO CURSOR clicked, but no follower", , 'X2TC');
+		return;
+	}
+	Follower.MoveActiveUnitToCursor();
 }
 
 // Stage 5: the guest leaves the co-op mission and goes back to the main menu.

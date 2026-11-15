@@ -47,7 +47,22 @@ CLAUDE.md describes.
   two full rounds; **Stage 4 accepted by Kc 2026-11-14** (Stage 6's
   three-turn check repeats the live follow). Stage 5 replanned and
   approved 2026-11-14 (tutorial-style follower; Stage 5b for abilities
-  added); Stage 5 code written (0.3.4), not built)
+  added). Stage 5 Run 1 2026-11-14 (0.3.4): LEAVE works, no soldier
+  selectable, tutorial intro played. Run 2 (0.3.5): abilities captured
+  and not applied, moves refused before capture, intro still played;
+  fix 0.3.6. Run 3: no intro, moves still blocked, guest history grew
+  by itself (step out of replay removed); 0.3.7 adds move diagnostics
+  and Stage 5b ability forwarding. Run 4: the laptop ran 0.3.6, not a
+  test; 0.3.8 adds a version check at JOIN. **Run 5 (0.3.8): the guest's
+  abilities work end to end (8 applied by the host)**; moves still
+  blocked (no path built); 0.3.9 adds MOVE TO CURSOR, faster sends, UI
+  fix. Run 6 (0.3.9): guest moves work via MOVE TO CURSOR, UI and latency
+  better; normal moves blocked by a hidden pathing pawn. Run 7 (0.4.0):
+  pawn visible, move-mode path frozen, spent units skipped; 0.4.1
+  refreshes the reachable-tiles cache. 0.4.2: M key/right-click, fix
+  toggles, 0.5 s state log. Run 8: M key and right-click move soldiers,
+  click-to-move still fails; 0.4.3 fix D (fresh pathing pawn), Run 9 is
+  the last in the time-box; Stage 6 approved, waiting)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -3331,3 +3346,509 @@ On the PC, Claude Opus 5.5. No test this turn.
     trace listener's per-screen lines and Kc's notes cover them, as the
     checklist says.
   - **How It Was Verified:** not applicable (no fix; the build is Kc's).
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 5 Run 1; fix for unit selection (0.3.5)
+On the PC, Claude Opus 5.5. Test by Kc with 0.3.4; **game build ID
+8270065 on both** (not re-reported). Logs saved as
+`local\m3-logs\stage4-pc-2.log` (921 lines) and `stage4-laptop-2.log`
+(366) (Stage 5's first run, under Stage 4 names).
+
+- **Planned:** checklists/m3-stage5.md, Part B.
+- **Result (Kc and the logs; details in plans/m3-plan.md, Results):**
+  - After "Concealed", the laptop played the tutorial's soldiers-rappel
+    intro (`CIN_TP_PostIntro`, 18.7 s), then the mission; the tutorial's
+    `StartDemoSequenceDeferred` was intercepted and logged.
+  - The laptop's input came on but no soldier was selected (`active
+    unit 0`), and Kc couldn't select one. LEAVE was there; the PC's
+    actions still synced (one partial, `match=True`).
+  - The first data-type line: full history `1` (History), partial `7`
+    (HistoryDelta), as finding 15 read it from the SDK.
+  - **LEAVE works:** laptop back to the main menu, no popup; the PC
+    logged the guest gone and stopped sending.
+  - No move was tried (no soldier selectable).
+- **Causes (SDK):** tutorial mode on at load plays the tutorial intro
+  and starts its demo (`X2TacticalGameRuleset.uc` L3422-3465); unit
+  cycling is off with any tutorial manager (`XComTacticalController.uc`
+  L540-544); outside `TurnPhase_UnitActions` the ruleset reports no
+  active player (L5462-5469); the real tutorial calls `EndReplay` and
+  `Visualizer_SelectUnit` before each player input (`XComTutorialMgr.uc`
+  L291-305).
+- **Changed (0.3.5):** `X2TC_CoopReplayMgr.uc`: `bInTutorial` false by
+  default; an XCOM input phase (tutorial mode on, `EndReplay` to
+  `TurnPhase_WaitForTutorialInput`, unit selected with
+  `Visualizer_SelectUnit`; at its end `ResumeReplay`, tutorial mode
+  off); input on and off inside the phase as before;
+  `SelectGuestUnit`/`SelectNextGuestUnit`. `X2TC_CoopListener.uc`:
+  CO-OP: NEXT SOLDIER. `X2TC_VERSION` 0.3.5. checklists/m3-stage5.md
+  (Run 2); plans/m3-plan.md (Results).
+- **Problems:** the two above; not compiled yet. Python check of locals
+  and brackets passed.
+- **Checks:** Python reads of both logs; SDK lines as cited.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 Run 1)
+- **Prompt:** "After joining and seeing concealed, the laptop played the
+  opening ~10 second cutscene for the tutorial mission of the soldiers
+  rappeling, then it loaded into the multiplayer mission. The laptop
+  cannot currently select a soldier though the leave button is there.
+  Actions on the PC are still synced. Logs saved as
+  stage4-[pc/laptop]-2.log."
+  - **Provided:** both logs read; the cutscene and the selection failure
+    traced to the SDK; the 0.3.5 fix (input phase as the tutorial does
+    it, NEXT SOLDIER); Run 2 in the checklist; the records above.
+  - **Misreads / rule breaks:** none. The Run 1 design was mine and
+    missed that tutorial mode at load triggers the tutorial intro, and
+    that unit cycling is off with a tutorial manager; both now recorded.
+  - **How It Was Verified:** not yet; Run 2's laptop log should show the
+    input phase, a selected unit, and no `CIN_TP_PostIntro`.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 5 Run 2; abilities captured; fix for moves (0.3.6)
+On the PC, Claude Opus 5.5. Test by Kc with 0.3.5; **game build ID
+8270065 on both** (not re-reported). Logs `local\m3-logs\stage5-pc-2.log`
+(349 lines), `stage5-laptop-2.log` (373). Kc was Alt+Tabbed on the PC
+part of the time (the game kept running; no effect seen in the log).
+
+- **Planned:** checklists/m3-stage5.md, Run 2.
+- **Result (details in plans/m3-plan.md, Results):**
+  - The intro still played; the input phase had begun during
+    `LoadTacticalGame`.
+  - Every ability glowed like the tutorial's "click me".
+  - NEXT SOLDIER cycled units; the HUD's own cycling didn't.
+  - **Abilities reached the capture and weren't applied** (overwatch,
+    AidProtocol, ThrowClaymore, PistolOverwatch; frames stayed 160),
+    which looked to Kc like "can't activate" because Stage 5 doesn't send
+    them.
+  - Moves were refused before the capture: `PerformPath` requires a
+    tutorial manager to be in `WaitForPlayerInput`
+    (`XComTacticalController.uc` L1098).
+  - LEAVE worked; the PC stopped sending.
+- **Changed (0.3.6):** `X2TC_CoopReplayMgr.uc`: following state renamed
+  `WaitForPlayerInput` (overrides the tutorial's state: handler and
+  Begin code); input phase only from `PerformingReplay`.
+  `X2TC_CoopSession.uc`: the guest clears the moving mark on its unit
+  when the host answers. `X2TC_VERSION` 0.3.6; checklists/m3-stage5.md
+  (Run 3); plans/m3-plan.md (Results).
+- **Problems:** the two above; the glow is cosmetic and left. Not
+  compiled yet; the Python check of locals and brackets passed.
+- **Checks:** Python read of both logs; SDK `XComTacticalController.uc`
+  L1093-1112, `XComTutorialMgr.uc` L655-756, `UITacticalHUD_Ability.uc`
+  L85-230.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 Run 2)
+- **Prompt:** "Game loads, catches up, still plays the intro cutscene.
+  Now has a highlight on every soldier ability that is currently
+  selected. [...] Clicking next soldier in the default hud does nothing.
+  Cannot move. Can select abilities with the default support trooper and
+  can cycle targets. but cannot activate them. Clicking the new next
+  soldier button does cycle soldiers. But cannot give orders to any of
+  them [...] I was alt tabbed on the PC to write some of this [...] Logs
+  attached, though keep in mind the prior logs were labled under stage 4
+  and not stage 5."
+  - **Provided:** both logs read; the finding that abilities are
+    captured (so "can't activate" is the moves-only Stage 5, not a
+    failure); the move refusal and the intro traced to the SDK; the 0.3.6
+    fix; Run 3 in the checklist; the records above.
+  - **Misreads / rule breaks:** none. Run 2's input-phase timing was my
+    design error (it began before the ruleset reached the replay state).
+  - **How It Was Verified:** not yet; Run 3 should show a captured move,
+    the host applying it, and no intro.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 5 Run 3; Run 4 build with diagnostics and abilities (0.3.7)
+On the PC, Claude Opus 5.5. Test by Kc with 0.3.6; **game build ID
+8270065 on both** (not re-reported). Logs `local\m3-logs\stage5-pc-3.log`
+(432 lines) and `stage5-laptop-3.log` (380, after Kc replaced a first
+copy that was byte-identical to the PC's log: same SHA-256, same open
+time).
+
+- **Planned:** checklists/m3-stage5.md, Run 3.
+- **Result (details in plans/m3-plan.md, Results):** no intro (fixed);
+  still no move; abilities captured (EVAC, overwatch) and not applied;
+  **the guest's history grew by 2 frames by itself**: the input phase's
+  `EndReplay` makes the ruleset add its phase changes straight to the
+  history (`X2TacticalGameRuleset.uc` L706-723), which the replay guard
+  doesn't cover; the guest's warning line caught it. LEAVE worked.
+- **Kc (2026-11-14):** authorized moving faster per iteration, with more
+  tests in one run, within common sense.
+- **Changed (0.3.7):** `X2TC_CoopReplayMgr.uc`: no `EndReplay` or
+  `ResumeReplay` (the ruleset stays in `PerformingReplay`); `move check:`
+  diagnostics for every guard on a clicked move's path; captured
+  abilities sent to the host (identical repeats within 1 s dropped).
+  `X2TC_CoopSession.uc`: `X2TC_GuestAbility`; the host's
+  `TryApplyGuestAbility` (living XCOM unit, XCOM's turn, not busy, the
+  host's own available action with `AA_Success`, the target valid on the
+  host; `ActivateAbility`); results through the same answer command.
+  `X2TC_VERSION` 0.3.7; checklists/m3-stage5.md (Run 4: moves with
+  diagnostics, overwatch, a standard shot, pod reveal from the PC if
+  needed, alien turn, pause menu, LEAVE); plans/m3-plan.md (Results).
+- **Decision (mine, within Kc's go-ahead):** Stage 5b's ability
+  forwarding is in this build rather than after Stage 5 passes; recorded
+  in the plan.
+- **Problems:** first compile check by reading caught a protected member
+  (`m_kActiveUnit`), replaced by the active unit's state and visualizer.
+  Not compiled yet; the Python check passed.
+- **Checks:** Python reads of both logs and SHA-256 of the two files; SDK
+  `XComTacticalInput.uc` L2555-2590, L3047-3095, L3270-3292;
+  `XComTacticalController.uc` L31, L75, L1093-1110;
+  `X2TacticalGameRuleset.uc` L545, L706-723; `XComGameStateVisualizationMgr.uc`
+  L784.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 Run 3)
+- **Prompt:** "Could not move. No cutscene. Logs saved. You are
+  authorized to move a bit faster per iteration if you deem suitable. I
+  would rather do more tests at once than a test every iteration. But
+  don't overstep common sense"
+  - **Provided:** found the laptop's log was a copy of the PC's (same
+    hash); read the PC's meanwhile and traced the click path in the SDK.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** SHA-256 of both files.
+- **Prompt (interrupting):** "Log has been fixed"
+  - **Provided:** the laptop's log read; the history-growth finding and
+    its cause; the 0.3.7 build (no step out of replay, move diagnostics,
+    ability forwarding); Run 4 combining moves and abilities; the records
+    above.
+  - **Misreads / rule breaks:** none. Pulling Stage 5b forward is a plan
+    change within Kc's go-ahead; recorded in the plan and here.
+  - **How It Was Verified:** the history-growth cause from the SDK
+    (L706-723) matches the two frames and the phase lines in the log;
+    the fix is verified if Run 4's laptop log has no `WARNING`.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 5 Run 4 ran mismatched builds; version check (0.3.8)
+On the PC, Claude Opus 5.5. Test by Kc; **game build ID 8270065 on
+both** (not re-reported). Logs `local\m3-logs\stage5-pc-4.log` (2386
+lines) and `stage5-laptop-4.log` (576; a different file from the PC's,
+checked by SHA-256).
+
+- **Planned:** checklists/m3-stage5.md, Run 4.
+- **Result: not a test of 0.3.7.** The PC logged `version 0.3.7`, the
+  laptop `version 0.3.6`. `local\release\` has zips up to 0.3.6 only, and
+  no Stage 5 pre-flight logs were saved, so nothing flagged it. The
+  laptop behaved exactly as Run 3 (no move checks, abilities "not sent",
+  the history-growth warning each XCOM turn). Kc: no path line, no move,
+  shots from the laptop did nothing; the PC revealed a pod and the
+  laptop followed it.
+- **Changed (0.3.8):** `X2TC_CoopSession.uc`: ping and pong carry the
+  mod version; on a mismatch the host logs `VERSION MISMATCH` and refuses
+  the history request, and the guest logs it and shows a "CO-OP: VERSION
+  MISMATCH" dialog instead of joining (`ModVersion`, `ShowGuestMessage`,
+  `bVersionMismatch`; `dependson(UIDialogueBox)`). `X2TC_VERSION` 0.3.8;
+  checklists/m3-stage5.md (Run 5, with packaging and the pre-flight
+  compare spelled out); plans/m3-plan.md (Results).
+- **Problems:** the build mix-up (procedural); the per-build version
+  line is what exposed it. Not compiled yet; the Python check passed.
+- **Checks:** Python reads and SHA-256 of both logs; `ls` of
+  `local\release\` and `local\m3-logs\`.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 Run 4)
+- **Prompt:** "Still cannot move. No blue path line to appear. Tried
+  moving about ten seconds after the mission finished loading in. Tried
+  using several abilities. Moved forward on the PC until encountering an
+  enemy, synced with laptop. Tried firing with laptop to no result. Logs
+  saved"
+  - **Provided:** the logs read: the laptop ran 0.3.6, so the run says
+    nothing about 0.3.7's laptop code; the version check added (0.3.8)
+    so this can't recur unnoticed; Run 5 in the checklist; the records
+    above.
+  - **Misreads / rule breaks:** none. My Run 4 checklist said "Part A
+    with version 0.3.7" without spelling out packaging and the laptop
+    install; Run 5 spells them out.
+  - **How It Was Verified:** the two `X2TC: version` lines (PC L121,
+    laptop L118) and the release folder listing.
+- **Prompt:** "For now on could you please include a small line of text
+  with the current version that I can see in the xcom title screen or
+  perhaps on one of the new buttons so I can confirm the version without
+  having to run the filechekc?"
+  - **Provided:** every CO-OP button now shows the version: `CO-OP: JOIN
+    (v0.3.8)` on the main menu, `CO-OP: HOST (v0.3.8)` / `HOSTING`,
+    `CO-OP: LEAVE (v0.3.8)` (`X2TC_CoopListener.VersionTag`, from
+    `X2TC_VERSION`). Still 0.3.8: that build hadn't been built or shared
+    yet. Run 5's checklist adds the on-screen check. Standing practice
+    from now on: the version shows on screen.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** not yet (visible after Kc's build).
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 5 Run 5, abilities work; Run 6 build (0.3.9)
+On the PC, Claude Opus 5.5. Test by Kc with 0.3.8 on both (the JOIN
+version check passed); **game build ID 8270065 on both** (not
+re-reported); pre-flight skipped by Kc for brevity. Logs
+`local\m3-logs\stage5-pc-5.log`, `stage5-laptop-5.log` (different files,
+checked by SHA-256).
+
+- **Planned:** checklists/m3-stage5.md, Run 5.
+- **Result (details in plans/m3-plan.md, Results):**
+  - **The laptop's abilities work end to end:** eight orders (overwatch,
+    PistolOverwatch, grapple, grenade launch and throw) captured on the
+    laptop, applied by the PC, shown on both; none refused; answer back
+    in 0.02 s. No history growth on the laptop. This is Stage 5b's goal,
+    met in Stage 5's runs.
+  - **Moves:** the laptop's pathing never builds a path (`path of 2+
+    tiles=False` in every diagnostic line, all other guards passing); no
+    path line.
+  - The targeting UI stayed open after each order: the follower returned
+    false, which in tutorial mode is what `ActivateAbility` reports.
+  - About 2 s from the laptop's order to its screen: the host's one-second
+    send poll plus the transfer.
+- **Changed (0.3.9):** `X2TC_CoopReplayMgr.uc`: returns true for a
+  forwarded order; pathing-pawn state in the move diagnostics;
+  `MoveActiveUnitToCursor` (the fallback); `TileText`.
+  `X2TC_CoopSession.uc`: a 0.2 s `FastSend` timer on the host and a send
+  right after each applied guest order; one-tile moves get a host-built
+  path (`X2PathSolver.BuildPath`, within the unit's range).
+  `X2TC_CoopListener.uc`: CO-OP: MOVE TO CURSOR. `X2TC_VERSION` 0.3.9;
+  checklists/m3-stage5.md (Run 6); plans/m3-plan.md (Results).
+- **Problems:** moves; not compiled yet; the Python check passed.
+- **Checks:** Python reads and Grep of both logs; SDK
+  `XComTacticalInput.uc` L1741-1846, `XComPathingPawn.uc` L136-143,
+  L846-1050, L1600-1690, `X2PathSolver.uc` L77,
+  `UITacticalHUD_AbilityContainer.uc` L660-700,
+  `XComGameStateContext_Ability.uc` L1334-1373, L1451.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 Run 5)
+- **Prompt:** "Decided to skip preflight checks for brevity. The game can
+  now issue commands, however the laptop still cannot move. When it
+  issues a command like overwatch or grapple, the UI to use the command
+  stays. [...] The solder is still selected after their turn is over
+  though I can't do anything. Also when I issue a command it first
+  happens on the PC and then the laptop about two seconds later, so the
+  input latency is a bit much. Logs attached"
+  - **Provided:** both logs read: abilities work end to end, moves
+    blocked at path building; the lingering UI and the delay explained;
+    the 0.3.9 changes; Run 6 in the checklist; the records above.
+  - **Misreads / rule breaks:** none. Skipping the pre-flight is Kc's
+    call; the version check covers the main risk it guarded against.
+  - **How It Was Verified:** the abilities by both logs (capture, apply,
+    answer, follow); the rest after Run 6.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 5 Run 6, guest moves via MOVE TO CURSOR; Run 7 build (0.4.0)
+On the PC, Claude Opus 5.5. Test by Kc with 0.3.9 on both (version
+check passed); **game build ID 8270065 on both** (not re-reported). Logs
+`local\m3-logs\stage5-pc-6.log`, `stage5-laptop-6.log` (different files,
+SHA-256).
+
+- **Planned:** checklists/m3-stage5.md, Run 6.
+- **Result (details in plans/m3-plan.md, Results):**
+  - **The guest's moves work through MOVE TO CURSOR:** the host built
+    the paths and moved the units; out-of-range targets were refused, as
+    intended. The mouse has to cross the map to reach the button (Kc).
+  - The targeting UI closes now; latency much improved (Kc).
+  - The diagnostics pinned the normal-move failure: the pathing pawn is
+    hidden the whole time (`pawn hidden=True`, destination -1,-1,-1),
+    so it never builds a path. Likely cause: the stock replay screen
+    closed during its own `OnInit` and left in the stack (the pawn hides
+    itself while it is there).
+  - The selection stays on a unit with no actions left (Kc).
+- **Changed (0.4.0):** `X2TC_CoopListener.uc`: the replay screen closes
+  0.2 s after its `OnInit`. `X2TC_CoopReplayMgr.uc`:
+  `KeepPathingVisible` (close a lingering replay screen; show a hidden
+  pathing pawn on the active unit), `SkipUnitWithoutActions`, the replay
+  screen in the diagnostics. `X2TC_VERSION` 0.4.0;
+  checklists/m3-stage5.md (Run 7); plans/m3-plan.md (Results).
+- **Problems:** normal moves (cause found, fix untested); MOVE TO CURSOR
+  needs the mouse to cross the map (a usability limit; if normal moves
+  work, the button is a fallback only). Not compiled yet; Python check
+  passed.
+- **Checks:** Grep and Python reads of both logs; SDK
+  `XComPathingPawn.uc` L451, L846-930, L1600-1690;
+  `XComTacticalInput.uc` L493-520, L1741-1846; `Engine\Classes\Actor.uc`
+  L1874-1878; `UIScreen.uc` L127-131.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 Run 6)
+- **Prompt:** "No action when out of range. works to move with the
+  button. Notably I need to mouse over the rest of the map to get to the
+  move to cursor button which is on the top right of the screen. So
+  these tests are done with navigating to an area near that button.
+  Latency is much improved now and tthe UI now successfuly goes away,
+  though it still sticks on a unit when it has no actions remaining.
+  Logs attached."
+  - **Provided:** both logs read: MOVE TO CURSOR works and refuses out of
+    range correctly; the pathing pawn found hidden in every diagnostic
+    line, with a likely cause; the 0.4.0 changes; Run 7 in the
+    checklist; the records above.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** MOVE TO CURSOR and the refusals by both
+    logs (PC L404-605); the pawn fix after Run 7.
+
+### 2026-11-14 — Session 7 (continued): M3 Stage 5 Run 7; pathing display visible, cache refresh (0.4.1)
+On the PC, Claude Opus 5.5. Test by Kc with 0.4.0 on both; **game build
+ID 8270065 on both** (not re-reported). Logs
+`local\m3-logs\stage5-pc-7.log`, `stage5-laptop-7.log` (different files,
+SHA-256).
+
+- **Planned:** checklists/m3-stage5.md, Run 7.
+- **Result (details in plans/m3-plan.md, Results):** the pathing display
+  is visible now (the hidden-pawn fix worked); in move mode its
+  destination doesn't follow the mouse, while during ability targeting
+  it does (Kc saw the line while aiming any ability, frozen after Esc);
+  the selection moves off spent units (minor visual glitches); MOVE TO
+  CURSOR, a claymore and Inspire worked; End Turn on the guest isn't
+  possible (expected); no history warning.
+- **Cause (from the SDK, a guess until Run 8):** move mode reads the
+  unit's reachable-tiles cache, which holds a unit state and history
+  index of its own and on the guest isn't refreshed by the normal turn
+  loop (`XComPathingPawn.uc` L451-468; `X2ReachableTilesCache.uc`
+  L30-60).
+- **Changed (0.4.1):** `X2TC_CoopReplayMgr.uc`:
+  `RefreshPathingIfNeeded` and `RefreshPathing` (`SetCacheUnit` with the
+  current state, `ForceCacheUpdate`, `UpdateTileCacheIfNeeded`, pawn
+  `SetActive`; logs action points, cache origin and max cost).
+  `X2TC_VERSION` 0.4.1; checklists/m3-stage5.md (Run 8);
+  plans/m3-plan.md (Results).
+- **Problems:** move-mode path; not compiled yet; Python check passed.
+- **Checks:** Grep, uniq counts and Python reads of the laptop log; SDK
+  `XComPathingPawn.uc` L451-490, `X2ReachableTilesCache.uc` L1-60,
+  `XGUnit.uc` L3511, L3618.
+
+### Session 7 prompt log (continued, 2026-11-14, Stage 5 Run 7)
+- **Prompt:** "No move line yet. Cannot end turn on laptop though that
+  is expected. something I found, the blue movement liine shows while I
+  have any ability selected, like fire, overwatch, stasis, inspire, etc.
+  It remains on the field when I stop trying to use the ability where it
+  was. [...] The selection did shift to the next soldier though there
+  were minor visual inconsistencies. Logs attached."
+  - **Provided:** the laptop log summarized (pawn visible; destination
+    frozen in move mode, live during targeting, matching Kc's
+    observation); the cache cause; the 0.4.1 refresh; Run 8 in the
+    checklist; the records above.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** the pawn fix by the log (`pawn
+    hidden=False` throughout); the cache fix after Run 8.
+
+### 2026-11-14 — Session 7 (continued): new approach for moves; 0.4.2; Stage 6 drafted
+Claude Opus 5.5, PC. No test. Kc: change approach (hotkey now; trace the
+whole move chain and fix all conditions together; toggles; 0.5 s state
+log; time-box of two more runs, then the hotkey is M3's movement method;
+plan Stage 6 in parallel; compact LOG entries). **Changed (0.4.2):** new
+`X2TC_CoopInput` (M key; right-click when the game has no path;
+Interaction in the game viewport); follower FIX A/B/C toggles, full
+`move state` line every 0.5 s; FIX buttons and `(M)` label on the
+guest's HUD; plans/m3-plan.md (move-chain trace with each condition's
+status, time-box, Run 8 build, **Stage 6 draft for approval**);
+checklists/m3-stage5.md (Run 8 for 0.4.2; 0.4.1 never ran);
+`mod/README.md`. Not compiled; Python check passed. **Checks:** SDK
+`Interaction.uc` L84-87, `GameViewportClient.uc` L756-788,
+`XComTacticalInput.uc` L1347, L1741-1846, `XComWorldData.uc` L754,
+`XComGameStateHistory.uc` L124, L258; game `DefaultInput.ini` (read
+only).
+- **Prompt:** "Progress check: [...] Change approach so each run tests
+  more: 1. Add a hotkey (and right-click if feasible) [...] 2. [...]
+  trace the whole chain [...] 3. [...] toggle buttons [...] 4.
+  Time-box [...] 5. In parallel, plan Stage 6 [...] Keep LOG.md entries
+  short for these runs, one compact entry per run." **Provided:** the
+  above. **Misreads / rule breaks:** none. **How It Was Verified:** n/a
+  (no fix; build is Kc's).
+
+### 2026-11-14 — Session 7 (continued): Stage 6 draft approved; End Turn hook checked
+Claude Opus 5.5, PC. No test, no code. **Decisions (Kc):** Stage 6
+approved with alternating ownership (assignment screen to the polish
+list) and END MY PHASE buttons; Stage 6 code waits for Run 8/9 to settle
+moves. **Checked:** no Highlander event before the host's End Turn
+(Backspace and the HUD button both reach `PerformEndTurn` →
+`XGPlayer.EndTurn`; `PlayerTurnEnded` fires only after). Plan: warning
+in the checklist, swallow Backspace on the host during P1 with
+`X2TC_CoopInput`, try hiding the HUD button, log an End Turn in P1.
+**Changed:** plans/m3-plan.md (Stage 6 decisions and the End Turn
+finding; decisions 13-14). **Checks:** CHL `XComTacticalController.uc`
+L1374-1445, `XGPlayer.uc` L418-447, `X2TacticalGameRuleset.uc` L4955;
+SDK `XComTacticalInput.uc` L2415-2440, `UITacticalHUD_MouseControls.uc`
+L240-262; game `DefaultInput.ini` L302-303 (read only).
+- **Prompt:** "Stage 6 draft approved, with: 1. Alternating ownership
+  [...] 2. END MY PHASE buttons for M3. Check whether the Highlander has
+  any event or hook that could stop the host's own End Turn during P1
+  [...] Save the decisions in the plan. I'm running Run 8 now; don't
+  start Stage 6 code until Run 8's (or Run 9's) result settles moves."
+  **Provided:** the above. **Misreads / rule breaks:** none. **How It
+  Was Verified:** n/a.
+
+### 2026-11-14 — Session 7 (continued): 0.4.2 compile error fixed
+Claude Opus 5.5, PC. Kc's build of 0.4.2 failed: `X2TC_CoopReplayMgr.uc(99)
+: Error, 'else': Bad command or expression` (my edit put the
+`X2TC_CoopInput.Install()` call between an `if` block and its `else` in
+`StartReplay`); warning `X2TC_CoopSession.uc(695): 'NoParams' : local
+variable used before assigned a value` (in `RequestHistory`, since
+Stage 3). **Fixed:** `Install()` moved after the `if`/`else`; `NoParams.Length
+= 0` before use (the stock pattern, `X2TacticalMPGameRuleset.uc` L343).
+Version stays 0.4.2 (that build never compiled or shipped). **Checks:**
+reread in full the files changed in 0.4.2 (`X2TC_CoopReplayMgr.uc`,
+`X2TC_CoopListener.uc`; `X2TC_CoopInput.uc` as written this session);
+a new syntax check script (scratchpad, not in the repo) over every class:
+each `else` must follow a closing brace, braces balance, statements end
+properly; one hit, a two-line `if` condition (a false positive); the
+script flags the original error when run on a copy of it. From now on I
+run it before handing back a build.
+- **Prompt:** "0.4.2 failed to compile: [the error and warning]. Fix the
+  error, and the warning too. Before handing it back, reread the whole of
+  each file you changed in 0.4.2 for the same kind of syntax problem
+  (if/else blocks, braces, semicolons), since each failed build costs me
+  a round trip." **Provided:** both fixes, the rereads, the check.
+  **Misreads / rule breaks:** the error was mine (an edit that split an
+  if/else). **How It Was Verified:** reread plus the script (no real
+  hits); the compile is Kc's.
+
+### 2026-11-14 — Session 7 (continued): Stage 5 Run 8 (0.4.2); Run 9 build (0.4.3)
+Claude Opus 5.5, PC. Test by Kc, 0.4.2 on both, build 8270065 (not
+re-reported); logs `stage5-pc-8.log`, `stage5-laptop-8.log`. **Result:**
+the M key and right-click move the guest's soldiers (ten moves); fixes
+A-C don't make click-to-move work; the cache is valid (max cost 24/12,
+cursor reachable, closest = cursor in 880 samples) but the controller's
+pathing pawn never takes a destination. **Lead:** targeting methods
+spawn their own working pawns; the controller's was spawned at map load.
+**Changed (0.4.3):** fix D (fresh pathing pawn in the controller's slot,
+on, button), pawn name and D in the state line; checklist Run 9 (last in
+the time-box); plan Results. Syntax script and locals check: no real
+hits. **Checks:** Python tally of the 986 state lines; SDK
+`XComTacticalController.uc` L800-808, L827-835, `XComPathingPawn.uc`
+L17, L920-935, L1040-1056, `X2TargetingMethod_PathTarget.uc` L20-80.
+- **Prompt:** "None of the fixes did anything, was able to press M and
+  right click to move each worked to move the soldier, but the highlight
+  along the ground did not update until after I moved the soldier, after
+  which a path they took (or one tile away from the one they took) will
+  be shown on the ground frozen." **Provided:** the log analysis, fix D,
+  Run 9. **Misreads / rule breaks:** none. **How It Was Verified:** n/a
+  (build is Kc's).
+
+### 2026-11-14 — Session 7 (continued): Stage 6 revised (banner, ending the turn)
+Claude Opus 5.5, PC. No test, no code. **Decisions (Kc):** a blue
+"FRIENDLY ACTION" banner in XCOM's style while the other player's soldier
+acts; only the host ends XCOM's turn manually; the guest's END TURN only
+signals readiness (text on both screens); the turn ends by itself when
+no soldier has actions; a popup for the host's End Turn while the
+guest's soldiers can act, unless the guest is ready; the host's End Turn
+no longer blocked. **Checked (SDK):** banner = `UITurnOverlay`'s blue
+XCOM-turn banner with our text (`SetDisplayText`, `ShowXComTurn`); auto
+end = `ActionsAvailable` covers the guest's soldiers on the host; popup
+without an override = disable the HUD End Turn icon (`OnAccept` refuses
+non-Normal states) plus our own END TURN button and Backspace through
+`X2TC_CoopInput`; side effect: the host's auto-select can land on a guest
+soldier. **Changed:** plans/m3-plan.md (Stage 6 revision, one question:
+do the P1/P2 phases stay?). **Checks:** SDK `UITurnOverlay.uc` L1-400,
+`X2TacticalGameRuleset.uc` L4606-4700, `UITacticalHUD_MouseControls.uc`
+L1-340, `UITacticalHUD.uc` L72, L185-230, `XComInputBase.uc` L576, L608.
+- **Prompt:** "More Stage 6 design decisions (mine): 1. A banner [...]
+  "FRIENDLY ACTION" [...] 2. Ending the turn: only the host can end
+  XCOM's turn manually [...] Also maybe add a pop up for the host [...]
+  Add these to the revised Stage 6 plan." **Provided:** the revision with
+  the SDK checks. **Misreads / rule breaks:** none; the phase question
+  asked, not assumed. **How It Was Verified:** n/a.
+- **Prompt:** "Shared turn now" (the button under "Do the P1/P2 phases
+  stay for M3, or is it a shared turn?"). **Provided:** plans/m3-plan.md:
+  decision 16 (shared turn now; supersedes decision 5 and the phase parts
+  of 14), the Stage 6 revision updated (no phase object, no END MY PHASE,
+  no host input lock; ownership, banner and end-turn rules stay; M4's
+  remaining work is its own check). SPEC.md not changed (its M3/M4 text
+  is Kc's to revise). **Misreads / rule breaks:** none. **How It Was
+  Verified:** n/a.
+
+### 2026-11-15 — Session 7 (continued): SPEC.md M3/M4 revised
+Claude Opus 5.5, PC. No test, no code. **Changed:** SPEC.md: M3 = shared
+turn (both players act with their own soldiers during XCOM's turn; three
+full turns; logs from both machines); M4 = the same-turn check (five
+turns, no desync, arrival order) plus shared-turn polish (refusal
+feedback, camera option, actions arriving close together) and an
+optional split-turn mode; section 3's "Ending the turn" row updated to
+the Stage 6 rules. plans/m3-plan.md: decisions 16 (SPEC note) and 17
+("ready" cleared by a further guest action, confirmed).
+- **Prompt:** "Yes, update SPEC.md: M3 = shared turn [...] M4 = SPEC's
+  same-turn check [...] plus shared-turn polish [...] and the optional
+  split-turn mode. Your default is fine: a further guest action clears
+  "ready"." **Provided:** the above. **Misreads / rule breaks:** none; I
+  also updated SPEC section 3's "Ending the turn" row, which otherwise
+  contradicted the new rules (said in the reply). **How It Was
+  Verified:** reread of the edited SPEC sections.

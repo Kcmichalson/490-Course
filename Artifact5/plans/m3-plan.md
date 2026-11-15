@@ -215,7 +215,8 @@ test buttons behind `SHOW_TEST_BUTTONS` as before:
    does. AML isn't installed yet; Kc installs it and sets up Steam
    offline mode before Stage 1.
 4. Test mission: Skirmish.
-5. Split turns for M3; the shared turn is M4.
+5. Split turns for M3; the shared turn is M4. *(Superseded 2026-11-14 by
+   decision 16: shared turn now.)*
 6. Version 0.3.0.
 7. Exit hang: a separate plan later, before friend playtests.
 8. Host's own input on P2's soldiers: decided at Stage 6; for M3's check
@@ -230,6 +231,23 @@ Added 2026-11-14 (Kc):
 11. CO-OP: LEAVE for the guest from Stage 5 on.
 12. Moves first in Stage 5; Stage 5b adds abilities (at least a standard
     shot) before Stage 6.
+13. New approach for moves (hotkey, full trace, toggles, 0.5 s state
+    log); time-box: after Runs 8-9, the M key is M3's movement method if
+    click-to-move still fails.
+14. Stage 6 draft approved: alternating ownership; END MY PHASE buttons;
+    a warning (and the swallowed Backspace) for the host's End Turn in P1;
+    an assignment screen on the polish list. Stage 6 code after moves
+    are settled.
+15. Stage 6 revised: FRIENDLY ACTION banner; only the host ends XCOM's
+    turn; the guest's END TURN signals readiness; auto-end when nobody
+    has actions; a popup for the host's End Turn while the guest's
+    soldiers can act (unless the guest is ready).
+16. **Shared turn now** (supersedes 5 and the phase parts of 14): no
+    P1/P2 phases in M3. SPEC.md updated 2026-11-15: M3 = shared turn,
+    three full turns, logs from both machines; M4 = the same-turn check
+    plus shared-turn polish (refusal feedback, camera option, actions
+    arriving close together) and an optional split-turn mode.
+17. A further guest action clears "ready" (Kc, 2026-11-15).
 
 ## 7. Not determinable from source (each settled by a stage)
 
@@ -542,3 +560,387 @@ closed connection; both log poll gaps over 1.5 s; each send logs its
 queued data types; the guest warns if its history grows without a
 history from the host. `X2TC_CoopListener`: CO-OP: LEAVE on the guest's
 tactical HUD. Checklist: checklists/m3-stage5.md.
+
+**Stage 5 Run 1 (test, 2026-11-14): no soldier selectable; tutorial
+intro played; LEAVE works.** Mod 0.3.4, build 8270065 (not re-reported),
+logs saved as `stage4-pc-2.log` and `stage4-laptop-2.log`.
+- Following still works (full history 164 frames, `data types=1`; one
+  partial, +2 frames, `data types=7`, i.e. `eGDT_HistoryDelta`,
+  confirming finding 15's reading; acknowledged `match=True`).
+- The laptop played the tutorial's intro movie `CIN_TP_PostIntro`
+  (laptop L287-288, 18.7 s), then `tutorial call intercepted:
+  StartDemoSequenceDeferred` (L290). Cause: tutorial mode was on when
+  the ruleset finished loading, and the load path plays the tutorial
+  intro and starts the demo when `bInTutorial` is set
+  (`X2TacticalGameRuleset.uc` L3422-3437, L3462-3465).
+- `input on (state ActiveUnit_Moving, active unit 0)` (L294): no soldier
+  selected, and Kc couldn't select one. Causes from the SDK: unit
+  cycling is switched off whenever the replay manager is a tutorial
+  manager (`XComTacticalController.uc` L540-544), and outside
+  `TurnPhase_UnitActions` the ruleset reports no active player
+  (L5462-5469; the controller's idle logic checks it, L629-633); the
+  real tutorial leaves the replay state and selects the unit itself
+  before the player acts (`XComTutorialMgr.uc` L291-305).
+- **LEAVE works (tested):** `LEAVE clicked`, connection closed,
+  `opening the main menu` (laptop L299-304), main menu reached at L338
+  with no popup; PC: `connection closed`, `the guest is gone; partial
+  history sends stopped, the mission goes on` (PC L382-383).
+- No hitch lines; no `WARNING` (the guest's history never grew by itself).
+- **Fix (0.3.5):** tutorial mode off by default, on only during XCOM's
+  input phase; at the phase start the follower calls the ruleset's
+  `EndReplay` (to `TurnPhase_WaitForTutorialInput`) and selects a unit
+  with `Visualizer_SelectUnit`; at the end `ResumeReplay`; a CO-OP: NEXT
+  SOLDIER button replaces the switched-off cycling. Run 2 in the
+  checklist.
+
+**Stage 5 Run 2 (test, 2026-11-14): abilities captured, moves refused
+before capture, intro still played.** Mod 0.3.5, build 8270065 (not
+re-reported), logs `stage5-pc-2.log`, `stage5-laptop-2.log`.
+- **Capture works for abilities (tested):** the laptop's
+  `HandleSubmittedGameStateContext` received overwatch, AidProtocol,
+  ThrowClaymore and PistolOverwatch (laptop L295-305; each two or three
+  times, the UI retrying a refused activation), with frames staying at
+  160: nothing applied on the guest. Not sent (moves only in Stage 5).
+  Good news for Stage 5b.
+- NEXT SOLDIER selected units 21, 24, 27, 30 (L292-304); the HUD's own
+  cycling did nothing, as expected.
+- **Moves never reached the capture:** `PerformPath` refuses every move
+  while a tutorial manager isn't in its `WaitForPlayerInput` state
+  (`XComTacticalController.uc` L1098); the follower's state was called
+  `Following`.
+- **Intro still played:** the input phase began at 51.1 s while the
+  ruleset was still in `LoadTacticalGame` (laptop L283), so the load path
+  saw tutorial mode on (`CIN_TP_PostIntro`, L284-285) and `EndReplay` did
+  nothing there; the ruleset then entered `PerformingReplay` (L289) and
+  stayed in it.
+- Cosmetic: every ability glows like the tutorial's "use this one",
+  because tutorial mode shines abilities `IsNextAbility` accepts
+  (`UITacticalHUD_Ability.uc` L205-225) and the follower accepts all (to
+  keep them usable). Left as is for now.
+- LEAVE worked again (laptop L308-345; PC L332-333).
+- **Fix (0.3.6):** the follower's following state is named
+  `WaitForPlayerInput` (overriding the tutorial's state of that name:
+  its validating handler and its Begin code); the input phase begins only
+  once the ruleset is in `PerformingReplay`; the guest clears its unit's
+  "moving" mark when the host answers a move (the controller sets it on
+  submit and refuses further orders while it's set, L1098-1109). Run 3
+  in the checklist.
+
+**Stage 5 Run 3 (test, 2026-11-14): no intro; moves still blocked; the
+guest's history grew by itself.** Mod 0.3.6, build 8270065 (not
+re-reported), logs `stage5-pc-3.log`, `stage5-laptop-3.log` (the
+laptop's file first held a copy of the PC's log; Kc replaced it).
+- **Intro fixed:** the input phase began after `PerformingReplay:
+  BeginState` (laptop L289-292); no `CIN_TP_PostIntro`.
+- **The guest's history grew by 2 frames by itself** (`WARNING: history
+  frames=231 but the host's last history had 229`, L304): `EndReplay`
+  took the ruleset through `TurnPhase_Begin` to
+  `TurnPhase_WaitForTutorialInput` (L291-300), and each phase change is
+  added straight to the history (`BeginState_RulesAuthority`,
+  `X2TacticalGameRuleset.uc` L706-723, `AddGameStateToHistory`), not
+  submitted, so the replay guard doesn't stop it. A desync risk; the
+  safety warning worked as intended.
+- Abilities captured again (EVAC, overwatch; L307-311), not applied.
+  NEXT SOLDIER worked. No move reached the capture; the PC received
+  none.
+- LEAVE worked (laptop L314-352; PC L369-370).
+- **Changes (0.3.7):** no `EndReplay`/`ResumeReplay` (the ruleset stays
+  in `PerformingReplay`, where Run 2 showed selection and ability capture
+  work); `move check:` lines log every guard a clicked move passes
+  (`ClickToPath`: the visualizer not blocking ability activation, with
+  the game's own explanation when it does; `PerformPath`: unit not
+  moving, tutorial state `WaitForPlayerInput`, a path of 2+ tiles; input
+  state; active unit), whenever one changes; **Stage 5b's ability
+  forwarding pulled into this build** (Kc's go-ahead to test more per
+  run): the guest sends captured abilities (template, source, primary
+  target, target locations; an identical capture within 1 s isn't sent
+  twice); the host finds the matching available action, checks it is
+  `AA_Success` and the target is valid on the host, and applies it with
+  `ActivateAbility`, answering applied or refused. Run 4 in the
+  checklist.
+
+**Stage 5 Run 4 (test, 2026-11-14): not a valid test of 0.3.7: the
+laptop ran 0.3.6.** Logs `stage5-pc-4.log` (`X2TC: version 0.3.7`, L121)
+and `stage5-laptop-4.log` (`X2TC: version 0.3.6`, L118). No 0.3.7 zip
+exists in `local\release\` and no pre-flight logs were saved for Stage 5
+runs, so the mismatch went unseen. On the laptop: no `move check` lines,
+abilities captured but "not sent" (the 0.3.6 text), and the `WARNING`
+(history grew by 2) at the start of each XCOM turn (L413, L459), as in
+Run 3: the 0.3.6 behaviour repeated. The PC side ran fine (followed,
+revealed a pod, two alien turns). Kc saw no path line and no result
+from the laptop's shots, consistent with 0.3.6.
+- **Change (0.3.8):** a version check at JOIN: the guest's ping and the
+  host's pong carry `X2TC_VERSION`; on a mismatch the host refuses to send
+  the history and the guest shows a "CO-OP: VERSION MISMATCH" dialog
+  (`UIRaiseDialog`), so a mismatched pair can't produce a test run again.
+  Run 5 in the checklist (0.3.7's code plus the check; packaging and
+  pre-flight spelled out).
+
+**Stage 5 Run 5 (test, 2026-11-14): abilities work end to end; moves
+still blocked.** Mod 0.3.8 on both (version check passed: `host version
+0.3.8, mine 0.3.8`, laptop L223), build 8270065 (not re-reported); Kc
+skipped the pre-flight. Logs `stage5-pc-5.log`, `stage5-laptop-5.log`.
+- **Stage 5b works (tested):** eight orders captured on the laptop and
+  applied by the PC: overwatch (x4), PistolOverwatch, SkirmisherGrapple,
+  LaunchGrenade, ThrowGrenade (PC L391-1138; each `applied ... waited
+  0s`, frames +1 to +3); none refused. The answer reached the laptop
+  0.02 s after its capture (laptop L363-364). The laptop's history never
+  grew by itself (no `WARNING`): removing `EndReplay` worked. No hitch
+  lines.
+- **Moves:** every `move check` line has `path of 2+ tiles=False`,
+  with every other guard passing (visualizer not blocking, unit not
+  moving, tutorial state `WaitForPlayerInput`, input state
+  `ActiveUnit_Moving`, unit selected) (laptop L344-437). The laptop's
+  pathing pawn never builds a path; Kc sees no path line.
+- **Lingering targeting UI (Kc):** in tutorial mode `ActivateAbility`
+  takes the non-latent path, which reports the ruleset's return value
+  (`XComGameStateContext_Ability.uc` L1348-1351, L1451); the follower
+  returned false, so the HUD treated each order as failed.
+- **Delay (Kc: about 2 s):** the round trip is 0.02 s; the rest is the
+  host's one-second poll before sending, the transfer (about 0.4 s,
+  Stage 4) and the laptop starting the animation.
+- Cosmetic (Kc): the last selected soldier stays selected during the
+  aliens' turn (input is off).
+- **Changes (0.3.9):** the follower returns true for a forwarded move or
+  ability (the HUD closes its targeting; nothing is applied on the guest
+  either way); the host checks for new frames every 0.2 s and sends right
+  after applying a guest order; the move diagnostics add the pathing
+  pawn's own state (hidden, state, destination tile, unit tile, cursor
+  tile); **fallback for moves:** CO-OP: MOVE TO CURSOR sends the tile
+  under the 3D cursor as a one-tile move and the host builds the path
+  with `X2PathSolver.BuildPath` (limited to the unit's range), as the AI
+  does. Run 6 in the checklist.
+
+**Stage 5 Run 6 (test, 2026-11-14): the guest's moves reach the board
+via MOVE TO CURSOR; the normal path display is hidden.** Mod 0.3.9 on
+both (version check passed), build 8270065 (not re-reported). Logs
+`stage5-pc-6.log`, `stage5-laptop-6.log`.
+- **Moves from the guest (tested), through the fallback:** the host
+  built paths of 11, 12 and 13 tiles and moved the units (PC L404, L463,
+  L530); out-of-range destinations were refused with `no path in range
+  to tile ...` (PC L526-605), as intended. Kc: works, but the mouse must
+  cross the map to reach the button at the top right, so the tested
+  destinations were near it.
+- Targeting UI now closes after an order (Kc); latency "much improved"
+  (Kc).
+- **Why normal moves fail (tested by the diagnostics):** every `move
+  check` line has `pawn hidden=True` and destination `-1,-1,-1`, while
+  the cursor tile follows the mouse (laptop L406-473): the pathing pawn
+  is hidden, so its Tick clears the path (`XComPathingPawn.uc`
+  L900-920). Its Tick hides it while the stock replay screen is in the
+  stack and tutorial mode is off (L870); the replay screen was closed
+  inside its own `OnInit` (the screen-trace line came after the close,
+  laptop L393-394), so it may have stayed in the stack.
+- Still sticking (Kc): the selection stays on a unit with no actions
+  left (the game's own auto-select runs in `TurnPhase_UnitActions`).
+- **Changes (0.4.0):** the replay screen is closed 0.2 s after its
+  `OnInit`; while the guest's input is on, any replay screen still in the
+  stack is closed and a hidden pathing pawn is shown on the active unit
+  (`SetVisible`, `SetActive`), logged once per input-on; the diagnostics
+  add "replay screen in stack"; a unit with no action points left hands
+  the selection to the next unit that has some. Run 7 in the checklist.
+
+**Stage 5 Run 7 (test, 2026-11-14): pathing display visible; move-mode
+path still empty; spent units skipped.** Mod 0.4.0 on both, build
+8270065 (not re-reported). Logs `stage5-pc-7.log`, `stage5-laptop-7.log`.
+- The pathing pawn was found hidden and shown (`hidden now=False`,
+  laptop L293); afterwards every diagnostic line has `pawn hidden=False`
+  and `replay screen in stack=False`.
+- In move mode (`ActiveUnit_Moving`) the pawn's destination stayed fixed
+  while the cursor moved (e.g. `dest=2,51,1` for 125 lines), `path of 2+
+  tiles=False`. During ability targeting (`UsingTargetingMethod`) the
+  path followed the cursor (`path of 2+ tiles=True`). Kc saw the same:
+  the line shows while aiming any ability and freezes after Esc.
+- MOVE TO CURSOR worked again (seven moves sent, laptop L426-1100); a
+  claymore and Inspire went through; `has no actions left; selected unit
+  ...` three times (L482, L516, L901), with minor visual glitches (Kc).
+  No `WARNING`, no hitch. End Turn on the guest isn't possible (Kc;
+  expected).
+- **Change (0.4.1):** the active unit's reachable-tiles cache is set to
+  the unit's current state and rebuilt, and the pawn re-activated, when
+  input comes on, the unit changes, new frames arrive, or the input
+  returns to move mode; each refresh logs the unit's action points and
+  the cache's origin and max cost. Run 8 in the checklist.
+
+**Change of approach for moves (Kc, 2026-11-14):** each run tests more:
+a hotkey for MOVE TO CURSOR now, the whole move chain traced and every
+condition addressed together, competing fixes behind on-screen toggles,
+the full move state logged every 0.5 s. **Time-box:** if normal
+click-to-move doesn't work after two more runs (Runs 8 and 9), the hotkey
+is M3's movement method and click-to-move goes to the polish list.
+
+**The chain from mouse-over to a submitted move on the guest (SDK
+trace, 2026-11-14), with each condition's status:**
+1. Input state `ActiveUnit_Moving` (`XComTacticalInput.uc` L1741-1790;
+   set by the follower, allowed in tutorial mode, L780-786): met (logs).
+2. The 3D cursor follows the mouse: met (cursor tile changes in the
+   logs).
+3. Pathing pawn visible with an active unit (`XComPathingPawn.uc`
+   L846-927; hidden while a replay screen is in the stack and tutorial
+   mode is off, L870): fixed in 0.4.0 (`hidden=False`).
+4. Destination = the closest reachable tile to the cursor in the unit's
+   reachable-tiles cache (L980-1040; `X2ReachableTilesCache`, its own
+   unit state and history index, L30-60): **open**; the destination stays
+   fixed in move mode. Suspects: a stale cache unit (fix A), the replay's
+   "current history index" (fix B), world tile data not synced to the
+   history (fix C).
+5. Path rebuilt when the destination changes (`RebuildPathingInformation`,
+   native `UpdatePath`, L734-1040): follows 4.
+6. Click → `ClickToPath` (`XComTacticalInput.uc` L3047-3095): visualizer
+   not blocking ability activation: met; melee check: n/a.
+7. `PerformPath` (`XComTacticalController.uc` L1093-1110): unit not
+   moving: met (mark cleared on the host's answer, 0.3.6); tutorial
+   manager in `WaitForPlayerInput`: met (0.3.6); path of 2+ tiles:
+   follows 4-5.
+8. `GameStateMoveUnit` → latent submit → the ruleset → tutorial mode →
+   the follower's capture (`X2GameRuleset.uc` L290-293): met for
+   abilities and one-tile moves; untested for clicked paths.
+Ability targeting draws the path (Kc, Run 7) because its targeting
+method drives the pawn, not move mode.
+
+**Run 8 build (0.4.2):** the M key and right-click (only while the game
+has no path) for move to cursor (`X2TC_CoopInput`, an Interaction
+inserted in the game viewport, as the engine's console is; not a class
+override); FIX A (cache refresh, on), FIX B (history current index -1
+while the input is on, off) and FIX C (world sync on refresh, off) as
+on-screen toggles on the guest; a full `move state:` line every 0.5 s
+while the guest's input is on (input state, unit, action points, tiles,
+pawn, destination, path length, cache origin and max cost, whether the
+cursor tile is reachable and the cache's closest tile to it, history
+index, visualizer, tutorial state, fixes).
+
+**Stage 5 Run 8 (test, 2026-11-14): the M key and right-click move the
+guest's soldiers; fixes A-C do nothing for click-to-move.** Mod 0.4.2 on
+both (version check passed), build 8270065 (not re-reported). Logs
+`stage5-pc-8.log`, `stage5-laptop-8.log` (986 `move state` lines).
+- M and right-click: ten moves sent (laptop L340-13310), applied by the
+  host; out-of-range ignored (Kc).
+- The cache is fine after refresh: correct origin, `max cost=24` with 2
+  action points, 12 with 1 (L301-756). In 880 samples the cursor tile was
+  reachable and the cache's closest tile was the cursor tile, yet the
+  controller's pathing pawn never took a destination (`dest` unchanged,
+  `path=0`). Fixes B and C (switched on at L439, L12240) and A off
+  (L12616) changed nothing. Kc: the ground highlight updates only after a
+  move, then stays frozen on the path taken.
+- **Lead:** ability targeting draws paths because each targeting method
+  spawns its own pathing pawn (`X2TargetingMethod_PathTarget.uc` L32,
+  `X2TargetingMethod_MeleePath.uc` L31); the controller's pawn is spawned
+  once at map load (`XComTacticalController.uc` L805), before the replay
+  and the state switching. **Run 9 (0.4.3, the last run in the time-box):
+  FIX D puts a freshly spawned pawn in the controller's slot** (on by
+  default, switchable); the state line names the pawn in use.
+
+**Stage 6 plan (draft for Kc's approval, 2026-11-14).** Starts as soon as
+moves are settled either way (normal moves or the hotkey).
+- **Ownership:** at session start (when the guest is following) the host
+  submits one game state setting a unit value `X2TC_Owner` (1 = P1 host,
+  2 = P2 guest, cleanup "never") on each XCOM soldier, alternating
+  through the squad; no value means P1. It reaches the guest in the next
+  partial history. (Unit values: `XComGameState_Unit.uc` L1239-1241;
+  change state: `XComGameStateContext_ChangeContainer.CreateChangeState`,
+  submitted with the ruleset's `SubmitGameState`.)
+- **Phases:** a small mod state object (`X2TC_CoopState`, extends
+  `XComGameState_BaseObject`) in the host's history holds the phase of
+  XCOM's turn: P1, then P2. Each XCOM turn begins in P1. The host ends
+  P1 with a new **CO-OP: END MY PHASE** button (not the game's End Turn,
+  which can't be intercepted without an override; on the host it still
+  ends XCOM's whole turn, so the checklist says not to use it in P1).
+  The guest ends P2 with its own END MY PHASE button, which asks the host
+  to end XCOM's turn (the host calls the ruleset's end-turn the way its
+  End Turn button does; to be traced before coding).
+- **Input:** the guest's input is on only in P2 (the follower's phase
+  check reads the state object). During P2 the host's own input is
+  locked with the stock `Multiplayer_Inactive` input state
+  (`XComTacticalInput.uc` L1347, used by stock multiplayer's inactive
+  player), and unlocked at P1 or the aliens' turn. Not a class override.
+- **Enforcement on the host:** guest actions are refused unless the unit's
+  owner is P2 and the phase is P2 (`Coop rejected: unit U is P1's, action
+  from P2`). The guest's NEXT SOLDIER and auto-selection skip P1's units.
+- **Banner:** a text line on both tactical HUDs: "CO-OP: P1 PHASE (host)"
+  / "P2 PHASE (guest)" / "ALIEN TURN", and each soldier's owner in the
+  log (`Coop owners: unit U -> P1|P2`).
+- **Pass (SPEC.md M3):** three full turns (P1, P2, aliens each), each
+  player moving only their own soldiers, matching `Coop sync` lines,
+  Launch.log from both machines.
+- **Approved by Kc (2026-11-14)**, with: (1) **alternating ownership**
+  for M3; an assignment screen goes on the polish list. (2) **END MY
+  PHASE buttons** for M3. **Stage 6 code waits until Run 8's (or Run
+  9's) result settles moves.**
+- **The host's own End Turn during P1 (checked 2026-11-14):** the
+  Highlander has no event or hook before it. Both routes, the Backspace
+  key (`XComTacticalInput.Back_Button`, L2417-2437) and the HUD's End
+  Turn button (`UITacticalHUD_MouseControls.uc` L249-260), call
+  `XComTacticalController.PerformEndTurn` (L1374-1412), which calls
+  `XGPlayer.EndTurn` (L418-447) to submit a skip-turn rule context; the
+  Highlander's only related event, `PlayerTurnEnded`
+  (`X2TacticalGameRuleset.uc` L4955), fires after the turn has ended.
+  **Plan for Stage 6:** keep the checklist warning; on the host during
+  P1, have `X2TC_CoopInput` swallow Backspace (and the gamepad Back
+  button), and try hiding the HUD's End Turn button from a screen
+  listener; log `Coop phase: host ended XCOM's turn during P1` whenever
+  XCOM's turn ends in P1 anyway. No class override.
+- Polish list (from Stage 6 decisions): a soldier-assignment screen.
+
+**Stage 6 revision (Kc's decisions, 2026-11-14), replacing the END MY
+PHASE buttons and the End Turn block above:**
+1. **"FRIENDLY ACTION" banner.** While the other player's soldier is
+   acting, each screen shows a blue banner at the top in XCOM's style,
+   like the red "ALIEN ACTIVITY" one. **How (SDK):** the game's own turn
+   banner, `UITurnOverlay`: its blue XCOM-turn banner
+   (`ShowXComTurn`/`HideXComTurn`, L283-313) shown with our text through
+   `SetDisplayText` (L159-189, which sets all its banner texts at once),
+   then the stock texts restored (`m_sXComTurn` and the others are the
+   overlay's own localized strings). The multiplayer second-player banner
+   (`ShowP2Turn`, L315-342) is the fallback if the blue one looks wrong
+   (its colour isn't known from script). **When:** on the host, from
+   applying a guest action until its visualizer is idle again; on the
+   guest, from receiving frames it didn't cause (not right after its own
+   action's answer) during XCOM's turn until caught up and idle.
+2. **Ending the turn.**
+   - Only the host can end XCOM's turn manually. The host's End Turn is
+     no longer blocked.
+   - The guest gets an **END TURN** button that ends nothing: it tells the
+     host the guest is ready. The host shows a small text at the top right
+     ("Partner is ready to end the turn"); the guest shows "Waiting for
+     the host to end the turn". Reset at each new XCOM turn; a further
+     guest action clears "ready" (confirmed by Kc, 2026-11-15).
+   - **The turn ends by itself when no soldier of either player has
+     actions left: confirmed in the SDK.** The host's ruleset ends the
+     unit-actions phase when `ActionsAvailable()` is false, and that
+     checks every member of XCOM's group, which includes the guest's
+     soldiers on the host (`X2TacticalGameRuleset.uc` L4606-4690). The
+     guest's own End Turn already does nothing (the HUD treats any
+     tutorial manager as "first tutorial", `UITacticalHUD_MouseControls.uc`
+     L218-260).
+   - **Popup for the host:** if the host ends the turn while the guest's
+     soldiers still have actions, and the guest hasn't pressed END TURN
+     this round: "Your partner's soldiers can still act. End the turn
+     anyway?" (End turn / Cancel). **How, without an override:** the HUD's
+     End Turn icon only plays a "no" sound when its state isn't Normal
+     (`UITacticalHUD_MouseControls.OnAccept` L205-216; `SetButtonState`,
+     L167; `m_optEndTurn` and `UITacticalHUD.m_kMouseControls` are public),
+     so while the popup would be needed the host's icon is set disabled
+     and the host gets our own END TURN button that asks first; Backspace
+     is caught by `X2TC_CoopInput` on the host and asks too. "End turn"
+     calls `XComTacticalController.PerformEndTurn` (L1374), the icon's
+     own path. When the popup isn't needed, the icon works normally.
+3. **Side effect found:** `ActionsAvailable` also re-selects the next unit
+   with actions on the host (L4650-4675), which can be one of the
+   guest's soldiers. With ownership on, the host moves its selection to
+   its own next soldier with actions (`Visualizer_SelectUnit`; the host
+   isn't in tutorial mode, so its cycling works).
+- Unchanged from the approved draft: alternating ownership stored as a
+  unit value; the host refuses guest actions on P1's soldiers; the
+  guest's selection skips P1's soldiers; logs from both machines; pass
+  = three full turns.
+- **Decided (Kc, 2026-11-14): shared turn now.** M3 drops the P1 / P2
+  phases: both players act during the same XCOM turn, one action at a
+  time (the host applies a guest action only when its ruleset and
+  visualizer are idle). So Stage 6 has no phase state object, no END MY
+  PHASE buttons and no host input lock; it keeps ownership (alternating
+  unit values, host-side refusal, the guest's selection skipping P1's
+  soldiers, the host's selection kept off P2's), the FRIENDLY ACTION
+  banner, and the end-turn rules above. Decision 5 (split turns for M3,
+  shared turn in M4) is superseded; M4's remaining work is SPEC.md's
+  same-turn check itself (five turns, no desync, actions in arrival
+  order), which these M3 runs already partly exercise.

@@ -41,7 +41,7 @@ far (section 6, M6), shown at the final show and tell, and a portfolio card.
 | Team | Both players are on XCOM's side, against the AI |
 | Squad | One shared squad. Each soldier is assigned to one player (what we already do over Parsec) |
 | Turns | Both players can act during XCOM's turn. One action resolves at a time: while one player's action is resolving, the other waits |
-| Ending the turn | XCOM's turn ends when both players have ended it |
+| Ending the turn | XCOM's turn ends when the host ends it, or by itself when no soldier of either player has actions left; the guest's End Turn tells the host it is ready (changed 2026-11-14, plans/m3-plan.md Stage 6) |
 | Campaign | The host's campaign. The guest joins its tactical missions; mission results (XP, wounds, deaths, loot) stay in the host's campaign |
 | Strategy layer | The host runs it, as over Parsec. Shared strategy play is a stretch goal |
 | Game version | The current Steam build if multiplayer can be reached on it (M2); otherwise the pre-21.10 beta branch, which takes two clicks in Steam |
@@ -102,23 +102,30 @@ Checks: the match runs, or the exact point where it fails is recorded with
 Launch.log lines from both machines. Decision recorded: current build or
 the beta branch from here on.
 
-### M3: Two humans on one team
+### M3: Two humans on one team (shared turn)
 - A tactical mission where both players control XCOM soldiers against the
-  AI, each moving only their own soldiers, taking turns as the game allows
+  AI in a shared turn: both act with their own soldiers during XCOM's
+  turn, one action resolving at a time
 - Starting point decided in the plan (the multiplayer match flow, or a
   campaign mission)
+- (Changed 2026-11-15 from "taking turns as the game allows": the shared
+  turn moved into M3, plans/m3-plan.md decision 16)
 
-Checks: a mission with both players' soldiers on XCOM's side, played for at
-least three turns, with Launch.log from both machines.
+Checks: a mission with both players' soldiers on XCOM's side, each acting
+with their own soldiers during XCOM's turn, played for three full turns,
+with Launch.log from both machines.
 
-### M4: Same-turn actions
-- Both players can act during XCOM's turn; the host applies actions in the
-  order they arrive; the other player waits while one resolves
-- The turn ends when both players end it; both screens show the same
-  result
+### M4: Same-turn check and shared-turn polish
+- The same-turn check: both players act in the same turn; the host
+  applies actions in the order they arrive; the other player waits while
+  one resolves; both screens show the same result
+- Shared-turn polish: feedback when an action is refused, a camera
+  option, actions arriving close together
+- An optional split-turn mode (one player's phase, then the other's)
 
 Checks: a scripted test in which both players act in the same turn, with
-no desync for five turns; any desync recorded with its log lines.
+no desync for five turns, actions applied in arrival order; any desync
+recorded with its log lines.
 
 ### M5: Campaign hookup
 - Start a co-op mission from the host's campaign; the guest joins it

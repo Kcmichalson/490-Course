@@ -94,7 +94,7 @@ simulated function InitScreen(XComPlayerController InitController, UIMovie InitM
 	SoldierList.InitList('X2TC_SquadSoldiers', 10, 80, PANEL_WIDTH - 40, SOLDIER_LIST_HEIGHT);
 
 	SettingsList = Spawn(class'UIList', Container);
-	SettingsList.InitList('X2TC_SquadSettings', 10, 80 + SOLDIER_LIST_HEIGHT + 20, PANEL_WIDTH - 40, 3 * class'UIMechaListItem'.default.Height);
+	SettingsList.InitList('X2TC_SquadSettings', 10, 80 + SOLDIER_LIST_HEIGHT + 20, PANEL_WIDTH - 40, 4 * class'UIMechaListItem'.default.Height);
 
 	CloseButton = Spawn(class'UIButton', Container);
 	CloseButton.InitButton('X2TC_SquadClose', "CLOSE", OnCloseClicked);
@@ -120,7 +120,7 @@ function BuildRows()
 		SoldierRows.AddItem(Row);
 		RowUnitIDs.AddItem(Squad[i].ObjectID);
 	}
-	for (i = 0; i < 3; i++)
+	for (i = 0; i < 4; i++)
 	{
 		Row = Spawn(class'UIMechaListItem', SettingsList.ItemContainer);
 		Row.bAnimateOnInit = false;
@@ -176,6 +176,9 @@ function RefreshRows()
 	SettingRows[1].SetDisabled(!bCanEdit);
 	SettingRows[2].UpdateDataCheckbox("Partner may edit this screen (host only)", "", Session != none && Session.GetSetting(class'X2TC_CoopSession'.const.SETTING_PARTNER_EDIT), OnSettingCheckbox);
 	SettingRows[2].SetDisabled(!bHost || !bCanEdit);
+	// Stage 8.1 test switch: host only, and only before the partner follows.
+	SettingRows[3].UpdateDataCheckbox("SYNC: NEW FRAMES (test; set before the partner joins)", "", Session != none && Session.GetSetting(class'X2TC_CoopSession'.const.SETTING_NEW_FRAMES), OnSettingCheckbox);
+	SettingRows[3].SetDisabled(!bHost || !bCanEdit || (Session != none && Session.bGuestFollowing));
 }
 
 // "Name (Class)" for a soldier row.
@@ -240,7 +243,7 @@ function OnSettingCheckbox(UICheckbox CheckboxControl)
 			continue;
 		}
 		if (Session == none || !Session.IsActive() || !Session.CanEdit()
-			|| (i == class'X2TC_CoopSession'.const.SETTING_PARTNER_EDIT && !Session.IsHost()))
+			|| ((i == class'X2TC_CoopSession'.const.SETTING_PARTNER_EDIT || i == class'X2TC_CoopSession'.const.SETTING_NEW_FRAMES) && !Session.IsHost()))
 		{
 			`log("Coop squad: setting" @ i @ "ignored (this player may not change it)", , 'X2TC');
 			RefreshRows();

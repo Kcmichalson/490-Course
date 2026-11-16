@@ -4122,3 +4122,170 @@ OnlineGameInterface.uc` L24-307, `OnlinePlayerInterfaceEx.uc` L56,
   0.5.3/0.6.0: with two HOST buttons, a second click would have closed a
   live session; it's fixed with the timer check. **How It Was Verified:**
   the checks above; the in-game test is Kc's, with a friend.
+- **Prompts:** "Let's do a comprehensive suite of tests now. Tell me what
+  you need. [...] full game" / "Okay give me the step by step on what to
+  do here, now." **Provided:** the list of what's needed, then the steps
+  from checklists/m3-stage7.md. **Misreads / rule breaks:** none. **How It
+  Was Verified:** n/a.
+
+### 2026-11-15 — Session 7 (continued): Stage 7 Run 1 with a friend (0.6.0): invite refused; 0.6.1
+Claude Opus 5.5, PC. Test by Kc and a friend over Steam, 0.6.0 on both.
+Builds: the friend's `Init: Version: 8917` matches the PC's; `buildid` not
+reported yet. Logs: the PC's live Launch.log and
+`local\m3-logs\stage7-friend-1.log`.
+
+**Result.**
+- **The host side worked** (PC L715-724):
+  - Steam game session created;
+  - server with `steam=True`;
+  - invite overlay shown.
+- **The friend's invite was refused** with "game versions are different":
+  the game's own check (`XComOnlineEventMgr.CheckInviteGameVersionMismatch`
+  L3593-3614).
+
+**Two causes.**
+1. **The mod's armed state was lost (my bug).** The session object was
+   garbage collected on the guest's main menu: `session object created` at
+   each JOIN (STEAM) click (friend L182, L187), and no armed hand-over at
+   the invite (L203). The stock handling took over.
+2. **The mods fingerprint differs.**
+   - PC: `mods=-262591650` (order: X2WOTCCommunityHighlander,
+     DLC2CommunityHighlander, X2TacticalCoop; the laptop had the same in
+     M3 Stage 3/4).
+   - Friend: `mods=-1070542405` (same mods, X2TacticalCoop first).
+   - The fingerprint was unchanged between mod versions 0.3.2 and 0.3.3 in
+     earlier logs, so load order is the likely cause (a guess).
+
+**Changed (0.6.1).** `ArmSteamInvite` adds the network manager's delegates,
+which keep the session alive. **Checks:** syntax (0); grep of every saved
+log's `MP criteria` lines.
+- **Prompt:** "friend invited at 9:35. It said 'connection unavaliable
+  because game versions are different [...]' on their end." **Provided:**
+  the PC log check and what the game's check compares; asked for the
+  friend's log. **Misreads / rule breaks:** none. **How It Was Verified:**
+  PC Launch.log L715-724.
+- **Prompt:** "Log is attached." **Provided:** the two causes above; 0.6.1;
+  steps to match the load order. **Misreads / rule breaks:** the
+  garbage-collection bug was mine (the 0.6.0 guest flow kept nothing alive
+  on the main menu). **How It Was Verified:** friend log L181-203, L284-286;
+  syntax check.
+- **Prompts:**
+  - "does tick order denote load order?"
+  - "different order but can't change their positions [...]"
+  - "It is okay for you to read that file [...]" (Kc allowed reading his
+    `XComModOptions.ini`, outside the usual read list, for this check)
+  - "give me another way to tick the mods [...]"
+  - "Launched and closed."
+
+  **Provided:**
+  - Kc's `ActiveMods=` order (X2WOTCCommunityHighlander,
+    DLC2CommunityHighlander, X2TacticalCoop) matches his game's reported
+    mod order. Kc said the friend's file differs.
+  - The reverse-tick test: after re-ticking in reverse (X2TacticalCoop
+    first), relaunching and closing, the file still read Highlander,
+    DLC2CommunityHighlander, X2TacticalCoop. So AML's tick order does not
+    set the load order (tested on Kc's PC, build 8270065).
+  - Proposed the 0.6.2 bypass of the game's invite check, with the mod's
+    own DLC and mod-list check.
+
+  **Misreads / rule breaks:** none. **How It Was Verified:** `XComModOptions.ini`
+  read before and after the re-tick (L1-6).
+- **Prompt:** "Yes, build 0.6.2" **Provided:** 0.6.2:
+  - while armed for a co-op Steam invite, the game's own invite handler is
+    off (restored 1 s after the invite and on reset);
+  - the ping and pong carry and compare the sorted mod and DLC names,
+    refusing with a message that names the difference;
+  - checklist, plan and LOG updated.
+
+  **Misreads / rule breaks:** none. **How It Was Verified:** syntax (0)
+  and locals (0) on all classes; SDK `Engine\Classes\OnlineEventMgr.uc`
+  L119-134, `Helpers.uc` L103-104, `Object.uc` L1370.
+
+### 2026-11-15 — Session 7 (continued): Stage 7 Run 2 with a friend (0.6.2): co-op over Steam works; 0.6.3
+Claude Opus 5.5, PC. Test by Kc and a friend over the internet, 0.6.2 on
+both. Builds: both report engine version 8917; the PC's buildid is
+8270065 (the friend's isn't reported). Logs: `stage7-pc-2.log`,
+`stage7-friend-2.log`.
+
+**Result.**
+- **The Steam connection works with no port forwarding.** The invite
+  reached the session, which joined, resolved the address and connected
+  over steamsockets in about 5 s; the follow started about 15 s after the
+  invite.
+- **A full mission:** 14 turns, so the M3 three-turn check is covered.
+  51 guest actions, all applied.
+- **Problems:**
+  - the friend saw "host disconnected" at mission end, not MISSION OVER;
+  - the rocket did no unit damage;
+  - no banner while both P1 soldiers were bound;
+  - a P1 soldier stuck after a bind, cause not logged;
+  - no cover icons or move range on the guest;
+  - camera panning is inconsistent;
+  - lag grows: partial histories went from 20 KB to 409 KB, and
+    acknowledgements grew to 2-4 s.
+- **Request:** show the other player's aim.
+
+**Changed (0.6.3).**
+- Mission-end handshake (`X2TC_MissionEndShown`).
+- The host computes area targets for location-aimed guest abilities.
+- "Can act" from the ruleset's unit cache.
+- Per-soldier state logging.
+- The fresh pawn gets `InitEvents`.
+- Plan results, backlog, checklist Run 3.
+
+**Checks:** syntax (0) and locals (0) on all classes; SDK
+`XComGameStateContext_Ability.uc` L1302-1344, L1470-1510,
+`XComGameState_Ability.uc` L412-434, `X2GameRuleset.uc` L70,
+`XComPathingPawn.uc` L337-422, L735-812, `XComTacticalController.uc`
+L800-809, `X2TacticalGameRuleset.uc` L386; grep counts of captures,
+applies, partial sizes and acknowledgement times in both logs.
+- **Prompt:** "Friends' notes: Cannot see cover indicators when moving.
+  [...] Sometimes their camera is force panned [...] When they used a
+  rocket, the explosion destroyed terrain but did no damage [...] Would be
+  nice to be able to see where the other player was currently looking
+  [...] The friendly action banner does not show when both of my own
+  soldiers are predisposed (like being bound by a viper) [...] after being
+  unbound, my soldier never got actions again [...] We lost the mission
+  and it said 'host disconnected from the server' [...] logs attached as
+  stage7-friend-2 and stage7-pc-2" **Provided:** the log analysis and
+  0.6.3 as above. Camera, the aim marker, the cover display and
+  incremental sends went to the backlog. **Misreads / rule breaks:** none.
+  The mission-end race was my design gap in 0.5.3, and the rocket gap was
+  in Stage 5b. **How It Was Verified:** the checks above; in-game is
+  Kc's (Run 3).
+- **Prompt:** "Friend said that the lag wasn't very noticible but that the
+  game seemed to be quote 'more unstable' as it went on, so go ahead with
+  planning the fix" **Provided:** research/history-sync.md:
+  - Run 2 measurements: send sizes, acknowledgement times, and guest
+    stalls at frames 718 and 1974.
+  - The source of the host's 1910 stack traces: `X2GameRuleset.uc`
+    L237-249, which runs while a connection exists.
+  - The building blocks (`SendGameState`, `SendMergeGameState`,
+    `SetPauseGameStateSending`).
+
+  The incremental-send plan was drafted in the reply, not saved (it
+  waits for approval). **Misreads / rule breaks:** none. **How It Was
+  Verified:** grep counts in both Run 2 logs; SDK
+  `XComGameStateNetworkManager.uc` L20-385, `X2GameRuleset.uc` L225-250,
+  `UIMPShell_Lobby.uc` L832-844.
+
+### 2026-11-15 — Session 7 (continued): Stage 8 approved; 8.1 written (0.7.0, not built)
+Claude Opus 5.5, PC. No test. **Changed (0.7.0, includes 0.6.3):**
+- A host-only **SYNC: NEW FRAMES** squad-screen setting, refused once
+  the guest follows. When on, the host sends each new frame with
+  `SendGameState(frame, index)` instead of `SendPartialHistory`.
+- The guest's `OnReceiveGameState` logs whether each frame is in its
+  history at its index (`XComGameState.HistoryIndex`,
+  `XComGameState.uc` L125: -1 means not in the history), acknowledges
+  with its frame count, and shows the banner.
+- The host's batch counts as acknowledged when the guest has all of it.
+
+Also: the plan saved (Stage 8, with the three defaults); checklists/
+m3-stage8.md (a LAN test with the laptop: mission A switch on, B off).
+**Checks:** syntax (0) and locals (0) on all classes.
+- **Prompt:** "Approve as drafted" **Provided:** the plan saved. Its three
+  unanswered questions were taken at the defaults I proposed (LAN first;
+  stop rather than add frames by script; 0.6.3 checks ride along), and
+  that's said in the plan and the reply. Then 8.1 code and the checklist.
+  **Misreads / rule breaks:** none. **How It Was Verified:** syntax and
+  locals checks; in-game is Kc's.

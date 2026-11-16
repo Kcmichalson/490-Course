@@ -1231,6 +1231,130 @@ research/steam-connection.md.
 - Relay without port forwarding.
 - Lag.
 
+**Run 1 (0.6.0, Kc and a friend, 2026-11-15): invite refused.**
+- **Host:** worked (Steam session, `steamsockets` server, overlay).
+- **Guest:** the game's check (`CheckInviteGameVersionMismatch`
+  L3593-3614) refused the invite.
+  - The mods hash differs: same mods, different order (friend:
+    X2TacticalCoop first). Kc's reverse-tick test in AML left his
+    `XComModOptions.ini` order unchanged, so the order isn't settable by
+    ticking.
+  - The guest's session object was garbage collected while armed.
+- **0.6.1:** `ArmSteamInvite` adds the network manager's delegates.
+- **0.6.2 (approved by Kc):**
+  - While armed, the guest takes the game's own invite handler off
+    (`ClearGameInviteAcceptedDelegate(0, ...)`; it registers for user 0,
+    `Engine\Classes\OnlineEventMgr.uc` L133). It's restored 1 s after the
+    co-op invite and on every session reset.
+  - Ping and pong carry `ContentList()`, the sorted mod and DLC names
+    (`Helpers.GetInstalledModNames` / `GetInstalledDLCNames` L103-104). A
+    difference refuses the history and names the difference.
+
+**Run 2 (0.6.2, Kc and a friend over the internet, 2026-11-15).**
+Builds: both report `Init: Version: 8917`; the PC's buildid is 8270065
+(the friend's isn't reported). Logs: `stage7-pc-2.log`,
+`stage7-friend-2.log` (the friend's clock is about 361 s ahead).
+
+**The Steam connection works without port forwarding:**
+- The invite was handed to the co-op session; the Steam session joined in
+  0.3 s.
+- The address resolved and the client connected with `steamsockets`
+  5 s later (friend L191-208).
+- Mods and DLC matched by name.
+- The 243 KB history loaded and the follow started about 15 s after the
+  invite.
+- PC: "Initialized RedirectNetDriver, for redirecting IP connections to
+  Steam sockets" (L379).
+
+**A full mission:** 14 XCOM turns, so the M3 three-turn check is covered.
+- 51 friend actions captured, 51 applied by the host, none refused.
+- The mission was lost at frame 2402.
+
+**Problems:**
+1. **Mission end.** The friend saw "host disconnected", not MISSION OVER:
+   the host closed 5 s after the guest had the end frame, while the guest
+   was still animating (its dialog waits up to 8 s; friend L4806-4817).
+2. **Rocket.** The friend's SparkRocketLauncher damaged terrain but no
+   unit: the host passed the location without the units in the area.
+3. **Bound soldiers.** With both P1 soldiers bound, the host saw no
+   banner; action points alone counted them as able to act.
+4. **A P1 soldier stuck after a bind.** From turn 7, the host was
+   re-locked every turn with the banner up at each turn start, so the
+   game's state said no P1 actions. The cause isn't in the log (no
+   per-unit state was logged).
+5. **No cover icons or move-range border on the guest.** Only the path
+   line shows (fix D's fresh pawn; cause unknown).
+6. **Camera.** It sometimes pans to the other player's action and
+   sometimes doesn't (vanilla action camera; the M4 camera option).
+7. **Lag grows** (Mr.Fear's warning, now measured):
+   - each partial history is the whole delta-encoded history: 20 KB at
+     the first send, 208 KB for a 1-frame send at frame 1480, 409 KB at
+     frame 2345;
+   - the guest's acknowledgements were 0 s: 24, 1 s: 55, 2 s: 44,
+     3 s: 20, 4 s: 11.
+
+**The friend's request:** see where the other player is aiming (an orange
+cursor or path).
+
+**0.6.3 (written, not built):**
+- **(1)** The guest sends `X2TC_MissionEndShown` when its MISSION OVER
+  dialog is up. The host closes 2 s later (60 s at most, or at once if the
+  guest left). A guest whose replay already passed the end frame doesn't
+  show HOST DISCONNECTED.
+- **(2)** For guest abilities aimed at a location, the host fills the
+  area targets itself (`GatherAdditionalAbilityTargetsForLocation`).
+- **(3)** "Can act" uses the ruleset's unit cache (`bAnyActionsAvailable`)
+  for the banner, the lock, selection, cycling and the End Turn question.
+- **(4)** The host logs every soldier's state (AP, can act, effects) at
+  each XCOM turn start and when it locks.
+- **(5)** The fresh pawn gets `InitEvents` (a guess).
+
+**Backlog from Run 2 (needs a plan):**
+- **Incremental history sends.** Only the new frames, instead of
+  `SendPartialHistory`'s whole delta. This is the main scaling risk.
+- **Cover and range display on the guest.**
+- **Camera option.**
+- **The other player's aim marker.**
+
 **Pass.** The friend joins over Steam, plays co-op turns, and a second
-mission connects again. The same session runs Stage 6 Run 3 and the M3
+mission connects again.
+
+## Stage 8: send only new frames (approved by Kc, 2026-11-15, "Approve as drafted")
+
+**Why.** The friend said the game felt "more unstable" as the mission went
+on, though the lag wasn't very noticeable. Run 2 measurements are in
+research/history-sync.md:
+- the partial history grew from 20 KB to 409 KB;
+- acknowledgements grew to 2-4 s;
+- the guest stalled in bursts at frames 718 and 1974;
+- the host logged 1910 stack traces (`X2GameRuleset.uc` L237-249).
+
+**Steps (0.7.0 onward).**
+1. **8.1, LAN test with the laptop (Kc alone).**
+   - A host-only **SYNC: NEW FRAMES** checkbox on the squad screen, off by
+     default. It can be changed only before the guest follows, because
+     switching mid-mission would leave the native delta baseline behind.
+   - When on, the host sends each new frame with
+     `SendGameState(GameState, HistoryIndex)` (L338) instead of
+     `SendPartialHistory`, one batch in flight.
+   - The guest registers `OnReceiveGameState` and logs whether each frame
+     landed in its history at the right index. It acknowledges with its
+     frame count.
+   - Both sides log bytes per batch and acknowledgement times.
+2. **8.2, make it the default (if 8.1 works).**
+   - Batches of a few frames, an ack and a resend.
+   - A full resync if the frame counts disagree.
+3. **8.3, the stack-trace spam.** Test `SetPauseGameStateSending` (L264)
+   and measure the trace count and any host stutter.
+
+**Pass.** A 10+ turn mission where send size stays roughly flat,
+acknowledgements stay under about 1 s, and the guest has no stall bursts.
+Then one friend run over Steam.
+
+**Defaults (Kc approved the draft without answering its questions):**
+1. 8.1 on the LAN with the laptop first.
+2. If the native side doesn't add the received frames to the guest's
+   history, stop and report rather than adding them by script (the
+   prototype reported crashes that way).
+3. Stage 7 Run 3's checks (0.6.3) ride along in the 8.1 LAN run. The same session runs Stage 6 Run 3 and the M3
 check (3 full turns, logs from both machines).

@@ -146,13 +146,19 @@ const CMD_GUEST_END_TURN = "X2TC_GuestEndTurn"; // guest: end XCOM's turn (when 
 const SETTING_OWNERSHIP = 0;
 const SETTING_PARTNER_END_TURN = 1;
 const SETTING_PARTNER_EDIT = 2;
+const SETTING_NEW_FRAMES = 3;              // Stage 8.1: send each new frame instead of a partial history (host only, before the guest follows)
 const OWN_ACTION_SECONDS = 5.0;            // guest, ownership off: its own soldier's frames this soon after its order aren't "friendly"
 const REFUSAL_SECONDS = 4.0;               // guest (0.5.3): how long a refusal message stays in the status line
 // 0.5.3, mission end: the host closes its side this long after the guest has the
 // end-of-battle frame (so the guest sees "mission over", not "host disconnected"), or
 // after MISSION_END_MAX_SECONDS whatever happens.
-const MISSION_END_DISCONNECT_SECONDS = 5;
-const MISSION_END_MAX_SECONDS = 30;
+// 0.6.3 (Stage 7 Run 2: the guest got "host disconnected" because the host closed 5 s
+// after the guest had the end frame, while the guest was still playing the last
+// animations): the guest says when its "mission over" dialog is up; the host closes
+// MISSION_END_DISCONNECT_SECONDS after that, or after MISSION_END_MAX_SECONDS.
+const CMD_MISSION_END_SHOWN = "X2TC_MissionEndShown";
+const MISSION_END_DISCONNECT_SECONDS = 2;
+const MISSION_END_MAX_SECONDS = 60;
 const MOVE_RETRY_SECONDS = 10;             // host: how long a move may wait for an idle ruleset
 const HITCH_SECONDS = 1.5;                 // both: a poll gap longer than this is logged
 const FAST_SEND_SECONDS = 0.2;             // host: how often new frames are checked for sending (Run 6)
@@ -246,17 +252,23 @@ var int MissionEndFrame;       // both: its frame
 var int MissionEndSecond;      // host: Seconds when it was seen
 var int MissionEndAckedSecond; // host: Seconds when the guest had it (-1 = not yet)
 var bool bMissionDialogShown;  // guest: the "mission over" or "host left" dialog is up
+var bool bMissionEndFrameAcked; // host (0.6.3): the guest acknowledged frames past the end frame
 
 // Stage 7 (Steam).
 var bool bSteamSession;        // both: this session's connection uses steamsockets
 var bool bSteamGameCreated;    // both: a Steam 'Game' session was created or joined by us
 var bool bSteamInviteArmed;    // guest: the next accepted invite is a co-op invite
 var bool bSteamJoinStarted;    // guest: joining the host's Steam session
+var bool bStockInviteHandlerOff; // guest (0.6.2): the game's own invite handler is taken off
+var bool bContentMismatch;     // both (0.6.2): the other game's mods or DLC differ (by name)
 
 // Co-op squad screen settings (host's; the guest keeps a copy from CMD_SETTINGS).
 var bool bOwnershipOn;         // owners enforced (default on)
 var bool bPartnerMayEndTurn;   // the guest's END TURN ends XCOM's turn (default off)
 var bool bPartnerMayEdit;      // the guest may change owners and settings (default off)
+var bool bNewFramesSync;       // Stage 8.1: frames go one by one (SendGameState), not as partial histories
+var int NewFramesReceived;     // guest (8.1): frames received with OnReceiveGameState
+var int NewFramesMisplaced;    // guest (8.1): of those, not found at their index in the history
 var array<int> PendingOwnerUnitIDs; // host: owner changes waiting for an idle ruleset
 var array<int> PendingOwnerValues;
 var int LastOwnActionUnitID;   // guest: the unit of its last order
@@ -606,9 +618,85 @@ function ArmSteamInvite()
 		`log("Coop steam guest: already started as" @ RoleName() $ "; not armed", , 'X2TC');
 		return;
 	}
+	// 0.6.1 (Stage 7 Run 1): the network manager's delegates keep this object alive. Without
+	// them it was garbage collected on the main menu between the click and the invite (the
+	// friend's log: "session object created" at each click, and no armed hand-over), so the
+	// game's own invite handling took over.
+	if (`XCOMNETMANAGER != none)
+	{
+		AddDelegates(`XCOMNETMANAGER);
+	}
+	// 0.6.2 (Stage 7 Run 1): the game's own invite handler refuses an invite when the two
+	// games' mod load orders differ (its mods hash, XComOnlineEventMgr.uc L3593-3614), and
+	// the load order can't be set by the player (AML tick order didn't change it). While
+	// armed, the game's handler is taken off; the co-op ping/pong compares the two games'
+	// mods and DLC by name instead, ignoring order.
+	SuspendStockInviteHandler();
 	bSteamInviteArmed = true;
-	`log("Coop steam guest: waiting for a Steam invite (armed)", , 'X2TC');
+	`log("Coop steam guest: waiting for a Steam invite (armed; delegates added=" $ bDelegatesAdded $ ")", , 'X2TC');
 	ShowGuestMessage("CO-OP: JOIN (STEAM)", "Now accept the host's invite in Steam (the notification, or Shift+Tab, Friends, then the invite). The co-op mission loads by itself.");
+}
+
+// Guest (0.6.2): take the game's own invite handler off (it registers for user 0,
+// Engine\Classes\OnlineEventMgr.uc L133) while a co-op invite is expected.
+function SuspendStockInviteHandler()
+{
+	local OnlineSubsystem OnlineSub;
+	local XComOnlineEventMgr OnlineMgr;
+
+	OnlineSub = GetOnlineSub();
+	OnlineMgr = `ONLINEEVENTMGR;
+	if (bStockInviteHandlerOff || OnlineSub == none || OnlineSub.GameInterface == none || OnlineMgr == none)
+	{
+		return;
+	}
+	OnlineSub.GameInterface.ClearGameInviteAcceptedDelegate(0, OnlineMgr.OnGameInviteAccepted);
+	bStockInviteHandlerOff = true;
+	`log("Coop steam guest: the game's own invite handler is off while waiting for a co-op invite", , 'X2TC');
+}
+
+// Guest (0.6.2): put the game's own invite handler back (after the co-op join, a failure,
+// or leaving), so normal multiplayer invites work as before.
+function RestoreStockInviteHandler(string Why)
+{
+	local OnlineSubsystem OnlineSub;
+	local XComOnlineEventMgr OnlineMgr;
+
+	if (!bStockInviteHandlerOff)
+	{
+		return;
+	}
+	bStockInviteHandlerOff = false;
+	OnlineSub = GetOnlineSub();
+	OnlineMgr = `ONLINEEVENTMGR;
+	if (OnlineSub == none || OnlineSub.GameInterface == none || OnlineMgr == none)
+	{
+		return;
+	}
+	OnlineSub.GameInterface.AddGameInviteAcceptedDelegate(0, OnlineMgr.OnGameInviteAccepted);
+	`log("Coop steam guest: the game's own invite handler is back (" $ Why $ ")", , 'X2TC');
+}
+
+// Guest (0.6.2): restore it a second later, outside the invite callback (adding a handler
+// while the game is still calling this invite's handlers might call it for this invite).
+function RestoreStockInviteHandlerLater()
+{
+	local PlayerController PC;
+
+	PC = class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController();
+	if (PC != none)
+	{
+		PC.SetTimer(1.0, false, nameof(RestoreStockInviteHandlerNow), self);
+	}
+	else
+	{
+		RestoreStockInviteHandler("no controller for the timer");
+	}
+}
+
+function RestoreStockInviteHandlerNow()
+{
+	RestoreStockInviteHandler("after the co-op invite");
 }
 
 // Guest (Stage 7): called by X2TC_InviteListener when an invite is accepted while armed.
@@ -619,6 +707,7 @@ function OnSteamInviteAccepted(const out OnlineGameSearchResult InviteResult, bo
 	local OnlineSubsystem OnlineSub;
 
 	bSteamInviteArmed = false;
+	RestoreStockInviteHandlerLater();
 	`log("Coop steam guest: invite accepted, success=" $ bWasSuccessful @ "has game settings=" $ (InviteResult.GameSettings != none), , 'X2TC');
 	if (!bWasSuccessful || InviteResult.GameSettings == none)
 	{
@@ -747,6 +836,7 @@ function AddDelegates(XComGameStateNetworkManager NetworkMgr)
 	NetworkMgr.AddNotifyConnectionClosedDelegate(OnConnectionClosed);
 	NetworkMgr.AddReceiveHistoryDelegate(OnReceiveHistory);
 	NetworkMgr.AddReceivePartialHistoryDelegate(OnReceivePartialHistory);
+	NetworkMgr.AddReceiveGameStateDelegate(OnReceiveGameState); // Stage 8.1
 	bDelegatesAdded = true;
 }
 
@@ -839,6 +929,10 @@ function HostTurnUI()
 	if (TurnTeam != LastTurnTeam)
 	{
 		LastTurnTeam = TurnTeam;
+		if (TurnTeam == eTeam_XCom)
+		{
+			class'X2TC_CoopOwnership'.static.LogSquadState("XCOM turn starts");
+		}
 		if (bGuestReady)
 		{
 			bGuestReady = false;
@@ -907,9 +1001,9 @@ function KeepHostSelectionOwn()
 	}
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
-		if (class'X2TC_CoopOwnership'.static.IsOwnableSoldier(UnitState) && !UnitState.IsIncapacitated()
+		if (class'X2TC_CoopOwnership'.static.IsOwnableSoldier(UnitState)
 			&& class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_HOST
-			&& UnitState.NumAllActionPoints() > 0 && TacticalController.Visualizer_SelectUnit(UnitState))
+			&& class'X2TC_CoopOwnership'.static.UnitCanAct(UnitState) && TacticalController.Visualizer_SelectUnit(UnitState))
 		{
 			if (LastHostSkippedUnitID != ActiveUnit.ObjectID)
 			{
@@ -928,6 +1022,7 @@ function KeepHostSelectionOwn()
 		bHostLocked = true;
 		TacticalController.SetInputState('Multiplayer_Inactive');
 		`log("Coop owners: host input locked (only P2's soldiers can act; unit" @ ActiveUnit.ObjectID @ "selected; input state" @ TacticalController.GetInputState() $ ")", , 'X2TC');
+		class'X2TC_CoopOwnership'.static.LogSquadState("host locked");
 		class'X2TC_CoopTurnUI'.static.SetStatusText("Your soldiers are done; your partner's turn");
 	}
 	else if (TacticalController.GetInputState() != 'Multiplayer_Inactive')
@@ -966,7 +1061,7 @@ function bool HostCycleOwnSoldier(int Direction)
 	class'X2TC_CoopOwnership'.static.GetSquad(Squad);
 	for (i = 0; i < Squad.Length; i++)
 	{
-		if (!Squad[i].IsIncapacitated() && Squad[i].NumAllActionPoints() > 0
+		if (class'X2TC_CoopOwnership'.static.UnitCanAct(Squad[i])
 			&& class'X2TC_CoopOwnership'.static.GetOwner(Squad[i]) == class'X2TC_CoopOwnership'.const.OWNER_HOST)
 		{
 			Own.AddItem(Squad[i]);
@@ -1300,13 +1395,14 @@ function bool GetSetting(int Index)
 		case SETTING_OWNERSHIP: return bOwnershipOn;
 		case SETTING_PARTNER_END_TURN: return bPartnerMayEndTurn;
 		case SETTING_PARTNER_EDIT: return bPartnerMayEdit;
+		case SETTING_NEW_FRAMES: return bNewFramesSync;
 	}
 	return false;
 }
 
 function string SettingsText()
 {
-	return "ownership=" $ bOwnershipOn @ "partner may end turn=" $ bPartnerMayEndTurn @ "partner may edit=" $ bPartnerMayEdit;
+	return "ownership=" $ bOwnershipOn @ "partner may end turn=" $ bPartnerMayEndTurn @ "partner may edit=" $ bPartnerMayEdit @ "new frames sync=" $ bNewFramesSync;
 }
 
 // The squad screen's owner change. Host: queued and applied when idle. Guest: sent to the
@@ -1407,10 +1503,18 @@ function RequestSetting(int Index, bool bValue, string Who)
 	{
 		return;
 	}
-	if (Who == "partner" && Index == SETTING_PARTNER_EDIT)
+	if (Who == "partner" && (Index == SETTING_PARTNER_EDIT || Index == SETTING_NEW_FRAMES))
 	{
-		`log("Coop settings: refused: only the host changes \"Partner may edit\"", , 'X2TC');
+		`log("Coop settings: refused: only the host changes setting" @ Index, , 'X2TC');
 		SendSettings();
+		return;
+	}
+	if (Index == SETTING_NEW_FRAMES && bGuestFollowing)
+	{
+		// Stage 8.1: switching mid-mission would leave the partial history's delta
+		// baseline (XComGameStateNetworkManager.uc L74) behind the guest's history.
+		`log("Coop settings: refused: SYNC: NEW FRAMES can only change before the partner joins", , 'X2TC');
+		RefreshSquadScreen();
 		return;
 	}
 	switch (Index)
@@ -1418,6 +1522,7 @@ function RequestSetting(int Index, bool bValue, string Who)
 		case SETTING_OWNERSHIP: bOwnershipOn = bValue; break;
 		case SETTING_PARTNER_END_TURN: bPartnerMayEndTurn = bValue; break;
 		case SETTING_PARTNER_EDIT: bPartnerMayEdit = bValue; break;
+		case SETTING_NEW_FRAMES: bNewFramesSync = bValue; break;
 		default: return;
 	}
 	`log("Coop settings: changed by" @ Who $ ":" @ SettingsText(), , 'X2TC');
@@ -1437,6 +1542,7 @@ function SendSettings()
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bOwnershipOn ? 1 : 0, Params);
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bPartnerMayEndTurn ? 1 : 0, Params);
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bPartnerMayEdit ? 1 : 0, Params);
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(bNewFramesSync ? 1 : 0, Params);
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_SETTINGS, Params);
 	`log("Coop settings: sent to the partner:" @ SettingsText(), , 'X2TC');
 }
@@ -1588,6 +1694,8 @@ function SendPing(XComGameStateNetworkManager NetworkMgr)
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(PingsSent, Params);
 	// Run 5 (0.3.8): the mod's version rides along, so a mismatched pair is caught at JOIN.
 	class'XComGameStateNetworkManager'.static.AddCommandParam_String(ModVersion(), Params);
+	// 0.6.2: this game's mods and DLC by name, sorted (ContentList).
+	class'XComGameStateNetworkManager'.static.AddCommandParam_String(ContentList(), Params);
 	NetworkMgr.SendRemoteCommand(CMD_PING, Params);
 	`log("Coop guest: ping" @ PingsSent @ "sent (version" @ ModVersion() $ ")", , 'X2TC');
 }
@@ -1597,7 +1705,7 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	local XComGameStateNetworkManager NetworkMgr;
 	local array<byte> Params, Reply;
 	local int Number;
-	local string OtherVersion, Reason;
+	local string OtherVersion, OtherContent, Reason;
 
 	if (Command == CMD_GUEST_MOVE)
 	{
@@ -1625,6 +1733,7 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 			bOwnershipOn = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0;
 			bPartnerMayEndTurn = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0;
 			bPartnerMayEdit = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0;
+			bNewFramesSync = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0;
 			`log("Coop settings: from the host:" @ SettingsText(), , 'X2TC');
 			class'X2TC_CoopTurnUI'.static.SetGuestEndTurnLabel(bPartnerMayEndTurn);
 			if (bPartnerMayEndTurn && bReadySent)
@@ -1656,6 +1765,16 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 			{
 				RequestSetting(Number, class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params) != 0, "partner");
 			}
+		}
+		return;
+	}
+
+	if (Command == CMD_MISSION_END_SHOWN)
+	{
+		if (Role == eCoopRole_Host && bMissionEnded && MissionEndAckedSecond < 0)
+		{
+			MissionEndAckedSecond = Seconds;
+			`log("Coop mission end (host): the guest shows \"mission over\"; closing in" @ MISSION_END_DISCONNECT_SECONDS $ "s", , 'X2TC');
 		}
 		return;
 	}
@@ -1723,7 +1842,13 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
 		if (Role == eCoopRole_Host)
 		{
-			`log("Coop host: partial history" @ PartialSends @ "acknowledged after" @ (Seconds - PartialSentSecond) $ "s; guest frames=" $ Number @ "sent frames=" $ PartialSentFrames @ "match=" $ (Number == PartialSentFrames), , 'X2TC');
+			// Stage 8.1: with new-frames sync the guest answers each frame; the batch is
+			// done when the guest has all of it.
+			if (bNewFramesSync && Number < PartialSentFrames)
+			{
+				return;
+			}
+			`log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "acknowledged after" @ (Seconds - PartialSentSecond) $ "s; guest frames=" $ Number @ "sent frames=" $ PartialSentFrames @ "match=" $ (Number == PartialSentFrames), , 'X2TC');
 			bPartialInFlight = false;
 		}
 		return;
@@ -1747,20 +1872,32 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	Params = RawParams;
 	Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
 
-	// Both carry the sender's mod version after the number (empty from builds before 0.3.8).
+	// Both carry the sender's mod version after the number (empty from builds before 0.3.8),
+	// and from 0.6.2 its mods and DLC by name.
 	OtherVersion = class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params);
+	OtherContent = class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params);
 
 	if (Command == CMD_PING)
 	{
 		NetworkMgr = `XCOMNETMANAGER;
 		class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Number, Reply);
 		class'XComGameStateNetworkManager'.static.AddCommandParam_String(ModVersion(), Reply);
+		class'XComGameStateNetworkManager'.static.AddCommandParam_String(ContentList(), Reply);
 		NetworkMgr.SendRemoteCommand(CMD_PONG, Reply);
 		bVersionMismatch = (OtherVersion != ModVersion());
+		bContentMismatch = (OtherContent != ContentList());
 		`log("Coop" @ RoleName() $ ": ping" @ Number @ "received (guest version" @ OtherVersion $ ", mine" @ ModVersion() $ "), pong sent", , 'X2TC');
 		if (bVersionMismatch)
 		{
 			`log("Coop host: VERSION MISMATCH: the guest runs" @ OtherVersion @ "and this PC" @ ModVersion() $ "; the history will not be sent", , 'X2TC');
+		}
+		else if (bContentMismatch)
+		{
+			`log("Coop host: CONTENT MISMATCH (mods or DLC by name):" @ ContentDifference(ContentList(), OtherContent, "host", "guest") $ "; the history will not be sent", , 'X2TC');
+		}
+		else
+		{
+			`log("Coop host: mods and DLC match the guest's (by name, any order):" @ ContentList(), , 'X2TC');
 		}
 	}
 	else
@@ -1777,13 +1914,121 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 					`log("Coop guest: VERSION MISMATCH: the host runs" @ OtherVersion @ "and this PC" @ ModVersion() $ "; not joining", , 'X2TC');
 					ShowGuestMessage("CO-OP: VERSION MISMATCH", "This PC runs X2TacticalCoop" @ ModVersion() @ "and the host runs" @ OtherVersion $ ". Install the same build on both and join again.");
 				}
+				else if (OtherContent != ContentList())
+				{
+					// 0.6.2: the same mods and DLC are needed (by name; order doesn't matter).
+					bContentMismatch = true;
+					`log("Coop guest: CONTENT MISMATCH (mods or DLC by name):" @ ContentDifference(OtherContent, ContentList(), "host", "guest") $ "; not joining", , 'X2TC');
+					ShowGuestMessage("CO-OP: DIFFERENT MODS OR DLC", "Both games need the same mods and DLC (the order doesn't matter). " $ ContentDifference(OtherContent, ContentList(), "Host", "This PC") $ ".");
+				}
 				else
 				{
+					`log("Coop guest: mods and DLC match the host's (by name, any order)", , 'X2TC');
 					RequestHistory();
 				}
 			}
 		}
 	}
+}
+
+// 0.6.2: this game's installed mods and DLC by name, sorted so the load order doesn't
+// matter: "mod:A,mod:B,dlc:C,...". The same lists the game hashes for its own checks
+// (Helpers.GetInstalledModNames / GetInstalledDLCNames L103-104), not hashed.
+static function string ContentList()
+{
+	local array<string> Items, Names;
+	local int i;
+
+	Names = class'Helpers'.static.GetInstalledModNames();
+	for (i = 0; i < Names.Length; i++)
+	{
+		Items.AddItem("mod:" $ Names[i]);
+	}
+	Names = class'Helpers'.static.GetInstalledDLCNames();
+	for (i = 0; i < Names.Length; i++)
+	{
+		Items.AddItem("dlc:" $ Names[i]);
+	}
+	SortStrings(Items);
+	return JoinStrings(Items, ",");
+}
+
+static function SortStrings(out array<string> Items)
+{
+	local int i, j;
+	local string Swap;
+
+	for (i = 0; i < Items.Length; i++)
+	{
+		for (j = i + 1; j < Items.Length; j++)
+		{
+			if (Caps(Items[j]) < Caps(Items[i]))
+			{
+				Swap = Items[i];
+				Items[i] = Items[j];
+				Items[j] = Swap;
+			}
+		}
+	}
+}
+
+static function string JoinStrings(array<string> Items, string Separator)
+{
+	local string Text;
+	local int i;
+
+	for (i = 0; i < Items.Length; i++)
+	{
+		if (i > 0)
+		{
+			Text $= Separator;
+		}
+		Text $= Items[i];
+	}
+	return Text;
+}
+
+// 0.6.2: what one list has and the other doesn't, e.g. "Host only: mod:X; This PC only:
+// dlc:Y" (names of mods and DLC, not personal data).
+static function string ContentDifference(string ListA, string ListB, string NameA, string NameB)
+{
+	local array<string> A, B, OnlyA, OnlyB;
+	local int i;
+	local string Text;
+
+	ParseStringIntoArray(ListA, A, ",", true);
+	ParseStringIntoArray(ListB, B, ",", true);
+	for (i = 0; i < A.Length; i++)
+	{
+		if (B.Find(A[i]) == INDEX_NONE)
+		{
+			OnlyA.AddItem(A[i]);
+		}
+	}
+	for (i = 0; i < B.Length; i++)
+	{
+		if (A.Find(B[i]) == INDEX_NONE)
+		{
+			OnlyB.AddItem(B[i]);
+		}
+	}
+	if (OnlyA.Length > 0)
+	{
+		Text = NameA @ "only:" @ JoinStrings(OnlyA, ", ");
+	}
+	if (OnlyB.Length > 0)
+	{
+		if (Text != "")
+		{
+			Text $= "; ";
+		}
+		Text $= NameB @ "only:" @ JoinStrings(OnlyB, ", ");
+	}
+	if (Text == "")
+	{
+		Text = "the lists differ (empty list from an older build?)";
+	}
+	return Text;
 }
 
 // The mod's version (X2DownloadableContentInfo_X2TacticalCoop.X2TC_VERSION).
@@ -1857,6 +2102,8 @@ function OnGuestLeaveDialog(name eAction)
 // here would run the campaign cleanup on the guest's copy).
 function OnGuestMissionEnd(int Frame)
 {
+	local array<byte> NoParams;
+
 	if (bMissionEnded)
 	{
 		return;
@@ -1870,6 +2117,12 @@ function OnGuestMissionEnd(int Frame)
 		bBannerShown = false;
 		ShownBannerText = "";
 		class'X2TC_CoopTurnUI'.static.HideBanner();
+	}
+	// 0.6.3: tell the host the dialog is up, so it can close the session now.
+	NoParams.Length = 0;
+	if (`XCOMNETMANAGER.Connections.Length > 0)
+	{
+		`XCOMNETMANAGER.SendRemoteCommand(CMD_MISSION_END_SHOWN, NoParams);
 	}
 	ShowGuestLeaveDialog("CO-OP: MISSION OVER", MissionResultText() $ ". The results stay in the host's campaign. This game returns to the main menu.");
 }
@@ -1901,9 +2154,9 @@ function SendHistoryToGuest()
 		`log("Coop host: history already sent; ignoring the request", , 'X2TC');
 		return;
 	}
-	if (bVersionMismatch)
+	if (bVersionMismatch || bContentMismatch)
 	{
-		`log("Coop host: history request refused: version mismatch (see the ping line)", , 'X2TC');
+		`log("Coop host: history request refused: version or content mismatch (see the ping line)", , 'X2TC');
 		return;
 	}
 
@@ -2138,13 +2391,58 @@ function bool HasHostSoldierAction(int FromFrame, int ToFrame)
 	return false;
 }
 
+// Guest (Stage 8.1): a single frame from the host (SendGameState). Logs whether the game's
+// own network code put it into this history at its index; acknowledges with the frame
+// count, as for a partial history. Whether the follower then replays it is seen from its
+// "replayed to frame" lines. (Plan default 2: if the frame isn't added, the mod does NOT
+// add it itself; the run stops there.)
+function OnReceiveGameState(XComGameState GameState)
+{
+	local XComGameStateHistory History;
+	local array<byte> Params;
+	local int Frames, Index;
+	local bool bInPlace;
+
+	History = `XCOMHISTORY;
+	Frames = History.GetNumGameStates();
+	NewFramesReceived++;
+	Index = -1;
+	if (GameState != none)
+	{
+		Index = GameState.HistoryIndex;
+	}
+	bInPlace = Index >= 0 && Index < Frames && History.GetGameStateFromHistory(Index) == GameState;
+	if (!bInPlace)
+	{
+		NewFramesMisplaced++;
+	}
+	// Every frame for the first 20, then every 25th, and every misplaced one.
+	if (NewFramesReceived <= 20 || NewFramesReceived % 25 == 0 || !bInPlace)
+	{
+		`log("Coop" @ RoleName() $ ": new frame" @ NewFramesReceived @ "received: its index" @ Index $ ", history frames=" $ Frames $ ", in the history at its index=" $ bInPlace @ "(misplaced so far:" @ NewFramesMisplaced $ ")", , 'X2TC');
+	}
+	if (Role != eCoopRole_Guest)
+	{
+		return;
+	}
+	GuestExpectedFrames = Frames;
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Frames, Params);
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_HISTORY_RECEIVED, Params);
+	// As for partial histories: the banner for the host's actions, the squad screen.
+	if (Frames - 1 >= 0 && HasHostSoldierAction(Frames - 1, Frames - 1))
+	{
+		ShowBanner("the host's soldier acted, frame" @ (Frames - 1));
+	}
+	RefreshSquadScreen();
+}
+
 // Host (Stage 4): send the new frames if there are any, one send at a time, not while
 // the ruleset is building a game state on another thread (the multiplayer ruleset waits
 // for the same, X2TacticalMPGameRuleset.uc L1352-1356).
 function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 {
 	local X2TacticalGameRuleset Rules;
-	local int Frames, BytesBefore, BunchesBefore, Bytes, Bunches;
+	local int Frames, BytesBefore, BunchesBefore, Bytes, Bunches, i;
 
 	if (bPartialInFlight)
 	{
@@ -2169,14 +2467,26 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 	}
 
 	CountOutData(NetworkMgr, BytesBefore, BunchesBefore);
-	NetworkMgr.SendPartialHistory(`XCOMHISTORY, `XEVENTMGR);
+	if (bNewFramesSync)
+	{
+		// Stage 8.1: only the new frames, each with its history index
+		// (XComGameStateNetworkManager.SendGameState L338).
+		for (i = LastSentFrames; i < Frames; i++)
+		{
+			NetworkMgr.SendGameState(`XCOMHISTORY.GetGameStateFromHistory(i), i);
+		}
+	}
+	else
+	{
+		NetworkMgr.SendPartialHistory(`XCOMHISTORY, `XEVENTMGR);
+	}
 	CountOutData(NetworkMgr, Bytes, Bunches);
 
 	PartialSends++;
 	bPartialInFlight = true;
 	PartialSentSecond = Seconds;
 	PartialSentFrames = Frames;
-	`log("Coop host: partial history" @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
+	`log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
 	LastSentFrames = Frames;
 }
 
@@ -2254,6 +2564,7 @@ function HostScanTurns()
 			MissionEndFrame = EndFrame;
 			MissionEndSecond = Seconds;
 			MissionEndAckedSecond = -1;
+			bMissionEndFrameAcked = false;
 			`log("Coop mission end (host): end-of-battle frame" @ EndFrame $ "," @ MissionResultText() $ "; sending it to the guest, then closing the co-op session", , 'X2TC');
 		}
 		HostTurnScanFrame = LastFrame;
@@ -2313,12 +2624,16 @@ function HostCheckMissionEnd()
 	{
 		return;
 	}
-	if (MissionEndAckedSecond < 0 && bGuestFollowing && !bPartialInFlight && LastSentFrames > MissionEndFrame)
+	if (!bMissionEndFrameAcked && bGuestFollowing && !bPartialInFlight && LastSentFrames > MissionEndFrame)
 	{
-		MissionEndAckedSecond = Seconds;
-		`log("Coop mission end (host): the guest has the end frame (sent frames" @ LastSentFrames $ "); closing in" @ MISSION_END_DISCONNECT_SECONDS $ "s", , 'X2TC');
+		bMissionEndFrameAcked = true;
+		`log("Coop mission end (host): the guest has the end frame (sent frames" @ LastSentFrames $ "); waiting for its \"mission over\" dialog (up to" @ MISSION_END_MAX_SECONDS $ "s)", , 'X2TC');
 	}
-	if (MissionEndAckedSecond >= 0 && Seconds - MissionEndAckedSecond >= MISSION_END_DISCONNECT_SECONDS)
+	if (!bGuestFollowing && MissionEndAckedSecond < 0)
+	{
+		HostEndSession("mission over, the guest already left");
+	}
+	else if (MissionEndAckedSecond >= 0 && Seconds - MissionEndAckedSecond >= MISSION_END_DISCONNECT_SECONDS)
 	{
 		HostEndSession("mission over, guest informed");
 	}
@@ -2415,14 +2730,28 @@ function OnAcceptedConnection(int ConnectionIdx)
 
 function OnConnectionClosed(int ConnectionIdx)
 {
+	local XComTacticalGRI TacticalGRI;
+	local X2TC_CoopReplayMgr Follower;
+
 	`log("Coop" @ RoleName() $ ": connection closed (connection" @ ConnectionIdx $ ")", , 'X2TC');
 	// 0.5.3: the guest in a mission lost the host (the host quit, crashed or closed the
 	// session): tell the player and offer the way back to the main menu.
 	if (Role == eCoopRole_Guest && bFollowerInstalled)
 	{
+		TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
+		if (TacticalGRI != none)
+		{
+			Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+		}
 		if (bMissionEnded)
 		{
 			`log("Coop mission end (guest): the host closed the session after the mission (expected)", , 'X2TC');
+		}
+		else if (Follower != none && Follower.MissionEndFrameSeen >= 0)
+		{
+			// 0.6.3: the replay already passed the end of the battle; "mission over"
+			// follows once its last animations finish (CheckMissionEnd).
+			`log("Coop mission end (guest): the host closed the session after the end frame; showing \"mission over\" when the replay is done", , 'X2TC');
 		}
 		else
 		{
@@ -2585,6 +2914,8 @@ function TryApplyGuestAbility()
 	local AvailableAction Action;
 	local int i, ActionIndex, TargetIndex, FramesBefore;
 	local string BusyReason;
+	local XComGameState_Ability AbilityState;
+	local AvailableTarget AreaTarget;
 
 	Rules = `TACTICALRULES;
 	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(PendingAbilitySourceID));
@@ -2676,6 +3007,30 @@ function TryApplyGuestAbility()
 	else if (Action.AvailableTargets.Length > 0)
 	{
 		TargetIndex = 0;
+	}
+
+	// 0.6.3 (Stage 7 Run 2: the friend's rocket damaged terrain but no unit): for an
+	// ability aimed at a location, the units in its area are "additional targets" that the
+	// aiming screen works out on the player's machine (XComGameStateContext_Ability.uc
+	// L1489-1500 reads them from the action). The host works them out itself from the
+	// ability's own area rules (XComGameState_Ability.GatherAdditionalAbilityTargetsForLocation
+	// L412-434), so the host's state decides who is hit.
+	if (PendingAbilityTargetID <= 0 && PendingAbilityLocations.Length > 0)
+	{
+		AbilityState = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(AbilityRef.ObjectID));
+		if (AbilityState != none && AbilityState.GetMyTemplate() != none && AbilityState.GetMyTemplate().AbilityMultiTargetStyle != none)
+		{
+			if (TargetIndex < 0)
+			{
+				Action.AvailableTargets.Length = 1;
+				TargetIndex = 0;
+			}
+			AreaTarget = Action.AvailableTargets[TargetIndex];
+			AreaTarget.AdditionalTargets.Length = 0;
+			AbilityState.GatherAdditionalAbilityTargetsForLocation(PendingAbilityLocations[0], AreaTarget);
+			Action.AvailableTargets[TargetIndex] = AreaTarget;
+			`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "aimed at a location: the host found" @ AreaTarget.AdditionalTargets.Length @ "units in its area", , 'X2TC');
+		}
 	}
 
 	FramesBefore = `XCOMHISTORY.GetNumGameStates();
@@ -2929,6 +3284,9 @@ function ResetSession()
 	bOwnershipOn = true;
 	bPartnerMayEndTurn = false;
 	bPartnerMayEdit = false;
+	bNewFramesSync = false;
+	NewFramesReceived = 0;
+	NewFramesMisplaced = 0;
 	PendingOwnerUnitIDs.Length = 0;
 	PendingOwnerValues.Length = 0;
 	LastOwnActionUnitID = 0;
@@ -2939,10 +3297,13 @@ function ResetSession()
 	bMissionEnded = false;
 	MissionEndFrame = -1;
 	MissionEndAckedSecond = -1;
+	bMissionEndFrameAcked = false;
 	bMissionDialogShown = false;
 	HostTurnScanFrame = 0;
 	PartialSends = 0;
 	// Stage 7 (DestroySteamGame runs before this where a session existed).
+	RestoreStockInviteHandler("session reset");
+	bContentMismatch = false;
 	bSteamSession = false;
 	bSteamGameCreated = false;
 	bSteamInviteArmed = false;

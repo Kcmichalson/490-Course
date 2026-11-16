@@ -20,7 +20,7 @@
 //    XComGame\Classes\X2GameRuleset.uc       (SubmitGameState L657)
 //---------------------------------------------------------------------------------------
 
-class X2TC_CoopOwnership extends Object dependson(X2TacticalGameRulesetDataStructures);
+class X2TC_CoopOwnership extends Object dependson(X2TacticalGameRulesetDataStructures, X2GameRuleset);
 
 const OWNER_VALUE = 'X2TC_Owner';
 const OWNER_HOST = 1;   // P1
@@ -132,11 +132,57 @@ static function bool PlayerHasActions(int Owner)
 
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
-		if (IsOwnableSoldier(UnitState) && !UnitState.IsIncapacitated()
-			&& GetOwner(UnitState) == Owner && UnitState.NumAllActionPoints() > 0)
+		if (IsOwnableSoldier(UnitState) && GetOwner(UnitState) == Owner && UnitCanAct(UnitState))
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+// 0.6.3 (Stage 7 Run 2): whether a soldier can do anything now, the way the game decides
+// whether a unit still has actions (the ruleset's unit cache, bAnyActionsAvailable,
+// X2GameRuleset.uc L70). Action points alone counted a soldier bound by a Viper as able to
+// act (Kc: no banner while both his soldiers were bound). Falls back to action points.
+static function bool UnitCanAct(XComGameState_Unit UnitState)
+{
+	local GameRulesCache_Unit UnitCache;
+	local X2TacticalGameRuleset Rules;
+
+	if (UnitState == none || UnitState.IsIncapacitated() || UnitState.NumAllActionPoints() <= 0)
+	{
+		return false;
+	}
+	Rules = `TACTICALRULES;
+	if (Rules != none && Rules.GetGameRulesCache_Unit(UnitState.GetReference(), UnitCache))
+	{
+		return UnitCache.bAnyActionsAvailable;
+	}
+	return true;
+}
+
+// 0.6.3 (Stage 7 Run 2): every soldier's state, logged by the host at each XCOM turn
+// start (Kc's last soldier never got actions back after a Viper's bind; this shows why
+// next time): owner, action points, can act, incapacitated, panicked, and its effects.
+static function LogSquadState(string Why)
+{
+	local array<XComGameState_Unit> Squad;
+	local XComGameState_Unit UnitState;
+	local string Effects;
+	local int i, j;
+
+	GetSquad(Squad);
+	for (i = 0; i < Squad.Length; i++)
+	{
+		UnitState = Squad[i];
+		Effects = "";
+		for (j = 0; j < UnitState.AffectedByEffectNames.Length; j++)
+		{
+			Effects $= (j > 0 ? "," : "") $ UnitState.AffectedByEffectNames[j];
+		}
+		`log("Coop squad state (" $ Why $ "): unit" @ UnitState.ObjectID @ OwnerText(GetOwner(UnitState))
+			@ "AP=" $ UnitState.NumAllActionPoints() @ "can act=" $ UnitCanAct(UnitState)
+			@ "incapacitated=" $ UnitState.IsIncapacitated() @ "panicked=" $ UnitState.bPanicked
+			@ "effects=" $ (Effects == "" ? "none" : Effects), , 'X2TC');
+	}
 }

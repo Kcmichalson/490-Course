@@ -33,6 +33,42 @@ build ID on both PCs (`steamapps\appmanifest_268500.acf`, `buildid`).
   - the guest's Backspace/End;
   - mission end and HOST DISCONNECTED handled.
 
+## Run 1 result and 0.6.2 (2026-11-15)
+Run 1 (0.6.0): the PC's Steam hosting worked. The friend's invite was
+refused by the game's own check ("game versions are different") because
+the mod load order differs (X2TacticalCoop first on the friend's PC).
+Ticking in a different order in AML doesn't change it (tested on Kc's PC).
+Also, the guest's armed state was lost (fixed in 0.6.1).
+
+**0.6.2:**
+- After CO-OP: JOIN (STEAM), the game's own invite check is switched off
+  until the co-op invite arrives.
+- The mod then compares both games' mods and DLC **by name, in any order**,
+  at the ping. A real difference stops the join with **CO-OP: DIFFERENT
+  MODS OR DLC**, naming what differs.
+- Normal multiplayer invites keep the game's check.
+
+For the retry, start Part C at step 6 with 0.6.2 on both PCs (menus read
+v0.6.2).
+
+## Run 2 result and Run 3 (0.6.3)
+**Run 2 (0.6.2):** Steam connection over the internet worked, and a full
+mission was played (14 turns). Fixed in 0.6.3:
+- mission end (MISSION OVER instead of host disconnected);
+- rockets and grenades the friend aims at a spot now damage units;
+- the banner and lock treat bound soldiers as unable to act;
+- extra per-soldier logging at each turn start.
+
+Possibly fixed (a guess): cover icons and the move range on the guest.
+
+**Run 3:** the same steps from step 6, with 0.6.3 on both, plus:
+- the friend fires a rocket or grenade at enemies: they should take
+  damage;
+- if a Viper binds a soldier, note the clock time, and whether the banner
+  and selection behave; note again when it's freed;
+- the friend: are cover icons and the move range there now?
+- at mission end, the friend should see **CO-OP: MISSION OVER**.
+
 ## Part A: setup (before the session)
 1. **Kc:** build, then package **0.6.0**:
    ```

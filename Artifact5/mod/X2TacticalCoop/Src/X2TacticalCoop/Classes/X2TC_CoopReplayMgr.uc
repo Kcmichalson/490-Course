@@ -446,6 +446,14 @@ function ApplyFreshPawn(XComTacticalController TacticalController)
 		if (FreshPawn == none)
 		{
 			FreshPawn = TacticalController.Spawn(class'XComPathingPawn');
+			// 0.6.3 (Stage 7 Run 2: no cover icons or move-range border on the guest): the
+			// game registers its own pawn for events when the battle starts
+			// (X2TacticalGameRuleset.uc L386); do the same for this one. Whether that
+			// brings the cover and range display back is a guess for the next run.
+			if (FreshPawn != none)
+			{
+				FreshPawn.InitEvents();
+			}
 		}
 		if (FreshPawn == none || TacticalController.m_kPathingPawn == FreshPawn)
 		{
@@ -689,11 +697,11 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 	}
 	ActiveUnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
 	// Stage 6: also move off a P1 soldier (the game may select one by itself).
-	if (ActiveUnitState == none || (ActiveUnitState.NumAllActionPoints() > 0 && GuestMayControl(ActiveUnitState)))
+	if (ActiveUnitState == none || (class'X2TC_CoopOwnership'.static.UnitCanAct(ActiveUnitState) && GuestMayControl(ActiveUnitState)))
 	{
 		return;
 	}
-	if (ActiveUnitState.ObjectID == LastSkipFromUnitID && ActiveUnitState.NumAllActionPoints() > 0)
+	if (ActiveUnitState.ObjectID == LastSkipFromUnitID && class'X2TC_CoopOwnership'.static.UnitCanAct(ActiveUnitState))
 	{
 		return; // already tried to move off this P1 soldier; no P2 soldier could be selected
 	}
@@ -706,7 +714,7 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 			return;
 		}
 		UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
-		if (UnitState != none && UnitState.NumAllActionPoints() > 0)
+		if (UnitState != none && class'X2TC_CoopOwnership'.static.UnitCanAct(UnitState))
 		{
 			`log("Coop follower: unit" @ ActiveUnitState.ObjectID @ "is P1's or has no actions left; selected unit" @ UnitState.ObjectID, , 'X2TC');
 			return;

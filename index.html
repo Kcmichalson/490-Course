@@ -539,13 +539,13 @@
         <div class="sleeve">Artifact 4</div>
       </div>
 
-      <!-- Artifact 5: Placeholder -->
+      <!-- Artifact 5: X2 Tactical Co-op -->
       <div class="artifact-slot" data-bg="idea5">
         <div class="card">
-          <div class="card-title">TITLE</div>
+          <div class="card-title">X2 Tactical Co-op</div>
           <div class="card-subtitle">Artifact 5: The Moonshot</div>
           <div class="card-desc">
-            A multiplayer mod for a popular strategy game that does not natively have multiplayer support.
+            A networked co-op mod for XCOM 2: War of the Chosen where two players each run their own game and play the same mission together.
           </div>
           <button class="card-btn inspect-trigger" data-artifact="5">Inspect</button>
         </div>
@@ -594,7 +594,7 @@
           <!-- Artifact 3 shares the Artifact 2 file, starting at its "Artifact 3: climate companion" entry -->
           <a class="nav-btn" href="https://github.com/Kcmichalson/490-Course/blob/main/Artifact2/LOG.md#2026-10-25--artifact-3-climate-companion" target="_blank" rel="noopener">Artifact 3</a>
           <a class="nav-btn" href="https://github.com/Kcmichalson/490-Course/blob/main/Artifact4/LOG.md" target="_blank" rel="noopener">Artifact 4</a>
-          <span class="nav-btn log-none" title="No log yet">Artifact 5</span>
+          <a class="nav-btn" href="https://github.com/Kcmichalson/490-Course/blob/main/Artifact5/LOG.md" target="_blank" rel="noopener">Artifact 5</a>
         </div>
         <p class="log-note">
           Shelved alternate for Artifact 3:
@@ -771,9 +771,10 @@
       },
       5: {
         title: "Artifact 5: The Moonshot",
-        desc: "A multiplayer mod for a popular strategy game that does not natively have multiplayer support.",
-        reflection: "Placeholder idea.",
-        link: "#"
+        desc: "A networked co-op mod for XCOM 2: War of the Chosen, whose multiplayer Firaxis switched off in 2022. Each player runs their own copy of the game on their own PC: the host runs the mission, the partner’s game follows it live, and the partner’s orders are sent to the host and applied there, with no screen streaming.",
+        reflection: "Firaxis switched off XCOM 2’s multiplayer in 2022, but the code still ships with the game. I found the route into the multiplayer menu is blocked, but a different way of loading it (ClientTravel) works on the current build without the beta branch, and I played a full 1v1 with a friend that way. From there I built a direct connection and then Steam invites, and played a full mission with a friend over Steam. Each player controls their own soldiers, a blue FRIENDLY ACTION banner shows when the partner is acting, and only the host ends the turn, while the partner can signal they’re ready. I tested on my PC plus a laptop running Steam offline, with trace logging and a version check so mismatched builds can’t connect. I coordinated with the author of the community’s PvP multiplayer mod, who left campaign co-op to me, and shared progress on the XCOM 2 Modding Discord. I built it with Claude Code in the desktop app, using the official SDK, X2ModBuildCommon and the Community Highlander. Still to do: co-op in full campaign missions, polish, and more playtesting before the final deadline.",
+        link: "https://github.com/Kcmichalson/490-Course/tree/main/Artifact5",
+        videoLink: "https://drive.google.com/file/d/17Di8bRUcI5ABWVI6vpyTi9JvARXON2LF/view?usp=sharing"
       }
     };
 

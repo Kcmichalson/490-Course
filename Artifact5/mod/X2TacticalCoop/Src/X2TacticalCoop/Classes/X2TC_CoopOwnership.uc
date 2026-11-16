@@ -122,12 +122,18 @@ static function LogOwners()
 // True if any of the guest's soldiers can still act.
 static function bool GuestHasActions()
 {
+	return PlayerHasActions(OWNER_GUEST);
+}
+
+// True if any soldier of this owner (OWNER_HOST or OWNER_GUEST) can still act.
+static function bool PlayerHasActions(int Owner)
+{
 	local XComGameState_Unit UnitState;
 
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
 		if (IsOwnableSoldier(UnitState) && !UnitState.IsIncapacitated()
-			&& GetOwner(UnitState) == OWNER_GUEST && UnitState.NumAllActionPoints() > 0)
+			&& GetOwner(UnitState) == Owner && UnitState.NumAllActionPoints() > 0)
 		{
 			return true;
 		}

@@ -24,13 +24,14 @@ X2TacticalCoop/Src/X2TacticalCoop/Classes/  UnrealScript classes:
     X2TC_MPTraceListener                      M2 diagnostics: X2TC lines per screen, MP state, MP criteria
     X2TC_MatchTraceListener                   M2 diagnostics: X2TC lines for lobby state, tactical HUD, turns
     X2DownloadableContentInfo_X2TacticalCoop  DLC info: X2TC lines when templates are created (loaded, version)
-    X2TC_CoopSession                          M3: direct connection between two games (host server,
-                                              guest client), ping and pong by remote command
+    X2TC_CoopSession                          M3: the co-op connection (direct IP, or over Steam from
+                                              Stage 7), history, live follow, actions, ownership,
+                                              turn rules, mission end
     X2TC_CoopListener                         M3: CO-OP: HOST (tactical HUD, single player) and
                                               CO-OP: JOIN (main menu, address box) buttons
-    X2TC_CoopInput                            M3: the guest's M key, right-click and Tab; the host's
-                                              Backspace/End co-op End Turn check (an Interaction in
-                                              the game viewport)
+    X2TC_CoopInput                            M3: keys and clicks for co-op: M, right-click, left-click
+                                              select, Tab/H (next/previous soldier), Backspace/End
+                                              (co-op End Turn) (an Interaction in the game viewport)
     X2TC_CoopReplayMgr                        M3: the guest's replay manager (tutorial-style from
                                               Stage 5); follows the host's history, captures the
                                               guest's actions, switches the guest's input

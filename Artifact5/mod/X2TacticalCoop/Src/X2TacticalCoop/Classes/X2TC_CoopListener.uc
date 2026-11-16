@@ -15,7 +15,8 @@
 //  From Stage 6 both HUDs get CO-OP: END TURN (host: ends the turn, asking first while
 //  the partner's soldiers can act; guest: tells the host it is ready) and a status line
 //  (a UIText named X2TC_CoopStatus that X2TC_CoopTurnUI sets), and CO-OP: SQUAD, which
-//  opens X2TC_CoopSquadScreen.
+//  opens X2TC_CoopSquadScreen. Stage 7 (0.6.0): CO-OP: HOST (STEAM) on the host's HUD
+//  (then INVITE (STEAM)) and CO-OP: JOIN (STEAM) on the main menu.
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -49,6 +50,8 @@ event OnInit(UIScreen Screen)
 	if (UIShell(Screen) != none)
 	{
 		AddButton(Screen, 'X2TC_CoopJoinButton', "CO-OP: JOIN" @ VersionTag(), OnJoinClicked, 290);
+		// Stage 7: join over Steam (accept the host's Steam invite after clicking this).
+		AddButton(Screen, 'X2TC_CoopJoinSteamButton', "CO-OP: JOIN (STEAM)", OnJoinSteamClicked, 340);
 		`log("Coop: JOIN button added to" @ string(Screen.Class.Name), , 'X2TC');
 	}
 	else if (UITacticalHUD(Screen) != none && IsSinglePlayerTactical(Screen))
@@ -66,14 +69,12 @@ event OnInit(UIScreen Screen)
 			AddButton(Screen, 'X2TC_CoopMoveButton', "CO-OP: MOVE TO CURSOR (M)", OnMoveToCursorClicked, 360);
 			// Stage 6 (0.5.0): the guest's END TURN only tells the host it is ready.
 			AddButton(Screen, 'X2TC_CoopGuestEndTurn', "CO-OP: END TURN (READY)", OnGuestEndTurnClicked, 420);
-			// Run 9 (0.4.3): fix D, a freshly spawned pathing pawn, settled normal moves; its
-			// switch stays for comparison. Fixes A-C (Run 8) keep their defaults (A on, B
-			// and C off) without buttons from 0.5.0.
-			AddButton(Screen, 'X2TC_CoopFixD', "FIX D FRESH PAWN: ON", OnFixClicked, 470);
+			// Fixes A-D (Runs 8-9) keep their defaults (A and D on, B and C off) without
+			// buttons: from 0.5.3 fix D, the fresh pathing pawn, is permanent (Kc).
 			// The co-op squad screen (owners and settings; view only unless allowed).
-			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 520);
-			AddStatusText(Screen, 580);
-			`log("Coop: LEAVE, NEXT SOLDIER, MOVE, END TURN and FIX D buttons added to the guest's tactical HUD", , 'X2TC');
+			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 470);
+			AddStatusText(Screen, 530);
+			`log("Coop: LEAVE, NEXT SOLDIER, MOVE, END TURN and SQUAD buttons added to the guest's tactical HUD", , 'X2TC');
 		}
 		else
 		{
@@ -83,7 +84,9 @@ event OnInit(UIScreen Screen)
 			AddButton(Screen, 'X2TC_CoopHostEndTurn', "CO-OP: END TURN", OnHostEndTurnClicked, 310);
 			// The co-op squad screen: soldier owners and the co-op settings.
 			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 360);
-			AddStatusText(Screen, 420);
+			// Stage 7: host over Steam (private Steam session, then the invite overlay).
+			AddButton(Screen, 'X2TC_CoopHostSteamButton', "CO-OP: HOST (STEAM)", OnHostSteamClicked, 410);
+			AddStatusText(Screen, 470);
 			`log("Coop: HOST and END TURN buttons added to the tactical HUD", , 'X2TC');
 		}
 	}
@@ -153,6 +156,40 @@ function AddStatusText(UIScreen Screen, float Y)
 	StatusText.SetPosition(-340, Y);
 	StatusText.SetWidth(320);
 	StatusText.Hide();
+}
+
+// Stage 7, host: the first click starts hosting over Steam; later clicks reopen the Steam
+// invite overlay.
+function OnHostSteamClicked(UIButton Button)
+{
+	local X2TC_CoopSession Session;
+
+	PlayClickSound(Button);
+	Session = class'X2TC_CoopSession'.static.GetSession();
+	if (Session.IsHost() && Session.bSteamSession && Session.IsPollRunning())
+	{
+		`log("Coop: HOST (STEAM) clicked again; reopening the invite overlay", , 'X2TC');
+		Session.ShowSteamInvite();
+		return;
+	}
+	`log("Coop: HOST (STEAM) clicked", , 'X2TC');
+	if (Session.StartHostSteam())
+	{
+		Button.SetText("CO-OP: INVITE (STEAM)" @ VersionTag());
+	}
+}
+
+// Stage 7, guest: wait for the host's Steam invite.
+function OnJoinSteamClicked(UIButton Button)
+{
+	`log("Coop: JOIN (STEAM) clicked", , 'X2TC');
+	PlayClickSound(Button);
+	if (class'X2TC_CoopSession'.static.IsSessionActive())
+	{
+		`log("Coop: JOIN (STEAM) ignored: a co-op session is already running", , 'X2TC');
+		return;
+	}
+	class'X2TC_CoopSession'.static.GetSession().ArmSteamInvite();
 }
 
 // The co-op squad screen, on either machine.
@@ -229,45 +266,6 @@ function OnNextSoldierClicked(UIButton Button)
 		return;
 	}
 	Follower.SelectNextGuestUnit();
-}
-
-// Run 8: switch one of the follower's fixes; the button's name says which.
-function OnFixClicked(UIButton Button)
-{
-	local X2TC_CoopReplayMgr Follower;
-	local XComTacticalGRI TacticalGRI;
-	local bool bNow;
-
-	PlayClickSound(Button);
-	TacticalGRI = XComTacticalGRI(Button.WorldInfo.GRI);
-	if (TacticalGRI != none)
-	{
-		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
-	}
-	if (Follower == none)
-	{
-		`log("Coop: FIX clicked, but no follower", , 'X2TC');
-		return;
-	}
-	switch (Button.MCName)
-	{
-		case 'X2TC_CoopFixA':
-			bNow = Follower.ToggleFix('A');
-			Button.SetText("FIX A CACHE:" @ (bNow ? "ON" : "OFF"));
-			break;
-		case 'X2TC_CoopFixB':
-			bNow = Follower.ToggleFix('B');
-			Button.SetText("FIX B HISTORY:" @ (bNow ? "ON" : "OFF"));
-			break;
-		case 'X2TC_CoopFixC':
-			bNow = Follower.ToggleFix('C');
-			Button.SetText("FIX C WORLD:" @ (bNow ? "ON" : "OFF"));
-			break;
-		case 'X2TC_CoopFixD':
-			bNow = Follower.ToggleFix('D');
-			Button.SetText("FIX D FRESH PAWN:" @ (bNow ? "ON" : "OFF"));
-			break;
-	}
 }
 
 // Run 6: move the guest's selected soldier to the tile under the 3D cursor.

@@ -170,7 +170,7 @@ function RefreshRows()
 		SoldierRows[i].SetDisabled(!bCanEdit);
 	}
 
-	SettingRows[0].UpdateDataCheckbox("Soldier ownership (off: both players can move every soldier)", "", Session == none || Session.GetSetting(class'X2TC_CoopSession'.const.SETTING_OWNERSHIP), OnSettingCheckbox);
+	SettingRows[0].UpdateDataCheckbox("Soldier ownership", "", Session == none || Session.GetSetting(class'X2TC_CoopSession'.const.SETTING_OWNERSHIP), OnSettingCheckbox);
 	SettingRows[0].SetDisabled(!bCanEdit);
 	SettingRows[1].UpdateDataCheckbox("Partner may end the turn", "", Session != none && Session.GetSetting(class'X2TC_CoopSession'.const.SETTING_PARTNER_END_TURN), OnSettingCheckbox);
 	SettingRows[1].SetDisabled(!bCanEdit);

@@ -80,6 +80,11 @@ var name LastSeenInputState;
 var float LastAbilityTime; // its WorldInfo.RealTimeSeconds
 var array<name> LoggedTutorialCalls; // tutorial functions already logged once
 var int LastSkipFromUnitID; // Stage 6: the P1 soldier the selection last moved off (retried after new frames)
+var int MissionEndFrameSeen;     // 0.5.3: the end-of-battle frame the replay passed (-1 = none)
+var float MissionEndSeenTime;    // its WorldInfo.RealTimeSeconds
+var bool bMissionOver;           // "mission over" handed to the session; no more input
+
+const MISSION_END_WAIT_SECONDS = 8.0; // 0.5.3: longest wait for the visualizer after the end frame
 
 simulated event StartReplay(int SessionStartStateIndex)
 {
@@ -111,10 +116,53 @@ simulated event StartReplay(int SessionStartStateIndex)
 
 function ScanTurnBegins()
 {
+	local int EndFrame;
+
 	if (CurrentHistoryFrame > TurnScanFrame)
 	{
 		class'X2TC_CoopSession'.static.LogTurnBegins("guest", TurnScanFrame + 1, CurrentHistoryFrame);
+		// 0.5.3: the end of the battle, passed by the replay.
+		if (MissionEndFrameSeen < 0)
+		{
+			EndFrame = class'X2TC_CoopSession'.static.FindGameEndFrame(TurnScanFrame + 1, CurrentHistoryFrame);
+			if (EndFrame >= 0)
+			{
+				MissionEndFrameSeen = EndFrame;
+				MissionEndSeenTime = WorldInfo.RealTimeSeconds;
+				`log("Coop mission end (guest): the replay passed the end-of-battle frame" @ EndFrame @ "(replay frame" @ CurrentHistoryFrame $ ", history frames=" $ `XCOMHISTORY.GetNumGameStates() $ "); waiting for the visualizer", , 'X2TC');
+			}
+		}
 		TurnScanFrame = CurrentHistoryFrame;
+	}
+}
+
+// 0.5.3: once the end of the battle has been shown (caught up and the visualizer idle,
+// or MISSION_END_WAIT_SECONDS after it was passed), the guest's input goes off for good
+// and the session shows "mission over".
+function CheckMissionEnd()
+{
+	local X2TC_CoopSession Session;
+	local bool bIdle;
+
+	if (MissionEndFrameSeen < 0 || bMissionOver)
+	{
+		return;
+	}
+	bIdle = !bBehind && !class'XComGameStateVisualizationMgr'.static.VisualizerBusy();
+	if (!bIdle && WorldInfo.RealTimeSeconds - MissionEndSeenTime < MISSION_END_WAIT_SECONDS)
+	{
+		return;
+	}
+	bMissionOver = true;
+	`log("Coop mission end (guest): shown (idle=" $ bIdle $ ", waited" @ (WorldInfo.RealTimeSeconds - MissionEndSeenTime) $ "s)", , 'X2TC');
+	Session = class'X2TC_CoopSession'.static.FindGuestSession();
+	if (Session != none)
+	{
+		Session.OnGuestMissionEnd(MissionEndFrameSeen);
+	}
+	else
+	{
+		`log("Coop mission end (guest): no guest session to tell", , 'X2TC');
 	}
 }
 
@@ -149,6 +197,7 @@ state WaitForPlayerInput
 		}
 
 		UpdateGuestInput();
+		CheckMissionEnd();
 	}
 
 Begin:
@@ -187,7 +236,8 @@ function UpdateGuestInput()
 	// Run 2 it began during LoadTacticalGame, which then saw tutorial mode on and played
 	// the tutorial intro (X2TacticalGameRuleset.uc L3422-3437), and EndReplay did nothing
 	// there.
-	bWantPhase = IsXComTurn() && (bInputPhase || (!bBehind && Rules.IsInState('PerformingReplay')));
+	bWantPhase = IsXComTurn() && (bInputPhase || (!bBehind && Rules.IsInState('PerformingReplay')))
+		&& MissionEndFrameSeen < 0; // 0.5.3: no input after the end of the battle
 	// Run 4 (0.3.7): no EndReplay/ResumeReplay any more. In Run 3, EndReplay took the
 	// ruleset through TurnPhase_Begin, whose phase change is added straight to the history
 	// (BeginState_RulesAuthority, X2TacticalGameRuleset.uc L706-723, AddGameStateToHistory,
@@ -229,7 +279,8 @@ function UpdateGuestInput()
 		LogMoveState(TacticalController);
 	}
 
-	bWant = bInputPhase && !bBehind && !class'XComGameStateVisualizationMgr'.static.VisualizerBusy();
+	// 0.5.1: and only with a soldier to control (NO SOLDIERS ASSIGNED otherwise).
+	bWant = bInputPhase && !bBehind && !class'XComGameStateVisualizationMgr'.static.VisualizerBusy() && HasControllableSoldier();
 	if (bWant != bGuestInputOn)
 	{
 		SetGuestInput(TacticalController, bWant);
@@ -248,6 +299,76 @@ function bool GuestMayControl(XComGameState_Unit UnitState)
 		return true;
 	}
 	return class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_GUEST;
+}
+
+// 0.5.1: true if any living soldier is one the guest may control (Run 1: with none,
+// the input stayed on for a soldier given back to the host).
+function bool HasControllableSoldier()
+{
+	local array<XComGameState_Unit> Squad;
+	local int i;
+
+	class'X2TC_CoopOwnership'.static.GetSquad(Squad);
+	for (i = 0; i < Squad.Length; i++)
+	{
+		if (!Squad[i].IsIncapacitated() && GuestMayControl(Squad[i]))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+// 0.5.1: a left-click on a soldier selects it (Run 1: the game's own click-to-select is
+// off whenever a tutorial manager exists, XComTacticalInput.uc L2846). Uses the tile
+// under the 3D cursor; ignored over the HUD (XComInputBase.TestMouseConsumedByFlash L166)
+// and outside move mode. Returns true if a soldier was selected.
+function bool SelectUnitUnderCursor()
+{
+	local XComTacticalController TacticalController;
+	local XComInputBase InputBase;
+	local array<StateObjectReference> UnitRefs;
+	local XComGameState_Unit UnitState;
+	local vector CursorLocation;
+	local TTile CursorTile;
+	local int i;
+
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController == none || !bGuestInputOn || TacticalController.GetInputState() != GUEST_INPUT_STATE)
+	{
+		return false;
+	}
+	InputBase = XComInputBase(TacticalController.PlayerInput);
+	if (InputBase != none && InputBase.TestMouseConsumedByFlash())
+	{
+		return false;
+	}
+	CursorLocation = `CURSOR.Location;
+	if (!`XWORLD.GetFloorTileForPosition(CursorLocation, CursorTile))
+	{
+		CursorTile = `XWORLD.GetTileCoordinatesFromPosition(CursorLocation);
+	}
+	UnitRefs = `XWORLD.GetUnitsOnTile(CursorTile);
+	for (i = 0; i < UnitRefs.Length; i++)
+	{
+		UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(UnitRefs[i].ObjectID));
+		if (UnitState == none || UnitState.GetTeam() != eTeam_XCom
+			|| UnitState.ObjectID == TacticalController.GetActiveUnitStateRef().ObjectID)
+		{
+			continue;
+		}
+		if (!GuestMayControl(UnitState))
+		{
+			`log("Coop follower: clicked unit" @ UnitState.ObjectID @ "is P1's; not selected", , 'X2TC');
+			return false;
+		}
+		if (TacticalController.Visualizer_SelectUnit(UnitState))
+		{
+			`log("Coop follower: clicked unit" @ UnitState.ObjectID @ "selected (tile" @ TileText(CursorTile) $ ")", , 'X2TC');
+			return true;
+		}
+	}
+	return false;
 }
 
 // Stage 6: the guest's "ready to end the turn" lasts one XCOM turn.
@@ -727,18 +848,24 @@ function int SelectGuestUnit(XComTacticalController TacticalController, int Dire
 	return 0;
 }
 
-// For the guest's NEXT SOLDIER button (X2TC_CoopListener).
+// For the guest's NEXT SOLDIER button (X2TC_CoopListener) and Tab.
 function SelectNextGuestUnit()
+{
+	SelectGuestUnitStep(1);
+}
+
+// 0.5.3: the next (1) or previous (-1) soldier, during XCOM's input phase (H = previous).
+function SelectGuestUnitStep(int Direction)
 {
 	local XComTacticalController TacticalController;
 
 	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
 	if (TacticalController == none || !bInputPhase)
 	{
-		`log("Coop follower: NEXT SOLDIER ignored (input phase=" $ bInputPhase $ ")", , 'X2TC');
+		`log("Coop follower: soldier selection ignored (input phase=" $ bInputPhase $ ")", , 'X2TC');
 		return;
 	}
-	SelectGuestUnit(TacticalController, 1);
+	SelectGuestUnit(TacticalController, Direction);
 }
 
 // True during the XCOM player's turn, as the replay last saw it (StepReplayForward sets
@@ -899,4 +1026,5 @@ defaultproperties
 	bFixHistoryIndex=false
 	bFixWorldSync=false
 	bFixFreshPawn=true
+	MissionEndFrameSeen=-1
 }

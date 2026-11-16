@@ -12,6 +12,10 @@
 //  menu then opens the game's own accept-invite screen (UIMPShell_MainMenu.uc L95).
 //  If the game did not keep the invite, it only logs that.
 //
+//  Stage 7 (0.6.0): after the guest clicks CO-OP: JOIN (STEAM) (X2TC_CoopSession.
+//  ArmSteamInvite), the next accepted invite goes to X2TC_CoopSession.OnSteamInviteAccepted
+//  instead, and the multiplayer-menu travel is skipped while a co-op join is under way.
+//
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\UIScreenListener.uc      (OnInit)
 //    XComGame\Classes\XComOnlineEventMgr.uc    (OnGameInviteAccepted L3502-3591)
@@ -73,8 +77,19 @@ function RegisterForInvites()
 function OnInviteAccepted(const out OnlineGameSearchResult InviteResult, bool bWasSuccessful)
 {
 	local PlayerController LocalPC;
+	local X2TC_CoopSession Session;
 
 	`log("Invite accepted callback: success=" $ bWasSuccessful @ "has game settings=" $ (InviteResult.GameSettings != none), , 'X2TC');
+
+	// Stage 7: after CO-OP: JOIN (STEAM), the invite is a co-op invite; the session joins
+	// it, and the multiplayer-menu travel below is skipped.
+	Session = class'X2TC_CoopSession'.static.FindSession();
+	if (Session != none && Session.bSteamInviteArmed)
+	{
+		`log("Invite: co-op Steam invite (armed); handed to the co-op session", , 'X2TC');
+		Session.OnSteamInviteAccepted(InviteResult, bWasSuccessful);
+		return;
+	}
 
 	LocalPC = GetLocalPC();
 	if (LocalPC == none)
@@ -93,6 +108,15 @@ function CheckInvite()
 	local PlayerController LocalPC;
 	local bool bKept;
 	local name GameClassName;
+	local X2TC_CoopSession Session;
+
+	// Stage 7: a co-op Steam join is under way; leave the menu alone.
+	Session = class'X2TC_CoopSession'.static.FindSession();
+	if (Session != none && (Session.bSteamJoinStarted || Session.IsActive()))
+	{
+		`log("Invite check: co-op session joining or active; no multiplayer-menu travel", , 'X2TC');
+		return;
+	}
 
 	OnlineMgr = `ONLINEEVENTMGR;
 	LocalPC = GetLocalPC();

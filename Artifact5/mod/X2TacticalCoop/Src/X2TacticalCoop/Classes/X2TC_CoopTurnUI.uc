@@ -3,9 +3,10 @@
 //
 //  What it changes: three pieces of the co-op tactical screen (plans/m3-plan.md, Stage 6),
 //  as static helpers the session and the follower call:
-//    - the "FRIENDLY ACTION" banner: the game's own turn banner (UITurnOverlay), its blue
-//      XCOM-turn style with our text, shown while the other player's soldier acts; the
-//      stock texts are put back when it is hidden;
+//    - the blue banner: the game's own turn banner (UITurnOverlay), its XCOM-turn style
+//      with our text: "FRIENDLY ACTION" while the other player's soldier acts, and (from
+//      0.5.1) "NO SOLDIERS ASSIGNED" on the partner's screen while it has none; the stock
+//      texts are put back when it is hidden;
 //    - a small status line at the top right ("Partner is ready to end the turn",
 //      "Waiting for the host to end the turn"): a UIText the listener adds to the HUD;
 //    - the host's End Turn icon on the HUD, set disabled while the host should be asked
@@ -28,6 +29,7 @@
 class X2TC_CoopTurnUI extends Object dependson(UI_Definitions);
 
 const FRIENDLY_TEXT = "FRIENDLY ACTION";
+const NO_SOLDIERS_TEXT = "NO SOLDIERS ASSIGNED"; // Run 1 (Kc): the partner has none to control
 const STATUS_TEXT_NAME = 'X2TC_CoopStatus';
 const GUEST_END_TURN_NAME = 'X2TC_CoopGuestEndTurn'; // the listener's button name
 
@@ -67,24 +69,25 @@ static function UITurnOverlay GetOverlay()
 	return Pres.m_kTurnOverlay;
 }
 
-// The banner, in the blue XCOM-turn style with FRIENDLY_TEXT.
-static function ShowFriendlyBanner()
+// The blue XCOM-turn banner with our text (FRIENDLY_TEXT or NO_SOLDIERS_TEXT). It stays up
+// until HideBanner (UITurnOverlay.ShowXComTurn L283-295 has no timer of its own).
+static function ShowBanner(string Text)
 {
 	local UITurnOverlay Overlay;
 
 	Overlay = GetOverlay();
 	if (Overlay == none)
 	{
-		`log("Coop UI: no turn overlay for the FRIENDLY ACTION banner", , 'X2TC');
+		`log("Coop UI: no turn overlay for the" @ Text @ "banner", , 'X2TC');
 		return;
 	}
-	Overlay.SetDisplayText(Overlay.m_sAlienTurn, FRIENDLY_TEXT, Overlay.m_sOtherTurn, Overlay.m_sTheLostTurn, Overlay.m_sReflexAction, Overlay.m_sSpecialTurn, Overlay.m_sChosenTurn);
+	Overlay.SetDisplayText(Overlay.m_sAlienTurn, Text, Overlay.m_sOtherTurn, Overlay.m_sTheLostTurn, Overlay.m_sReflexAction, Overlay.m_sSpecialTurn, Overlay.m_sChosenTurn);
 	Overlay.ShowXComTurn();
-	`log("Coop UI: FRIENDLY ACTION banner shown", , 'X2TC');
+	`log("Coop UI:" @ Text @ "banner shown", , 'X2TC');
 }
 
 // Hides the banner and restores the overlay's own texts.
-static function HideFriendlyBanner()
+static function HideBanner()
 {
 	local UITurnOverlay Overlay;
 
@@ -95,7 +98,7 @@ static function HideFriendlyBanner()
 	}
 	Overlay.HideXComTurn();
 	Overlay.SetDisplayText(Overlay.m_sAlienTurn, Overlay.m_sXComTurn, Overlay.m_sOtherTurn, Overlay.m_sTheLostTurn, Overlay.m_sReflexAction, Overlay.m_sSpecialTurn, Overlay.m_sChosenTurn);
-	`log("Coop UI: FRIENDLY ACTION banner hidden", , 'X2TC');
+	`log("Coop UI: banner hidden", , 'X2TC');
 }
 
 // The status line at the top right ("" hides it).

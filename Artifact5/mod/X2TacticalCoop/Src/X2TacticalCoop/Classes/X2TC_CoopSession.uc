@@ -58,6 +58,14 @@
 //    XComGame\Classes\XGGameData.uc           (EPlayerEndTurnType L605)
 //    XComGame\Classes\UIDialogueBox.uc        (TDialogueBoxData, ActionCallback L69)
 //
+//  0.5.1-0.5.3 (Stage 6 runs): the host's input is locked while only P2's soldiers can
+//  act; the blue banner also says NO SOLDIERS ASSIGNED on the guest, and FRIENDLY ACTION
+//  to a player out of moves; Tab/H on the host cycle only its own soldiers; the guest
+//  sees why the host refused an action; at the end of the battle (eGameRule_TacticalGameEnd)
+//  the guest gets "mission over" and returns to the main menu, and the host closes the
+//  co-op session once the guest has the end frame. A host that loses the guest mid-
+//  mission plays on; a guest that loses the host is told and returns to the main menu.
+//
 //  One session per game: GetSession() looks it up by a fixed name in the transient
 //  package and creates it there the first time, the pattern the Highlander uses for its
 //  dependency objects (X2WOTCCH_ModDependencies.uc L102-110). A runtime default value
@@ -106,7 +114,7 @@
 //    Engine\Classes\PlayerController.uc       (bIgnoreNetworkMessages L214)
 //---------------------------------------------------------------------------------------
 
-class X2TC_CoopSession extends Object dependson(UIDialogueBox, XGGameData);
+class X2TC_CoopSession extends Object dependson(UIDialogueBox, XGGameData, X2MPData_Common);
 
 const COOP_PORT = 7777;
 
@@ -139,6 +147,12 @@ const SETTING_OWNERSHIP = 0;
 const SETTING_PARTNER_END_TURN = 1;
 const SETTING_PARTNER_EDIT = 2;
 const OWN_ACTION_SECONDS = 5.0;            // guest, ownership off: its own soldier's frames this soon after its order aren't "friendly"
+const REFUSAL_SECONDS = 4.0;               // guest (0.5.3): how long a refusal message stays in the status line
+// 0.5.3, mission end: the host closes its side this long after the guest has the
+// end-of-battle frame (so the guest sees "mission over", not "host disconnected"), or
+// after MISSION_END_MAX_SECONDS whatever happens.
+const MISSION_END_DISCONNECT_SECONDS = 5;
+const MISSION_END_MAX_SECONDS = 30;
 const MOVE_RETRY_SECONDS = 10;             // host: how long a move may wait for an idle ruleset
 const HITCH_SECONDS = 1.5;                 // both: a poll gap longer than this is logged
 const FAST_SEND_SECONDS = 0.2;             // host: how often new frames are checked for sending (Run 6)
@@ -224,6 +238,20 @@ var float BannerShownTime;     // both: WorldInfo.RealTimeSeconds when it came u
 var ETeam LastTurnTeam;        // host: whose turn it was at the last fast tick
 var int LastHostSkippedUnitID; // host: last guest-owned unit moved off the host's selection
 var bool bEndTurnIconDisabled; // host: we disabled the HUD's End Turn icon
+var string ShownBannerText;    // both: the banner text on screen ("" = none)
+var bool bHostLocked;          // host (0.5.1): input locked while only P2's soldiers can act
+var float RefusalShownTime;    // guest (0.5.3): when the refusal message went up (0 = none)
+var bool bMissionEnded;        // both (0.5.3): the end-of-battle frame was seen
+var int MissionEndFrame;       // both: its frame
+var int MissionEndSecond;      // host: Seconds when it was seen
+var int MissionEndAckedSecond; // host: Seconds when the guest had it (-1 = not yet)
+var bool bMissionDialogShown;  // guest: the "mission over" or "host left" dialog is up
+
+// Stage 7 (Steam).
+var bool bSteamSession;        // both: this session's connection uses steamsockets
+var bool bSteamGameCreated;    // both: a Steam 'Game' session was created or joined by us
+var bool bSteamInviteArmed;    // guest: the next accepted invite is a co-op invite
+var bool bSteamJoinStarted;    // guest: joining the host's Steam session
 
 // Co-op squad screen settings (host's; the guest keeps a copy from CMD_SETTINGS).
 var bool bOwnershipOn;         // owners enforced (default on)
@@ -288,20 +316,42 @@ function bool IsActive()
 	return Role != eCoopRole_None;
 }
 
-// Host: create a server on COOP_PORT. Returns false (and logs why) if it couldn't.
+// Host: create a server on COOP_PORT (direct IP). Returns false (and logs why) if it
+// couldn't.
 function bool StartHost()
 {
-	local XComGameStateNetworkManager NetworkMgr;
-	local URL ServerURL;
-	local string Error;
+	if (!PrepareToHost())
+	{
+		return false;
+	}
+	return StartHostServer(false);
+}
 
+// Host: closes a session left over from an earlier mission; false if hosting can't start.
+function bool PrepareToHost()
+{
+	local XComGameStateNetworkManager NetworkMgr;
+
+	NetworkMgr = `XCOMNETMANAGER;
+	// 0.5.3: a host session left over from an earlier mission: its poll timer died with
+	// that map's controller, so it isn't running here; close it first. (0.6.0: with two
+	// HOST buttons, a running timer means this mission is already hosting.)
+	if (Role == eCoopRole_Host && IsPollRunning())
+	{
+		`log("Coop host: already hosting in this mission (steam=" $ bSteamSession $ ")", , 'X2TC');
+		return false;
+	}
+	if (Role == eCoopRole_Host)
+	{
+		`log("Coop host: a co-op session from an earlier mission was still open (mission ended=" $ bMissionEnded $ ", following=" $ bGuestFollowing $ "); closing it first", , 'X2TC');
+		HostEndSession("new HOST in a new mission");
+	}
 	if (IsActive())
 	{
 		`log("Coop host: already started as" @ RoleName(), , 'X2TC');
 		return false;
 	}
 
-	NetworkMgr = `XCOMNETMANAGER;
 	if (NetworkMgr == none)
 	{
 		`log("Coop host: no network manager", , 'X2TC');
@@ -313,20 +363,37 @@ function bool StartHost()
 		`log("Coop host: the network manager already has a connection; not starting", , 'X2TC');
 		return false;
 	}
+	return true;
+}
 
+// Host: the server itself. Direct IP: a port and no options, as the LAN lobby does
+// (UIMPShell_Lobby.uc L502-513). Steam (Stage 7): the same plus "steamsockets", as the
+// lobby (L510) and the shell's StartNetworkGame (XComShellPresentationLayer.uc L1121-1129)
+// do for non-LAN games.
+function bool StartHostServer(bool bSteam)
+{
+	local XComGameStateNetworkManager NetworkMgr;
+	local URL ServerURL;
+	local string Error;
+
+	NetworkMgr = `XCOMNETMANAGER;
 	AddDelegates(NetworkMgr);
 
-	// As the LAN lobby does (UIMPShell_Lobby.uc L502-513): a port and no "steamsockets".
 	ServerURL.Port = COOP_PORT;
+	if (bSteam)
+	{
+		ServerURL.Op.AddItem("steamsockets");
+	}
 	NetworkMgr.CreateServer(ServerURL, Error);
 	if (Error != "")
 	{
-		`log("Coop host: server not created, error:" @ Error, , 'X2TC');
+		`log("Coop host: server not created (steam=" $ bSteam $ "), error:" @ Error, , 'X2TC');
 		return false;
 	}
 
 	Role = eCoopRole_Host;
-	`log("Coop host: server created (port" @ COOP_PORT $ ")", , 'X2TC');
+	bSteamSession = bSteam;
+	`log("Coop host: server created (port" @ COOP_PORT $ ", steam=" $ bSteam $ ")", , 'X2TC');
 	// Stage 6: Backspace on the host goes through the co-op End Turn check.
 	class'X2TC_CoopInput'.static.Install();
 	// Owners remembered from earlier missions of this campaign (X2TC_CoopOwnerMemory).
@@ -338,6 +405,19 @@ function bool StartHost()
 // Guest: create a client to the given address. Returns false (and logs why) if it couldn't.
 function bool StartGuest(string Address)
 {
+	if (Address == "")
+	{
+		`log("Coop guest: no address entered", , 'X2TC');
+		return false;
+	}
+	return StartGuestClient(Address, COOP_PORT, false);
+}
+
+// Guest: the client itself. Steam (Stage 7): "steamsockets" added, as the shell's
+// StartNetworkGame does for the joining player (XComShellPresentationLayer.uc
+// L1121-1163). Logs only the address's form, never the address.
+function bool StartGuestClient(string Address, int Port, bool bSteam)
+{
 	local XComGameStateNetworkManager NetworkMgr;
 	local URL ClientURL;
 	local string Error;
@@ -345,12 +425,6 @@ function bool StartGuest(string Address)
 	if (IsActive())
 	{
 		`log("Coop guest: already started as" @ RoleName(), , 'X2TC');
-		return false;
-	}
-
-	if (Address == "")
-	{
-		`log("Coop guest: no address entered", , 'X2TC');
 		return false;
 	}
 
@@ -371,18 +445,260 @@ function bool StartGuest(string Address)
 
 	// As UIMPShell_Lobby.CreateClient does (L515-523): the host as typed, and the port.
 	ClientURL.Host = Address;
-	ClientURL.Port = COOP_PORT;
+	ClientURL.Port = Port;
+	if (bSteam)
+	{
+		ClientURL.Op.AddItem("steamsockets");
+	}
 	NetworkMgr.CreateClient(ClientURL, Error);
 	if (Error != "")
 	{
-		`log("Coop guest: client not created (address form:" @ AddressForm(Address) $ "), error:" @ Error, , 'X2TC');
+		`log("Coop guest: client not created (address form:" @ AddressForm(Address) $ ", port" @ Port $ ", steam=" $ bSteam $ "), error:" @ Error, , 'X2TC');
 		return false;
 	}
 
 	Role = eCoopRole_Guest;
-	`log("Coop guest: client created (address form:" @ AddressForm(Address) $ ")", , 'X2TC');
+	bSteamSession = bSteam;
+	`log("Coop guest: client created (address form:" @ AddressForm(Address) $ ", port" @ Port $ ", steam=" $ bSteam $ ")", , 'X2TC');
 	StartPoll();
+	if (bSteam)
+	{
+		// Steam P2P takes longer (XComShellPresentationLayer.uc L1994-1997): try at once
+		// and more often than over a LAN.
+		LastAttemptSecond = -CONNECT_RETRY_SECONDS;
+	}
 	return true;
+}
+
+// ---- Stage 7: the connection over Steam (plans/m3-plan.md, research/steam-connection.md) ----
+
+static function OnlineSubsystem GetOnlineSub()
+{
+	return class'GameEngine'.static.GetOnlineSubsystem();
+}
+
+static function byte LocalUserNum()
+{
+	if (`ONLINEEVENTMGR != none)
+	{
+		return byte(`ONLINEEVENTMGR.LocalUserIndex);
+	}
+	return 0;
+}
+
+// Host (Stage 7): CO-OP: HOST (STEAM). Creates a private Steam game session the way the
+// multiplayer shell does for a Private lobby (XComShellPresentationLayer.uc L1209-1226,
+// settings L1286-1358: 0 public / 2 private connections, the version hashes the guest's
+// invite check compares, XComOnlineEventMgr.uc L3547), then (OnSteamGameCreated) the
+// server with "steamsockets", then the Steam invite overlay.
+function bool StartHostSteam()
+{
+	local OnlineSubsystem OnlineSub;
+	local XComOnlineGameSettings Settings;
+
+	if (!PrepareToHost())
+	{
+		return false;
+	}
+	OnlineSub = GetOnlineSub();
+	if (OnlineSub == none || OnlineSub.GameInterface == none)
+	{
+		`log("Coop steam host: no online subsystem; not started", , 'X2TC');
+		return false;
+	}
+	if (OnlineSub.GameInterface.GetGameSettings('Game') != none)
+	{
+		// A session from an earlier match or co-op run; the shell destroys it the same way
+		// (UIMPShell_Lobby.uc L999).
+		`log("Coop steam host: a 'Game' session already exists; destroying it first (click again in a few seconds)", , 'X2TC');
+		OnlineSub.GameInterface.DestroyOnlineGame('Game');
+		return false;
+	}
+
+	Settings = new class'XComOnlineGameSettingsDeathmatchUnranked';
+	Settings.SetIsRanked(false);
+	Settings.SetNetworkType(eMPNetworkType_Private);
+	Settings.SetGameType(eMPGameType_Deathmatch);
+	Settings.NumPublicConnections = 0;
+	Settings.NumPrivateConnections = 2;
+	Settings.bIsLanMatch = false;
+	Settings.SetMPDataINIVersion(0);
+	Settings.SetByteCodeHash(class'Helpers'.static.NetGetVerifyPackageHashes());
+	Settings.SetIsAutomatch(false);
+	Settings.SetInstalledDLCHash(class'Helpers'.static.NetGetInstalledMPFriendlyDLCHash());
+	Settings.SetInstalledModsHash(class'Helpers'.static.NetGetInstalledModsHash());
+	Settings.SetINIHash(class'Helpers'.static.NetGetMPINIHash());
+	Settings.SetIsDevConsoleEnabled(class'Helpers'.static.IsDevConsoleEnabled());
+
+	OnlineSub.GameInterface.AddCreateOnlineGameCompleteDelegate(OnSteamGameCreated);
+	if (!OnlineSub.GameInterface.CreateOnlineGame(LocalUserNum(), 'Game', Settings))
+	{
+		OnlineSub.GameInterface.ClearCreateOnlineGameCompleteDelegate(OnSteamGameCreated);
+		`log("Coop steam host: CreateOnlineGame refused to start", , 'X2TC');
+		return false;
+	}
+	bSteamGameCreated = true;
+	`log("Coop steam host: creating a private Steam game session (invites=" $ Settings.bAllowInvites @ "presence=" $ Settings.bUsesPresence $ ")", , 'X2TC');
+	return true;
+}
+
+function OnSteamGameCreated(name SessionName, bool bWasSuccessful)
+{
+	GetOnlineSub().GameInterface.ClearCreateOnlineGameCompleteDelegate(OnSteamGameCreated);
+	`log("Coop steam host: Steam game session" @ SessionName @ "created=" $ bWasSuccessful, , 'X2TC');
+	if (!bWasSuccessful)
+	{
+		bSteamGameCreated = false;
+		ShowGuestMessage("CO-OP: STEAM", "The Steam game session could not be created. Check that Steam is online, then try again.");
+		return;
+	}
+	if (!StartHostServer(true))
+	{
+		ShowGuestMessage("CO-OP: STEAM", "The co-op server could not start over Steam. See Launch.log (X2TC lines).");
+		DestroySteamGame("server failed");
+		return;
+	}
+	ShowSteamInvite();
+}
+
+// Host (Stage 7): the Steam overlay's invite list (as the lobby's Invite button,
+// UIMPShell_Lobby.uc L897). Can be opened again from the same button.
+function ShowSteamInvite()
+{
+	local OnlineSubsystem OnlineSub;
+	local bool bShown;
+
+	OnlineSub = GetOnlineSub();
+	if (OnlineSub == none || OnlineSub.PlayerInterfaceEx == none)
+	{
+		`log("Coop steam host: no PlayerInterfaceEx; invite overlay not shown", , 'X2TC');
+		return;
+	}
+	bShown = OnlineSub.PlayerInterfaceEx.ShowInviteUI(LocalUserNum());
+	`log("Coop steam host: Steam invite overlay shown=" $ bShown, , 'X2TC');
+}
+
+// Both (Stage 7): end the Steam game session, if this game made or joined one.
+function DestroySteamGame(string Why)
+{
+	local OnlineSubsystem OnlineSub;
+
+	if (!bSteamGameCreated)
+	{
+		return;
+	}
+	bSteamGameCreated = false;
+	OnlineSub = GetOnlineSub();
+	if (OnlineSub != none && OnlineSub.GameInterface != none)
+	{
+		`log("Coop steam: destroying the Steam game session (" $ Why $ "), started=" $ OnlineSub.GameInterface.DestroyOnlineGame('Game'), , 'X2TC');
+	}
+}
+
+// Guest (Stage 7): CO-OP: JOIN (STEAM) on the main menu. The next accepted Steam invite is
+// a co-op invite: X2TC_InviteListener hands it to OnSteamInviteAccepted instead of taking
+// the game to the multiplayer menu. Normal multiplayer invites are untouched while not
+// armed.
+function ArmSteamInvite()
+{
+	if (IsActive())
+	{
+		`log("Coop steam guest: already started as" @ RoleName() $ "; not armed", , 'X2TC');
+		return;
+	}
+	bSteamInviteArmed = true;
+	`log("Coop steam guest: waiting for a Steam invite (armed)", , 'X2TC');
+	ShowGuestMessage("CO-OP: JOIN (STEAM)", "Now accept the host's invite in Steam (the notification, or Shift+Tab, Friends, then the invite). The co-op mission loads by itself.");
+}
+
+// Guest (Stage 7): called by X2TC_InviteListener when an invite is accepted while armed.
+// Joins the host's Steam session (JoinOnlineGame, as an accepted invite does,
+// XComPlayerController.uc L219-282); OnSteamJoinComplete connects.
+function OnSteamInviteAccepted(const out OnlineGameSearchResult InviteResult, bool bWasSuccessful)
+{
+	local OnlineSubsystem OnlineSub;
+
+	bSteamInviteArmed = false;
+	`log("Coop steam guest: invite accepted, success=" $ bWasSuccessful @ "has game settings=" $ (InviteResult.GameSettings != none), , 'X2TC');
+	if (!bWasSuccessful || InviteResult.GameSettings == none)
+	{
+		ShowGuestMessage("CO-OP: STEAM", "The invite could not be used. Ask the host to invite you again, then click CO-OP: JOIN (STEAM) first.");
+		return;
+	}
+	OnlineSub = GetOnlineSub();
+	OnlineSub.GameInterface.AddJoinOnlineGameCompleteDelegate(OnSteamJoinComplete);
+	if (!OnlineSub.GameInterface.JoinOnlineGame(LocalUserNum(), 'Game', InviteResult))
+	{
+		OnlineSub.GameInterface.ClearJoinOnlineGameCompleteDelegate(OnSteamJoinComplete);
+		`log("Coop steam guest: JoinOnlineGame refused to start", , 'X2TC');
+		ShowGuestMessage("CO-OP: STEAM", "Joining the host's Steam session failed to start. See Launch.log (X2TC lines).");
+		return;
+	}
+	bSteamJoinStarted = true;
+	`log("Coop steam guest: joining the host's Steam session", , 'X2TC');
+}
+
+function OnSteamJoinComplete(name SessionName, bool bWasSuccessful)
+{
+	local OnlineSubsystem OnlineSub;
+	local string Resolved, Host;
+	local int Port, Index;
+
+	OnlineSub = GetOnlineSub();
+	OnlineSub.GameInterface.ClearJoinOnlineGameCompleteDelegate(OnSteamJoinComplete);
+	`log("Coop steam guest: Steam session" @ SessionName @ "joined=" $ bWasSuccessful, , 'X2TC');
+	ClearStockInvite();
+	if (!bWasSuccessful)
+	{
+		bSteamJoinStarted = false;
+		ShowGuestMessage("CO-OP: STEAM", "Joining the host's Steam session failed. Ask the host to invite you again.");
+		return;
+	}
+	bSteamGameCreated = true; // joined: destroyed again when leaving
+	if (!OnlineSub.GameInterface.GetResolvedConnectString(SessionName, Resolved) || Resolved == "")
+	{
+		`log("Coop steam guest: no connect string for the host's session", , 'X2TC');
+		ShowGuestMessage("CO-OP: STEAM", "Steam gave no address for the host. See Launch.log (X2TC lines).");
+		return;
+	}
+	// Split as the shell does (XComShellPresentationLayer.uc L1142-1159): host[:port][?...].
+	Host = Resolved;
+	Port = COOP_PORT;
+	Index = InStr(Host, ":");
+	if (Index != -1)
+	{
+		Port = int(Mid(Host, Index + 1));
+		Host = Left(Host, Index);
+	}
+	Index = InStr(Host, "?");
+	if (Index != -1)
+	{
+		Host = Left(Host, Index);
+	}
+	if (Port <= 0)
+	{
+		Port = COOP_PORT;
+	}
+	`log("Coop steam guest: host address resolved (form:" @ AddressForm(Host) $ ", length" @ Len(Host) $ ", port" @ Port $ "); connecting with steamsockets", , 'X2TC');
+	StartGuestClient(Host, Port, true);
+}
+
+// Guest (Stage 7): the game's own invite handler also ran (XComOnlineEventMgr.uc
+// L3554-3559): it stored the invite and set the "go to the multiplayer invite screen"
+// shuttle. Clear both, so the main menu doesn't act on this invite later.
+function ClearStockInvite()
+{
+	local XComOnlineEventMgr OnlineMgr;
+
+	OnlineMgr = `ONLINEEVENTMGR;
+	if (OnlineMgr == none)
+	{
+		return;
+	}
+	`log("Coop steam guest: clearing the game's stored invite (had invites=" $ OnlineMgr.HasAcceptedInvites() @ "shuttle to invite loadout=" $ OnlineMgr.GetShuttleToMPInviteLoadout() $ ")", , 'X2TC');
+	OnlineMgr.ClearAcceptedInvites();
+	OnlineMgr.ClearShuttleToScreen();
+	OnlineMgr.bAcceptedInviteDuringGameplay = false;
 }
 
 // "dotted" (has a dot), "integer" (digits only) or "other". Never the address itself.
@@ -478,6 +794,15 @@ function StartTimer()
 	Poll();
 }
 
+// True if this session's poll timer runs on the current map's local controller.
+function bool IsPollRunning()
+{
+	local PlayerController PC;
+
+	PC = class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController();
+	return PC != none && PC.IsTimerActive(nameof(Poll), self);
+}
+
 // Timer function (Run 6): the host sends new frames to a following guest without
 // waiting for the one-second poll; the in-flight and latent checks still apply.
 function FastSend()
@@ -505,6 +830,11 @@ function HostTurnUI()
 {
 	local ETeam TurnTeam;
 
+	// 0.5.3: after the battle the game owns the screen and input; nothing more here.
+	if (bMissionEnded)
+	{
+		return;
+	}
 	TurnTeam = CurrentTurnTeam();
 	if (TurnTeam != LastTurnTeam)
 	{
@@ -532,10 +862,18 @@ function HostTurnUI()
 		class'X2TC_CoopTurnUI'.static.SetEndTurnIconEnabled(true);
 	}
 	MaybeHideBanner();
-	if (TurnTeam == eTeam_XCom && OwnershipOn())
+	if (TurnTeam == eTeam_XCom)
 	{
-		KeepHostSelectionOwn();
+		if (OwnershipOn())
+		{
+			KeepHostSelectionOwn();
+		}
+		else if (bHostLocked)
+		{
+			UnlockHost("soldier ownership is off");
+		}
 	}
+	UpdateBanner(); // 0.5.2: the locked host's banner comes and goes with the lock
 }
 
 // Host: true while ending XCOM's turn should first ask: the guest's soldiers can still
@@ -561,6 +899,10 @@ function KeepHostSelectionOwn()
 	ActiveUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
 	if (ActiveUnit == none || class'X2TC_CoopOwnership'.static.GetOwner(ActiveUnit) != class'X2TC_CoopOwnership'.const.OWNER_GUEST)
 	{
+		if (bHostLocked)
+		{
+			UnlockHost("a P1 soldier is selected");
+		}
 		return;
 	}
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
@@ -577,12 +919,150 @@ function KeepHostSelectionOwn()
 			return;
 		}
 	}
+	// Run 1: none of the host's soldiers can act and the game selected one of P2's; the
+	// host could then act with it. Lock the host's input the way stock multiplayer locks
+	// the inactive player (XComTacticalInput.uc L1347-1424, Multiplayer_Inactive: the
+	// camera still scrolls) until one of its own soldiers is selected again.
+	if (!bHostLocked)
+	{
+		bHostLocked = true;
+		TacticalController.SetInputState('Multiplayer_Inactive');
+		`log("Coop owners: host input locked (only P2's soldiers can act; unit" @ ActiveUnit.ObjectID @ "selected; input state" @ TacticalController.GetInputState() $ ")", , 'X2TC');
+		class'X2TC_CoopTurnUI'.static.SetStatusText("Your soldiers are done; your partner's turn");
+	}
+	else if (TacticalController.GetInputState() != 'Multiplayer_Inactive')
+	{
+		// The game set another input state (e.g. after selecting the next unit itself).
+		`log("Coop owners: host input state was" @ TacticalController.GetInputState() $ "; locked again", , 'X2TC');
+		TacticalController.SetInputState('Multiplayer_Inactive');
+	}
 }
 
-// Guest (Stage 6), five times a second: hide the banner when the partner's action is done.
+// Host (0.5.3): true while Tab and H are the co-op cycling keys on the host.
+function bool HostOwnsCycleKeys()
+{
+	return Role == eCoopRole_Host && bGuestFollowing && !bMissionEnded && OwnershipOn()
+		&& !bHostLocked && CurrentTurnTeam() == eTeam_XCom;
+}
+
+// Host (0.5.3): Tab (Direction 1) and H (-1) cycle only through the host's own soldiers
+// that can act (Run 2: the game's own Tab landed on the partner's, then was pushed
+// back). True if the key belongs to us now (ownership on, XCOM's turn, not locked).
+function bool HostCycleOwnSoldier(int Direction)
+{
+	local XComTacticalController TacticalController;
+	local array<XComGameState_Unit> Squad, Own;
+	local int i, Start, Index, ActiveID;
+
+	if (!HostOwnsCycleKeys())
+	{
+		return false;
+	}
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController == none)
+	{
+		return false;
+	}
+	class'X2TC_CoopOwnership'.static.GetSquad(Squad);
+	for (i = 0; i < Squad.Length; i++)
+	{
+		if (!Squad[i].IsIncapacitated() && Squad[i].NumAllActionPoints() > 0
+			&& class'X2TC_CoopOwnership'.static.GetOwner(Squad[i]) == class'X2TC_CoopOwnership'.const.OWNER_HOST)
+		{
+			Own.AddItem(Squad[i]);
+		}
+	}
+	if (Own.Length == 0)
+	{
+		return true; // nothing of the host's can act; keep the key from the game
+	}
+	ActiveID = TacticalController.GetActiveUnitStateRef().ObjectID;
+	Start = 0;
+	for (i = 0; i < Own.Length; i++)
+	{
+		if (Own[i].ObjectID == ActiveID)
+		{
+			Start = i + Direction;
+			break;
+		}
+	}
+	for (i = 0; i < Own.Length; i++)
+	{
+		Index = ((Start + i * Direction) % Own.Length + Own.Length) % Own.Length;
+		if (TacticalController.Visualizer_SelectUnit(Own[Index]))
+		{
+			`log("Coop owners: host cycled to its unit" @ Own[Index].ObjectID @ "(direction" @ Direction $ ")", , 'X2TC');
+			return true;
+		}
+	}
+	return true;
+}
+
+// Host (0.5.1): give the input back (only during XCOM's turn; at other times the game
+// sets the input state itself at the next turn).
+function UnlockHost(string Why)
+{
+	local XComTacticalController TacticalController;
+
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController == none)
+	{
+		return;
+	}
+	bHostLocked = false;
+	if (TacticalController.GetInputState() == 'Multiplayer_Inactive')
+	{
+		TacticalController.SetInputState('ActiveUnit_Moving');
+	}
+	`log("Coop owners: host input unlocked (" $ Why $ "; input state" @ TacticalController.GetInputState() $ ")", , 'X2TC');
+	class'X2TC_CoopTurnUI'.static.SetStatusText("");
+}
+
+// Guest (Stage 6), five times a second: hide the banner when the partner's action is done,
+// and show NO SOLDIERS ASSIGNED while the guest has none to control.
 function GuestTurnUI()
 {
 	MaybeHideBanner();
+	UpdateBanner();
+	// 0.5.3: the refusal message goes after REFUSAL_SECONDS.
+	if (RefusalShownTime > 0 && class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - RefusalShownTime > REFUSAL_SECONDS)
+	{
+		RefusalShownTime = 0;
+		if (bReadySent)
+		{
+			class'X2TC_CoopTurnUI'.static.SetStatusText("Waiting for the host to end the turn");
+		}
+		else
+		{
+			class'X2TC_CoopTurnUI'.static.SetStatusText("");
+		}
+	}
+}
+
+// Guest (0.5.3): the host refused an action; say so in the status line for a few seconds
+// (M4 polish item "feedback when an action is refused", pulled in by Kc).
+function ShowRefusal(string Reason)
+{
+	local string Text;
+
+	if (InStr(Reason, "belongs to P1") != -1)
+	{
+		Text = "Refused: that soldier belongs to the host";
+	}
+	else if (InStr(Reason, "not XCOM's turn") != -1)
+	{
+		Text = "Refused: it isn't XCOM's turn";
+	}
+	else if (InStr(Reason, "busy") != -1 || InStr(Reason, "still waiting") != -1)
+	{
+		Text = "Refused: the host was busy; try again";
+	}
+	else
+	{
+		Text = "Refused by the host:" @ Reason;
+	}
+	RefusalShownTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	class'X2TC_CoopTurnUI'.static.SetStatusText(Text);
 }
 
 // Both: show the FRIENDLY ACTION banner (Kc's design, plans/m3-plan.md Stage 6).
@@ -593,7 +1073,66 @@ function ShowBanner(string Why)
 	{
 		bBannerShown = true;
 		`log("Coop UI: FRIENDLY ACTION (" $ Why $ ")", , 'X2TC');
-		class'X2TC_CoopTurnUI'.static.ShowFriendlyBanner();
+	}
+	UpdateBanner();
+}
+
+// Both (0.5.1): the one banner on screen. FRIENDLY ACTION first; otherwise, on the guest
+// during XCOM's input phase with no soldier it may control, NO SOLDIERS ASSIGNED (Run 1,
+// Kc); otherwise none. Changes the overlay only when the wanted text changes.
+function UpdateBanner()
+{
+	local X2TC_CoopReplayMgr Follower;
+	local XComTacticalGRI TacticalGRI;
+	local string Wanted;
+
+	if (bMissionEnded)
+	{
+		Wanted = ""; // 0.5.3: no co-op banner after the battle
+	}
+	else if (bBannerShown)
+	{
+		Wanted = class'X2TC_CoopTurnUI'.const.FRIENDLY_TEXT;
+	}
+	else if (Role == eCoopRole_Host && bGuestFollowing && OwnershipOn() && CurrentTurnTeam() == eTeam_XCom
+		&& !class'X2TC_CoopOwnership'.static.PlayerHasActions(class'X2TC_CoopOwnership'.const.OWNER_HOST))
+	{
+		// 0.5.2 (Run 2, Kc): a player out of moves keeps the banner until its soldiers
+		// have actions again (a new turn, or e.g. Teamwork).
+		Wanted = class'X2TC_CoopTurnUI'.const.FRIENDLY_TEXT;
+	}
+	else if (Role == eCoopRole_Guest)
+	{
+		TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
+		if (TacticalGRI != none)
+		{
+			Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+		}
+		if (Follower != none && Follower.bInputPhase && !Follower.bBehind)
+		{
+			if (!Follower.HasControllableSoldier())
+			{
+				Wanted = class'X2TC_CoopTurnUI'.const.NO_SOLDIERS_TEXT;
+			}
+			else if (OwnershipOn() && !class'X2TC_CoopOwnership'.static.PlayerHasActions(class'X2TC_CoopOwnership'.const.OWNER_GUEST))
+			{
+				// 0.5.2: the guest out of moves, as on the host.
+				Wanted = class'X2TC_CoopTurnUI'.const.FRIENDLY_TEXT;
+			}
+		}
+	}
+	if (Wanted == ShownBannerText)
+	{
+		return;
+	}
+	ShownBannerText = Wanted;
+	if (Wanted == "")
+	{
+		class'X2TC_CoopTurnUI'.static.HideBanner();
+	}
+	else
+	{
+		class'X2TC_CoopTurnUI'.static.ShowBanner(Wanted);
 	}
 }
 
@@ -626,7 +1165,7 @@ function MaybeHideBanner()
 		}
 	}
 	bBannerShown = false;
-	class'X2TC_CoopTurnUI'.static.HideFriendlyBanner();
+	UpdateBanner();
 }
 
 // Host (Stage 6): our END TURN button and Backspace come here. Asks first while the
@@ -988,6 +1527,11 @@ function Poll()
 		}
 		HostMaybeSendPartial(NetworkMgr);
 	}
+	// 0.5.3: close the session once the mission is over (also if the guest left).
+	if (Role == eCoopRole_Host && bMissionEnded)
+	{
+		HostCheckMissionEnd();
+	}
 
 	// Guest (Stage 5): the history may only grow through the host's histories. Growth
 	// without one would mean an action was applied on the guest itself.
@@ -1053,7 +1597,7 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	local XComGameStateNetworkManager NetworkMgr;
 	local array<byte> Params, Reply;
 	local int Number;
-	local string OtherVersion;
+	local string OtherVersion, Reason;
 
 	if (Command == CMD_GUEST_MOVE)
 	{
@@ -1140,7 +1684,12 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	{
 		Params = RawParams;
 		Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
-		`log("Coop" @ RoleName() $ ": action result from the host:" @ (Number == 1 ? "applied" : "refused") $ "," @ class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params) @ "(frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+		Reason = class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params);
+		`log("Coop" @ RoleName() $ ": action result from the host:" @ (Number == 1 ? "applied" : "refused") $ "," @ Reason @ "(frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+		if (Role == eCoopRole_Guest && Number != 1)
+		{
+			ShowRefusal(Reason);
+		}
 		ClearGuestUnitMoving();
 		return;
 	}
@@ -1260,6 +1809,69 @@ function ShowGuestMessage(string Title, string Text)
 	DialogData.strText = Text;
 	DialogData.strAccept = "OK";
 	PC.Pres.UIRaiseDialog(DialogData);
+}
+
+// Guest (0.5.3): a message with one button that takes the guest back to the main menu
+// (LeaveAsGuest). Shown once.
+function ShowGuestLeaveDialog(string Title, string Text)
+{
+	local XComPlayerController PC;
+	local TDialogueBoxData DialogData;
+	local X2TC_CoopSquadScreen SquadScreen;
+
+	if (bMissionDialogShown)
+	{
+		return;
+	}
+	bMissionDialogShown = true;
+	SquadScreen = class'X2TC_CoopSquadScreen'.static.FindOpen();
+	if (SquadScreen != none)
+	{
+		SquadScreen.CloseScreen();
+	}
+	PC = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (PC == none || PC.Pres == none)
+	{
+		`log("Coop guest: no presentation layer for the dialog; leaving at once", , 'X2TC');
+		LeaveAsGuest();
+		return;
+	}
+	DialogData.eType = eDialog_Normal;
+	DialogData.strTitle = Title;
+	DialogData.strText = Text;
+	DialogData.strAccept = "Main menu";
+	DialogData.fnCallback = OnGuestLeaveDialog;
+	PC.Pres.UIRaiseDialog(DialogData);
+	`log("Coop guest: dialog shown:" @ Title, , 'X2TC');
+}
+
+function OnGuestLeaveDialog(name eAction)
+{
+	`log("Coop guest: dialog closed (" $ eAction $ "); leaving for the main menu", , 'X2TC');
+	LeaveAsGuest();
+}
+
+// Guest (0.5.3): called by the follower when its replay has reached the end-of-battle
+// frame and finished showing it. The guest's own ruleset is left alone (the stock
+// replay only ends the battle for Challenge Mode, XComReplayMgr.uc L258-265; ending it
+// here would run the campaign cleanup on the guest's copy).
+function OnGuestMissionEnd(int Frame)
+{
+	if (bMissionEnded)
+	{
+		return;
+	}
+	bMissionEnded = true;
+	MissionEndFrame = Frame;
+	`log("Coop mission end (guest): end-of-battle frame" @ Frame $ "," @ MissionResultText() @ "(history frames=" $ `XCOMHISTORY.GetNumGameStates() $ ", connections=" $ `XCOMNETMANAGER.Connections.Length $ ")", , 'X2TC');
+	class'X2TC_CoopTurnUI'.static.SetStatusText("");
+	if (ShownBannerText != "")
+	{
+		bBannerShown = false;
+		ShownBannerText = "";
+		class'X2TC_CoopTurnUI'.static.HideBanner();
+	}
+	ShowGuestLeaveDialog("CO-OP: MISSION OVER", MissionResultText() $ ". The results stay in the host's campaign. This game returns to the main menu.");
 }
 
 // Guest (Stage 3): ask the host for its whole history, once.
@@ -1505,6 +2117,8 @@ function bool HasHostSoldierAction(int FromFrame, int ToFrame)
 		{
 			continue;
 		}
+		// Ownership on: P1's soldiers (the host can't act with P2's: it is locked once only
+		// they can act, 0.5.1).
 		if (OwnershipOn())
 		{
 			if (class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_HOST)
@@ -1513,7 +2127,8 @@ function bool HasHostSoldierAction(int FromFrame, int ToFrame)
 			}
 		}
 		// Ownership off (approved question 1, a guess to test): any soldier, except the
-		// one the guest ordered itself in the last few seconds.
+		// one the guest ordered itself in the last few seconds. (The host's banner comes
+		// from applying the guest's action, so it needs no rule in either mode.)
 		else if (UnitState.ObjectID != LastOwnActionUnitID
 			|| class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - LastOwnActionTime > OWN_ACTION_SECONDS)
 		{
@@ -1625,12 +2240,123 @@ function HostScanTurns()
 {
 	local int LastFrame;
 
+	local int EndFrame;
+
 	LastFrame = `XCOMHISTORY.GetNumGameStates() - 1;
 	if (LastFrame > HostTurnScanFrame)
 	{
 		LogTurnBegins("host", HostTurnScanFrame + 1, LastFrame);
+		// 0.5.3: the end of the battle (win, loss or full evac).
+		EndFrame = FindGameEndFrame(HostTurnScanFrame + 1, LastFrame);
+		if (EndFrame >= 0 && !bMissionEnded)
+		{
+			bMissionEnded = true;
+			MissionEndFrame = EndFrame;
+			MissionEndSecond = Seconds;
+			MissionEndAckedSecond = -1;
+			`log("Coop mission end (host): end-of-battle frame" @ EndFrame $ "," @ MissionResultText() $ "; sending it to the guest, then closing the co-op session", , 'X2TC');
+		}
 		HostTurnScanFrame = LastFrame;
 	}
+}
+
+// Both (0.5.3): the first end-of-battle frame (eGameRule_TacticalGameEnd, built by
+// X2TacticalGameRuleset.EndBattle L282) in FromFrame..ToFrame, or -1.
+static function int FindGameEndFrame(int FromFrame, int ToFrame)
+{
+	local XComGameStateHistory History;
+	local XComGameState GameState;
+	local XComGameStateContext_TacticalGameRule RuleContext;
+	local int Frame;
+
+	History = `XCOMHISTORY;
+	for (Frame = Max(FromFrame, 0); Frame <= ToFrame && Frame < History.GetNumGameStates(); Frame++)
+	{
+		GameState = History.GetGameStateFromHistory(Frame);
+		if (GameState == none)
+		{
+			continue;
+		}
+		RuleContext = XComGameStateContext_TacticalGameRule(GameState.GetContext());
+		if (RuleContext != none && RuleContext.GameRuleType == eGameRule_TacticalGameEnd)
+		{
+			return Frame;
+		}
+	}
+	return -1;
+}
+
+// "XCOM won" / "XCOM lost" from the battle data (bLocalPlayerWon, set when the end
+// frame is built, XComGameState_BattleData.uc L161; the host plays XCOM).
+static function string MissionResultText()
+{
+	local XComGameState_BattleData BattleData;
+
+	BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
+	if (BattleData == none)
+	{
+		return "result unknown (no battle data)";
+	}
+	if (BattleData.bLocalPlayerWon)
+	{
+		return "XCOM won";
+	}
+	return "XCOM lost";
+}
+
+// Host (0.5.3), every poll after the mission ended: once the guest has the end frame,
+// wait MISSION_END_DISCONNECT_SECONDS and close the session; give up waiting after
+// MISSION_END_MAX_SECONDS.
+function HostCheckMissionEnd()
+{
+	if (!bMissionEnded || Role != eCoopRole_Host)
+	{
+		return;
+	}
+	if (MissionEndAckedSecond < 0 && bGuestFollowing && !bPartialInFlight && LastSentFrames > MissionEndFrame)
+	{
+		MissionEndAckedSecond = Seconds;
+		`log("Coop mission end (host): the guest has the end frame (sent frames" @ LastSentFrames $ "); closing in" @ MISSION_END_DISCONNECT_SECONDS $ "s", , 'X2TC');
+	}
+	if (MissionEndAckedSecond >= 0 && Seconds - MissionEndAckedSecond >= MISSION_END_DISCONNECT_SECONDS)
+	{
+		HostEndSession("mission over, guest informed");
+	}
+	else if (Seconds - MissionEndSecond >= MISSION_END_MAX_SECONDS)
+	{
+		HostEndSession("mission over, no confirmation from the guest after" @ MISSION_END_MAX_SECONDS $ "s (following=" $ bGuestFollowing $ ")");
+	}
+}
+
+// Host (0.5.3): close the co-op connection and forget the session, so the next mission
+// can HOST again. The host's own game goes on (summary screen, campaign).
+function HostEndSession(string Why)
+{
+	local PlayerController PC;
+
+	`log("Coop mission end (host): closing the co-op session (" $ Why $ "); frames=" $ `XCOMHISTORY.GetNumGameStates() @ "partials sent=" $ PartialSends, , 'X2TC');
+	PC = class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController();
+	if (PC != none)
+	{
+		// As the guest's LEAVE does: the game's own connection-error handling stays out.
+		PC.bIgnoreNetworkMessages = true;
+	}
+	if (bEndTurnIconDisabled)
+	{
+		class'X2TC_CoopTurnUI'.static.SetEndTurnIconEnabled(true);
+	}
+	bHostLocked = false; // no input change: the game owns the input after the battle
+	bBannerShown = false;
+	if (ShownBannerText != "")
+	{
+		ShownBannerText = "";
+		class'X2TC_CoopTurnUI'.static.HideBanner();
+	}
+	class'X2TC_CoopTurnUI'.static.SetStatusText("");
+	`XCOMNETMANAGER.Disconnect();
+	DestroySteamGame("host session closed");
+	ResetSession();
+	`log("Coop mission end (host): session closed; HOST works again in the next mission", , 'X2TC');
 }
 
 // Logs "Coop sync (<who>): turn begin, team T turn count N, frame F" for every
@@ -1690,6 +2416,20 @@ function OnAcceptedConnection(int ConnectionIdx)
 function OnConnectionClosed(int ConnectionIdx)
 {
 	`log("Coop" @ RoleName() $ ": connection closed (connection" @ ConnectionIdx $ ")", , 'X2TC');
+	// 0.5.3: the guest in a mission lost the host (the host quit, crashed or closed the
+	// session): tell the player and offer the way back to the main menu.
+	if (Role == eCoopRole_Guest && bFollowerInstalled)
+	{
+		if (bMissionEnded)
+		{
+			`log("Coop mission end (guest): the host closed the session after the mission (expected)", , 'X2TC');
+		}
+		else
+		{
+			`log("Coop guest: WARNING: the host disconnected during the mission (frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+			ShowGuestLeaveDialog("CO-OP: HOST DISCONNECTED", "The connection to the host was lost. This game returns to the main menu.");
+		}
+	}
 	if (Role == eCoopRole_Host && bGuestFollowing)
 	{
 		// Stage 5: the guest left; stop sending and play on alone.
@@ -2147,6 +2887,7 @@ function LeaveAsGuest()
 		PC.bIgnoreNetworkMessages = true;
 	}
 	`XCOMNETMANAGER.Disconnect();
+	DestroySteamGame("guest left");
 	ResetSession();
 	`log("Coop guest: disconnected; opening the main menu:" @ LEAVE_MAP_COMMAND, , 'X2TC');
 	if (PC != none)
@@ -2191,6 +2932,21 @@ function ResetSession()
 	PendingOwnerUnitIDs.Length = 0;
 	PendingOwnerValues.Length = 0;
 	LastOwnActionUnitID = 0;
+	// 0.5.1-0.5.3.
+	bHostLocked = false;
+	ShownBannerText = "";
+	RefusalShownTime = 0;
+	bMissionEnded = false;
+	MissionEndFrame = -1;
+	MissionEndAckedSecond = -1;
+	bMissionDialogShown = false;
+	HostTurnScanFrame = 0;
+	PartialSends = 0;
+	// Stage 7 (DestroySteamGame runs before this where a session existed).
+	bSteamSession = false;
+	bSteamGameCreated = false;
+	bSteamInviteArmed = false;
+	bSteamJoinStarted = false;
 }
 
 defaultproperties

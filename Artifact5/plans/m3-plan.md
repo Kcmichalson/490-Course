@@ -1051,3 +1051,186 @@ partner end the turn ("in case the host has to step away").
   the shipped file must never change between releases; it stays on the
   host's PC; Skirmish may have no campaign ID (then nothing is
   remembered).
+
+**Stage 6 Run 1 (0.5.0, Kc, 2026-11-15; build 8270065 on the PC from
+appmanifest_268500.acf, laptop not re-reported):** logs `stage6-pc-1.log`,
+`stage6-laptop-1.log` (laptop clock about 17.5 s ahead). Four XCOM turns.
+- **Worked:**
+  - Squad screen on both. Owner changes reached the laptop in about
+    0.3 s (PC L424-495).
+  - The laptop's move on a soldier given back to P1 was refused (PC
+    L474-476).
+  - FRIENDLY ACTION on both machines (PC L2010, laptop L1023 onwards).
+  - The question on Backspace, then Cancel (PC L2313-2316).
+  - "Ready" set and cleared at the turn change (PC L2317-2335, laptop
+    L2056).
+  - "Partner may edit" let the laptop switch ownership off and "Partner may
+    end the turn" on (PC L4159-4278).
+  - The partner's END TURN ended the turn (PC L4279); the second press, one
+    turn later, was refused (L4306).
+  - Owner memory wrote 4 entries in a Skirmish, which has a campaign ID
+    (`campaign ID present=True`, PC L400).
+- **Problems (Kc, logs):**
+  1. With no soldier, the laptop's input stayed on for the soldier given
+     back (laptop L679-681). Kc asked for a blue **NO SOLDIERS ASSIGNED**
+     banner.
+  2. Click-to-select never works on the laptop: the game skips it while
+     any tutorial manager exists (`XComTacticalInput.uc` L2846). Our NEXT
+     SOLDIER and Tab work.
+  3. Once the PC's own soldiers were done, the game selected P2's soldiers
+     on the PC and the PC could act with them. The laptop showed no banner
+     because only P1 sources counted.
+  4. Neither screen can pan while the other's action plays: vanilla action
+     camera; M4's camera option.
+  5. Polish: drop the explanation on "Soldier ownership".
+- **0.5.1:** fixes 1, 2, 3 and 5 (checklist Run 2). (1) The follower keeps
+  the input off without a controllable soldier, and the session shows NO
+  SOLDIERS ASSIGNED (one banner manager: FRIENDLY ACTION first). (2) Our
+  input's left-click selects the soldier on the tile under the 3D cursor
+  (`XComWorldData.GetUnitsOnTile` L923), skipping clicks over the HUD
+  (`XComInputBase.TestMouseConsumedByFlash` L166). (3) The PC's input is
+  set to stock multiplayer's `Multiplayer_Inactive` (camera still scrolls,
+  `XComTacticalInput.uc` L1347-1424) while only P2's soldiers can act, set
+  again if the game changes it, and given back when a P1 soldier is
+  selected or ownership is off. Backspace/End go to our End Turn while
+  locked. Banner rule (Kc, same day): with ownership on, P1's soldiers, as
+  in 0.5.0, because the lock keeps the PC off P2's; with ownership off,
+  any soldier the laptop didn't order in the last 5 s. The PC's banner
+  comes from applying the laptop's action in both modes.
+
+**Stage 6 Run 2 (0.5.1, Kc, 2026-11-15; build 8270065):** logs
+`stage6-pc-2.log`, `stage6-laptop-2.log`.
+- **Passed:**
+  - NO SOLDIERS ASSIGNED (laptop L407, L472).
+  - Left-click select, on the body too (laptop L525-557, 6 clicks;
+    P1 clicks refused).
+  - The laptop's overwatch on a P1 soldier refused (PC L463-465).
+  - The PC lock: on at PC L653, the PC idle about 4 min; off by itself at
+    the next XCOM turn (L1516).
+  - The turn ending by itself, and ownership off (step 6).
+- **Kc:**
+  - A given-back soldier stays selected without acting: fine.
+  - Tab on the PC reaches a laptop soldier, then is pushed back
+    (polish: skip them in the PC's own Tab).
+  - The lock's ability icons and Backspace weren't checked.
+  - He asked for the banner to stay up on the PC while it's locked.
+- **Regained actions (Kc's question; from source, not tested):**
+  - Every 0.2 s, the locked PC looks for a P1 soldier with actions,
+    selects it, and unlocks on the next tick.
+  - The partner's input stays on while it has any assigned soldier, and
+    its skip picks one with actions.
+  - The question and the auto end recount actions every tick or turn.
+  - Teamwork (`BondmateTeamwork`, `X2Ability_DefaultBondmateAbilities.uc`
+    L45) should work either way.
+- **0.5.2 (Kc's clarification):** a player out of moves keeps the same
+  FRIENDLY ACTION banner, in the same place, until its soldiers have
+  actions again (a new turn, or e.g. Teamwork). This applies on both
+  machines, during XCOM's turn, with ownership on. It's based on the
+  player's own soldiers' action points (`PlayerHasActions`), not on the
+  lock. A host with no soldiers of its own sees it for the whole turn.
+  Kc from Run 2: while locked, the PC's camera pans and Backspace works;
+  ability icons not checked. Teamwork waits for a campaign test (Skirmish
+  has no bonds). Checklist Run 3.
+
+**0.5.3 (Kc, 2026-11-15: "go a bit further"; all four picked).**
+- **The PC's Tab and H** cycle only its own soldiers that can act, while
+  ownership is on, it's XCOM's turn and the PC isn't locked
+  (`HostCycleOwnSoldier`).
+- **H = previous soldier** on both machines. Kc: not Shift+Tab, which is
+  Steam's overlay. H is unbound in every input section of the game's
+  `DefaultInput.ini`: the only H entries are the text-entry alias lists
+  (L556, L558). `XComInputBase.uc` L1148 `Key_H` is an empty stub.
+- **FIX D button removed;** the fix stays on by default.
+- **Refusal message:** the laptop's status line shows a short reason for
+  4 s.
+- **The laptop's Backspace/End** end the turn when "Partner may end the
+  turn" is on.
+- **Mission end, from the SDK:**
+  - The battle ends with an `eGameRule_TacticalGameEnd` frame
+    (`X2TacticalGameRuleset.EndBattle` L225-282). The host's ruleset then
+    goes to `EndTacticalGame`, which shows the mission summary
+    (L5023-5070).
+  - A replay only follows into `EndTacticalGame` for Challenge Mode
+    (`XComReplayMgr.uc` L258-265). So the guest stopped on the last frame
+    with nothing handled, and the host's session stayed open, which made
+    HOST refuse in the next mission.
+- **Mission end, the fix:**
+  - The follower spots the end frame. Once caught up and idle (8 s at
+    most), it stops the guest's input and the session shows **CO-OP:
+    MISSION OVER** (won or lost, from `BattleData.bLocalPlayerWon`,
+    `XComGameState_BattleData.uc` L161), with a Main menu button
+    (LeaveAsGuest).
+  - The guest's ruleset is deliberately not sent to `EndTacticalGame`,
+    whose cleanup is for a campaign.
+  - The host spots the end frame. 5 s after the guest has it (30 s at
+    most), it disconnects and resets the session, with the game's own
+    connection-error handling kept out.
+  - A guest that loses the host mid-mission gets **CO-OP: HOST
+    DISCONNECTED** with the same button.
+  - A host session left over from an earlier mission is closed when HOST
+    is clicked again.
+  - Every step logs `Coop mission end (...)`.
+- Not verified from source: whether the guest's dialog and map change are
+  clean right after its replay reaches the end; whether the host's
+  disconnect during the summary screen disturbs it. Checklist Run 3 (0.5.3).
+
+## Stage 7: co-op over the internet via Steam (approved by Kc, 2026-11-15)
+
+**Goal.** A friend elsewhere joins without port forwarding. Direct IP works
+on a LAN but needs port forwarding over the internet. Research:
+research/steam-connection.md.
+
+**Kc's answers.**
+- Only Kc's own Steam account is available, so Steam tests need a friend.
+- No hotspot.
+- **Stage 7 before Stage 6 Run 3**, with one comprehensive test set
+  (checklists/m3-stage7.md).
+- Remove H only if XCOM has no previous-soldier key. It has one: Shift+Tab
+  on release (`XComTacticalInput.uc` L2197-2210), which Steam's overlay
+  usually takes. So H stays, and Shift+Tab also works in the mod.
+
+**Design (0.6.0).**
+- **Host.** CO-OP: HOST (STEAM) on the tactical HUD calls `StartHostSteam`:
+  - It creates a private session (`XComOnlineGameSettingsDeathmatchUnranked`:
+    0 public / 2 private connections, the stock version hashes), as the
+    shell does (`XComShellPresentationLayer.uc` L1209-1226, L1286-1358).
+  - `CreateOnlineGame('Game')`, then on completion `CreateServer` with
+    Port 7777 plus `steamsockets` (`UIMPShell_Lobby.uc` L510; SPL L1121).
+  - Then `ShowInviteUI` (`UIMPShell_Lobby.uc` L897). The button becomes
+    INVITE (STEAM), which reopens the overlay.
+- **Guest.** CO-OP: JOIN (STEAM) on the main menu arms the session. The
+  next accepted invite goes from `X2TC_InviteListener` to
+  `OnSteamInviteAccepted`:
+  - `JoinOnlineGame`, then `GetResolvedConnectString`, split as SPL
+    L1142-1159 does.
+  - `CreateClient` with `steamsockets`, then the usual retries, ping,
+    version check, history and follow.
+- **Clearing the stock invite.** The game's own invite handler also runs
+  (it disconnects and stores the invite, `XComOnlineEventMgr.uc`
+  L3554-3559). Once joined, the mod clears the stored invite and shuttle
+  (`ClearAcceptedInvites`, `ClearShuttleToScreen`) so the main menu doesn't
+  act on it later.
+- **Cleanup.** `DestroyOnlineGame('Game')` runs when the host's session
+  closes (mission end, a stale session) and when the guest leaves.
+- **Two HOST buttons.** A session counts as stale only if its poll timer
+  isn't running on the current map (`IsPollRunning`). Clicking either HOST
+  again in the same mission no longer closes a live session.
+- **Unchanged.** Direct IP (HOST, JOIN) for the LAN.
+
+**Fallbacks if the test fails.**
+- The Steam lobby API (`OnlineGameInterfaceXCom.uc`: CreateLobby L298,
+  JoinLobby L426, SetLobbyServer L909, InviteToLobby L947; manual flow in
+  `XComCheatManager.uc` L3767-3789).
+- `AllowP2PPacketRelay` (L287), if a direct Steam P2P connection can't form.
+
+**Unknowns the test settles.**
+- `steamsockets` from a single-player tactical map and the main menu.
+- Invites while hosting a single-player mission.
+- Delegate order with the stock invite handler.
+- The connect string's format.
+- Relay without port forwarding.
+- Lag.
+
+**Pass.** The friend joins over Steam, plays co-op turns, and a second
+mission connects again. The same session runs Stage 6 Run 3 and the M3
+check (3 full turns, logs from both machines).

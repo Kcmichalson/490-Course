@@ -111,11 +111,139 @@ New in 0.5.0:
 - **(guess)** The banner's text and colour, and whether the stock "XCOM
   TURN" text comes back on the next real turn change.
 
+## Run 2 (version 0.5.1)
+
+Run 1 (0.5.0): squad screen, settings, FRIENDLY ACTION on both, the
+question, "ready", and the partner's End Turn all worked. Fixed in 0.5.1:
+- **NO SOLDIERS ASSIGNED** (blue banner) on the laptop while it has no
+  soldier during XCOM's turn; its input is now off then, so a soldier
+  given back to the PC no longer shows movement range and abilities.
+- **Left-click selects** the laptop's soldiers (the game turns click
+  selection off in its tutorial mode, which the laptop runs in).
+- **PC locked** once only P2's soldiers can act. The game used to select
+  them and let the PC act. While locked, the camera should still scroll,
+  the status reads "Your soldiers are done; your partner's turn", and
+  CO-OP: END TURN, Backspace and End still work.
+- FRIENDLY ACTION on the laptop: with ownership on, for P1's soldiers (as
+  in 0.5.0; the PC can no longer act with P2's); with ownership off, for
+  any soldier the laptop didn't order in the last 5 s. The PC's banner
+  comes from applying the laptop's action, in both modes.
+- "Soldier ownership" has no explanation in brackets any more.
+- Not changed: neither screen can pan while the other player's action
+  plays (vanilla XCOM locks the camera during actions; the M4 camera
+  option).
+
+Steps (4 soldiers, Skirmish):
+1. Build, package **0.5.1**, install. Menus read (v0.5.1). Host, join.
+2. **Laptop, before any soldier is given:** the blue **NO SOLDIERS
+   ASSIGNED** banner should be up, with no movement range showing.
+3. **PC:** give units 2 soldiers (squad screen). On the laptop the banner
+   should go away and a P2 soldier should be selected. Give one back: if
+   it was selected, the laptop should switch to its other soldier. Give
+   both back: the banner should return. Then give two again.
+4. **Laptop:** **left-click** each of its soldiers: it should select. Left
+   click a PC soldier: nothing should happen. Ability icons on the HUD
+   should still work (one shot or overwatch).
+5. **PC:** use up both P1 soldiers' actions. The PC should **not** jump to
+   a laptop soldier: its status reads "Your soldiers are done; your
+   partner's turn". Check that the camera can still scroll and that
+   clicking a laptop soldier or its abilities does nothing. Then press
+   **Backspace**: the question should appear (Cancel).
+6. **Laptop:** act with its soldiers until they're out. The turn should
+   end by itself; next turn the PC should have its input back.
+7. **Ownership off** (PC ticks it): on the laptop, left-click should now
+   select every soldier. The PC should not be locked. Each side moves a
+   soldier "belonging" to the other: the other screen should show
+   FRIENDLY ACTION both times.
+8. Logs: `stage6-pc-2.log`, `stage6-laptop-2.log`.
+
+## Run 3 (version 0.5.3; replaces the 0.5.2 steps below)
+
+New in 0.5.3 (Kc: "go a bit further"):
+- **Out-of-moves banner** (from 0.5.2): a player out of moves keeps the
+  FRIENDLY ACTION banner until its soldiers can act again.
+- **PC Tab** cycles only the PC's own soldiers that can act (no more
+  jumping to a laptop soldier and back).
+- **H = previous soldier** on both machines (Tab = next). H is unbound in
+  the game's default keys; Shift+Tab is Steam's overlay.
+- **FIX D button gone**; the fix stays on permanently.
+- **Refusal message**: when the PC refuses a laptop action, the laptop's
+  status line says why for about 4 s (e.g. "Refused: that soldier belongs
+  to the host").
+- **Laptop Backspace/End** end XCOM's turn when "Partner may end the turn"
+  is on.
+- **Mission end** (was unhandled): the laptop shows **CO-OP: MISSION OVER**
+  (XCOM won/lost) with a **Main menu** button; the PC closes the co-op
+  session about 5 s after the laptop has the last frame, and its own game
+  goes on (summary screen). If the PC disconnects mid-mission, the laptop
+  shows **CO-OP: HOST DISCONNECTED** with the same button. Clicking HOST in
+  a later mission works again.
+
+Steps (Skirmish, 4 soldiers, laptop gets 2). Note clock times on both
+machines for steps 6-8.
+1. Build, package **0.5.3**, install; menus read (v0.5.3). Host, join.
+   The laptop's HUD should have no FIX D button.
+2. **Keys.** PC: Tab and H cycle only the PC's two soldiers. Laptop: Tab
+   and H cycle its two (H backwards).
+3. **Refusal.** PC gives one laptop soldier back while it's selected on
+   the laptop; the laptop orders it a move at once. The status line should
+   say "Refused: that soldier belongs to the host", then clear.
+4. **Out of moves, both ways.** One turn the PC runs out first (its banner
+   stays, its ability icons do nothing); the next turn the laptop runs out
+   first.
+5. **Laptop Backspace.** PC ticks "Partner may edit" and "Partner may end
+   the turn"; on its turn the laptop presses **Backspace**: the turn
+   should end.
+6. **Mission end.** Play on to the end of the mission (finish it or
+   evacuate everyone, or let it fail). Note the clock time of the last
+   action. Laptop: **CO-OP: MISSION OVER** with the result, then **Main
+   menu** should reach the main menu. PC: its normal mission summary;
+   nothing co-op left on screen.
+7. **New mission on the PC:** start another Skirmish, click HOST: it should
+   say hosting (no "already started"). Laptop JOIN again works.
+8. **Host leaves mid-mission:** in that second mission, quit the PC's game
+   to the main menu (or close it). Laptop: **CO-OP: HOST DISCONNECTED**,
+   then Main menu. Note the clock time.
+9. Logs: `stage6-pc-3.log`, `stage6-laptop-3.log` (with a PC log from the
+   second mission too if the game was closed: copy Launch.log before
+   restarting). For the M3 check, the first mission should run at least 3
+   full turns before step 6.
+
+## Run 3, first draft (version 0.5.2; superseded by the steps above)
+
+Run 2 (0.5.1) passed:
+- the NO SOLDIERS ASSIGNED banner;
+- left-click select, including on a soldier's body;
+- the laptop refused a P1 soldier;
+- the PC lock: on at PC L653, off by itself at the next XCOM turn, L1516;
+- the turn ending by itself;
+- ownership off.
+
+New in 0.5.2 (Kc): a player out of moves keeps the **FRIENDLY ACTION**
+banner (the same one, same place) until its soldiers have actions again,
+on both machines, during XCOM's turn with ownership on. Kc from Run 2:
+while locked, the PC's camera pans and Backspace works.
+
+1. Build, package **0.5.2**, install; menus read (v0.5.2). Host, join, give
+   the laptop 2 of 4 soldiers.
+2. **PC out of moves first:** the PC uses up both its soldiers. Its banner
+   should come up and stay while the laptop acts, and go at the next XCOM
+   turn. Try one **ability icon** on the PC's HUD while locked: nothing
+   should happen on either screen.
+3. **Laptop out of moves first** (next turn): the laptop uses up both its
+   soldiers. Its banner should come up and stay while the PC acts, and go
+   at the next XCOM turn.
+4. Play on to **3 full turns** for the M3 check. Logs: `stage6-pc-3.log`,
+   `stage6-laptop-3.log`.
+5. Regained actions (Teamwork) wait for a campaign test: Skirmish has no
+   bonds.
+
 ## What I'll look for
 
 | Machine | Lines |
 |---|---|
 | Both | `X2TC: version 0.5.0`; `Coop UI: FRIENDLY ACTION (...)`, `banner shown`, `banner hidden`; `Coop input: installed` |
+| Both (0.5.3) | `Coop mission end (host): end-of-battle frame F, XCOM won/lost`, `the guest has the end frame`, `closing the co-op session (...)`, `session closed`; `Coop mission end (guest): the replay passed the end-of-battle frame F`, `shown (idle=...)`, `dialog shown: CO-OP: MISSION OVER`, `dialog closed`; `WARNING: the host disconnected during the mission`; `Coop owners: host cycled to its unit U`; `Coop input: H -> soldier -1` |
 | Both | `Coop squad: screen opened`, `rows for N soldiers`, `screen closed`; `owner switch ignored` / `setting I ignored` on the laptop while it may not edit |
 | PC | `Coop owners: unit U -> P1` (one per soldier at join), `change requested by host/partner: unit U -> P2`, `unit U -> P2 (frames now F)`; `Coop settings: changed by ...`, `sent to the partner: ...`; `the partner ends XCOM's turn`; `Coop UI: host End Turn icon disabled/enabled`; `Coop turn: the partner is ready...`, `"ready" is cleared (...)`; `Coop input: BackSpace -> co-op End Turn check`; `host End Turn (...) ... asking`, `host chose not to end the turn`, `host ends XCOM's turn (anyway)`; `Coop owners: host selection moved off P2's unit`; any `Coop rejected: unit U is P1's, action from P2` |
 | Laptop | `Coop settings: from the host: ...`; `asked the host to give unit U to P1`; `guest asked the host to end XCOM's turn`; `Coop input: Tab -> next soldier`; `Coop follower: selected unit U` (P2 units only); `is P1's or has no actions left; selected P2's unit`; `Coop turn: guest is ready to end the turn`; `guest acted again; no longer ready`; `XCOM input phase begins/ends` |

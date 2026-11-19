@@ -63,7 +63,20 @@ CLAUDE.md describes.
   toggles, 0.5 s state log. Run 8: M key and right-click move soldiers,
   click-to-move still fails; 0.4.3 fix D (fresh pathing pawn). Run 9:
   fix D works, right-click moves; Stage 5 settled. Stage 6 (shared turn,
-  owners, banner, end-turn rules) written as 0.5.0, Run 1 next)
+  owners, banner, end-turn rules): Run 1 (0.5.0), **Run 2 (0.5.1)
+  passed 2026-11-15**; Run 3 (0.5.3 items) not run yet. **Stage 7
+  (Steam invite) Run 2 passed 2026-11-15 (0.6.2, a friend over the
+  internet): 14 turns, 51 guest actions applied**; problems fixed in
+  0.6.3 (not built or tested). Stage 8 (send only new frames) approved
+  2026-11-15; **8.1 written as 0.7.0 (includes 0.6.3), not built**; its
+  LAN run with the laptop carries the 0.6.3 checks, Stage 6 Run 3 and
+  the formal M3 check (checklists/m3-stage8.md). **8.1 run 2026-11-18:
+  new-frames sync is a stop case (frames not added to the guest's
+  history); with it off, the M3 check was met (7 full turns, guest acting
+  every turn, logs from both machines; buildid 8270065 on both)**; a PC
+  crash on leaving a map traced to the network manager. New-frames sync
+  dropped for now (Kc: optimization after the basics). M3 closes on
+  Kc's word)
 - [ ] M4: Same-turn actions
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
@@ -4289,3 +4302,56 @@ m3-stage8.md (a LAN test with the laptop: mission A switch on, B off).
   that's said in the plan and the reply. Then 8.1 code and the checklist.
   **Misreads / rule breaks:** none. **How It Was Verified:** syntax and
   locals checks; in-game is Kc's.
+
+### 2026-11-18 — Session 8: status, Stage 8.1 run steps
+Claude Opus 5.5, PC. No code. Kc ran the 8.1 test (0.7.0, LAN, buildid
+8270065 on both); results in plans/m3-plan.md, Stage 8 "8.1 run".
+**Changed:** LOG.md milestone
+status (M3 line was stuck at "Stage 6 ... Run 1 next"). **Checks:**
+`X2TC_VERSION` = "0.7.0" (`X2DownloadableContentInfo_X2TacticalCoop.uc`
+L22); `bNewFramesSync` reset to false per session (`X2TC_CoopSession.uc`
+L3287); PC `buildid` 8270065; no 0.6.3 or 0.7.0 zip in `local\release\`
+yet.
+
+### Session 8 prompt log
+- **Prompt:** "New session, on my PC. Read CLAUDE.md, SPEC.md, [LOG.md,
+  plans/m3-plan.md Stage 8, checklists/m3-stage8.md]. Give me a short
+  status [...] Then give me the Stage 8.1 checklist for today [...] mission
+  A with SYNC: NEW FRAMES on and mission B with it off, plus the 0.6.3
+  checks and the formal M3 check riding along [...] Also update LOG.md's
+  out-of-date milestone status block. House rules: paths relative to
+  Artifact5, compact LOG entries, no new code until the test is run and
+  the logs read." **Provided:** status; today's numbered steps in the
+  reply (mission A with the switch on, the 0.6.3 checks and M3 check;
+  mission B off, with Stage 6 Run 3 items and the host-leaves test); the
+  status block above. **Misreads / rule breaks:** none. **How It Was
+  Verified:** the checks above.
+- **Prompt:** "Give me the cmd command to build it briefly" **Provided:**
+  the Build task's `build.ps1` call with the SDK and game paths filled in.
+  **Misreads / rule breaks:** none. **How It Was Verified:** read from
+  `mod/.vscode/tasks.json` and `mod/README.md`; not run by me.
+- **Prompt:** "[Kc's report of three runs: run 0 crashed, maybe from
+  alt-tab; run 1 with SYNC: NEW FRAMES, PC moves the laptop's soldiers but
+  the laptop never shows it, quit early (stage8 logs 1); run 2 won,
+  MISSION OVER shown (stage8 logs 2). Issues: no cover icons or move
+  range, all ability icons glowing, camera not following, VIP/civilian
+  control, no detection warnings, rocket from off the map, position
+  catch-up, no wheel elevation, long alien turn, bound soldier
+  selectable, hacking on both machines with no Cancel on the laptop;
+  grenade works.]" **Provided:** the 8.1 results in plans/m3-plan.md
+  (Stage 8, "8.1 run"): stop case for new frames, M3 check met in run 2,
+  0.6.3 checks, the crash's reference chain. Copied the crashed run's PC
+  logs to `local\m3-logs\stage8-pc-0-crash.log` and
+  `stage8-pc-0-crashdump.log`. No code. **Misreads / rule breaks:**
+  none. **How It Was Verified:** greps of all six logs (counts and line
+  numbers in the plan entry); the 36 turn-start lines diffed between
+  `stage8-pc-2.log` and `stage8-laptop-2.log` with no difference.
+- **Prompt:** "i fired it with a PC spark and the PC then saw it fly from
+  off the map, seems rockets in particular might be scuffed. Laptop build
+  id is 8270065. Drop the new frames for now, let's look into
+  optimization once the basics are done." **Provided:** the plan's 8.1
+  entry corrected (the off-map rocket was on the PC's own screen; cause
+  a guess), laptop buildid recorded, the drop decision recorded (8.2 and
+  8.3 deferred; the switch stays off by default). **Misreads / rule
+  breaks:** I had guessed the rocket was a laptop display problem; Kc's
+  answer corrected it. **How It Was Verified:** n/a (records only).

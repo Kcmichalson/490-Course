@@ -1358,3 +1358,48 @@ Then one friend run over Steam.
    prototype reported crashes that way).
 3. Stage 7 Run 3's checks (0.6.3) ride along in the 8.1 LAN run. The same session runs Stage 6 Run 3 and the M3
 check (3 full turns, logs from both machines).
+
+**8.1 run (0.7.0, Kc alone, PC + laptop on the LAN, 2026-11-18; buildid
+8270065 on both).** Logs in `local\m3-logs\`:
+`stage8-pc-0-crash.log` (+ `-crashdump.log`), `stage8-pc-1.log` /
+`stage8-laptop-1.log`, `stage8-pc-2.log` / `stage8-laptop-2.log`.
+- **Switch on (run 1): stop case.** Every frame reached the laptop, none
+  joined its history: `new frame 1..9 received ... history frames=112,
+  in the history at its index=False` (laptop L453-529). The PC applied the
+  laptop's moves; the laptop's screen never changed; acks timed out
+  (`not acknowledged after 15s`). Per default 2, 8.2 doesn't start.
+- **Switch off (run 2): M3 check met.** 7 full XCOM turns, won in turn 8;
+  the guest acted in every turn (19 moves: 16 applied, 3 refused as out
+  of range; 8 abilities: 7 applied); all 36 `Coop sync` pairs match.
+  Partial sends 30 KB at first, up to 427 KB; acks 0 s: 19, 1 s: 50,
+  2 s: 16; 1 guest hitch.
+- **0.6.3 checks:** MISSION OVER on the laptop (run 2 and run 0's first
+  mission) **pass**; the laptop's grenade (`LaunchGrenade ... the host
+  found 2 units in its area`) **pass**; a bound P2 soldier logged `can
+  act=False` **pass** on the host, but the laptop can still select it.
+  Cover icons and move range still missing on the laptop (the
+  `InitEvents` guess failed).
+- **Crash (run 0, PC):** after the guest left an Extract VIP mission, the
+  PC asserted leaving the map (`UnGame.cpp` L3107, "World ... not cleaned
+  up by garbage collection"). The reference chain in the crash log runs
+  from `XComGameStateNetworkManager.HistoryContextData.ContextRef` to an
+  ability context's `TraceHitInfo.HitComponent` in the old map. So the
+  network manager kept the last sent context alive across the map change
+  (from the log; that the mod causes it, rather than alt-tab, is a guess).
+- **Kc's other observations (not in the logs):** ability icons all
+  glowing on the laptop; the laptop's camera doesn't follow moving
+  soldiers; VIPs and civilians aren't on the squad screen, and the host
+  controls them under the FRIENDLY ACTION banner; no detection warnings
+  on the laptop; a PC SPARK's rocket flying in from off the map **on the
+  PC's own screen** (Kc: rockets in particular may be broken; cause
+  unknown, a guess either way whether the mod is involved);
+  laptop soldiers stopping short, then catching up at the next move; no
+  mouse-wheel elevation on the laptop (F/C work); the alien turn plays
+  longer on the laptop; hacking opens the hack screen on both machines
+  (the PC's choice decided it; the laptop's `FinalizeHack` was refused
+  after 10 s, and the laptop has no Cancel).
+
+**Decision (Kc, 2026-11-18): new-frames sync dropped for now.** "Let's
+look into optimization once the basics are done." 8.2 and 8.3 are
+deferred; the SYNC: NEW FRAMES switch stays in 0.7.0 as an off-by-default
+test setting until a plan removes or replaces it.

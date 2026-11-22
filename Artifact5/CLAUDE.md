@@ -93,6 +93,13 @@ These come from what happened to the 2016 Tactical Co-Op mod (see LOG.md).
   class override in a plan first, with why nothing else works
 - Log lines from the mod start with a fixed prefix (decided in M0) so they
   can be found in Launch.log
+- UnrealScript: never assign to a class's default values at runtime
+  (default.X = ... or class'Y'.default.X = ...) unless X is a config
+  variable; the compiler rejects it. Keep shared state on a named object
+  found with FindObject, or in config variables that are never saved.
+  Never name a local variable after a field the class inherits (for
+  example Owner on an Actor). Run the syntax-check script, which checks
+  for both, over every changed class before handing over a build.
 
 ## Workflow rules
 - Work one milestone at a time, in SPEC.md order. The mod must build and

@@ -157,6 +157,12 @@ const REFUSAL_SECONDS = 4.0;               // guest (0.5.3): how long a refusal 
 // animations): the guest says when its "mission over" dialog is up; the host closes
 // MISSION_END_DISCONNECT_SECONDS after that, or after MISSION_END_MAX_SECONDS.
 const CMD_MISSION_END_SHOWN = "X2TC_MissionEndShown";
+// 0.8.0: the guest's choice on its own hack screen: the reward option (1 or 2), or 0 to
+// cancel. The host applies it on its hidden copy of the screen (X2TC_CoopHackListener).
+const CMD_HACK_CHOICE = "X2TC_HackChoice";
+const HACK_CHOICE_WAIT_SECONDS = 15.0;  // host: longest wait for its hack screen to open
+const HACK_RESULT_WAIT_SECONDS = 20.0;  // host: longest wait for the hidden screen's result
+const HACK_HOLD_MAX_SECONDS = 180.0;    // guest (0.8.1): longest hold before releasing anyway
 const MISSION_END_DISCONNECT_SECONDS = 2;
 const MISSION_END_MAX_SECONDS = 60;
 const MOVE_RETRY_SECONDS = 10;             // host: how long a move may wait for an idle ruleset
@@ -261,6 +267,25 @@ var bool bSteamInviteArmed;    // guest: the next accepted invite is a co-op inv
 var bool bSteamJoinStarted;    // guest: joining the host's Steam session
 var bool bStockInviteHandlerOff; // guest (0.6.2): the game's own invite handler is taken off
 var bool bContentMismatch;     // both (0.6.2): the other game's mods or DLC differ (by name)
+// 0.8.0 hack routing (X2TC_CoopHackListener).
+var int PendingHackOption;     // host: the guest's hack choice waiting for the host's hidden hack screen (-1 none, 0 cancel, 1-2 reward)
+var float PendingHackTime;     // host: WorldInfo.RealTimeSeconds when it arrived
+var bool bHostHackDriven;      // host: InitiateHack ran on the hidden screen; end it when its result shows
+var float HostHackDrivenTime;  // host: when
+// 0.8.1 hack hold (guest): the hack screen's "done" callback is held until the hack's
+// result frame (FinalizeHack or CancelHack) has been replayed. Cleared on release,
+// ResetSession and map cleanup (they point at objects of the map).
+var int LastEngineMultiplayer; // 0.8.1 diagnostics: last logged IsMultiPlayerGame (-1 unknown, 0, 1)
+var UIHackingScreen HeldHackScreen;
+var delegate<UIHackingScreen.HackingCompleteCallback> HeldHackComplete;
+var int HeldHackTargetID;
+var name HeldHackFinalizeName;
+var name HeldHackCancelName;
+var int HeldHackScanFrame;     // frames before this one were already checked for the result
+var bool bHeldHackMine;        // the guest started it (its screen is the interactive one)
+var bool bHeldHackScreenDone;  // the screen finished (its owner pressed a key, or cancelled)
+var bool bHeldHackResultSeen;  // the replay passed the result frame
+var float HeldHackTime;        // WorldInfo.RealTimeSeconds when the hold began
 
 // Co-op squad screen settings (host's; the guest keeps a copy from CMD_SETTINGS).
 var bool bOwnershipOn;         // owners enforced (default on)
@@ -406,6 +431,12 @@ function bool StartHostServer(bool bSteam)
 	Role = eCoopRole_Host;
 	bSteamSession = bSteam;
 	`log("Coop host: server created (port" @ COOP_PORT $ ", steam=" $ bSteam $ ")", , 'X2TC');
+	// 0.8.0: release the network manager's data before this map unloads; the switches
+	// and the engine's multiplayer flag, for the camera question.
+	EnsureMapCleanup();
+	LogNetDiagnostics("host started");
+	class'X2TC_CoopFixes'.static.LogState("HOST");
+	class'X2TC_CoopSPRules'.static.BeginSession(); // 0.8.1
 	// Stage 6: Backspace on the host goes through the co-op End Turn check.
 	class'X2TC_CoopInput'.static.Install();
 	// Owners remembered from earlier missions of this campaign (X2TC_CoopOwnerMemory).
@@ -901,6 +932,11 @@ function FastSend()
 	{
 		HostApplyPendingOwners();
 	}
+	// 0.8.0: the guest's hack choice, on the host's hidden hack screen.
+	if (Role == eCoopRole_Host && (PendingHackOption >= 0 || bHostHackDriven))
+	{
+		HostDriveHack();
+	}
 	if (Role == eCoopRole_Host && bGuestFollowing)
 	{
 		HostMaybeSendPartial(`XCOMNETMANAGER);
@@ -1001,8 +1037,10 @@ function KeepHostSelectionOwn()
 	}
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
-		if (class'X2TC_CoopOwnership'.static.IsOwnableSoldier(UnitState)
-			&& class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_HOST
+		// 0.8.0: or a VIP, civilian or other non-soldier the host controls.
+		if (((class'X2TC_CoopOwnership'.static.IsOwnableSoldier(UnitState)
+				&& class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_HOST)
+				|| class'X2TC_CoopOwnership'.static.IsHostOnlyUnit(UnitState))
 			&& class'X2TC_CoopOwnership'.static.UnitCanAct(UnitState) && TacticalController.Visualizer_SelectUnit(UnitState))
 		{
 			if (LastHostSkippedUnitID != ActiveUnit.ObjectID)
@@ -1047,6 +1085,7 @@ function bool HostCycleOwnSoldier(int Direction)
 {
 	local XComTacticalController TacticalController;
 	local array<XComGameState_Unit> Squad, Own;
+	local XComGameState_Unit UnitState;
 	local int i, Start, Index, ActiveID;
 
 	if (!HostOwnsCycleKeys())
@@ -1065,6 +1104,14 @@ function bool HostCycleOwnSoldier(int Direction)
 			&& class'X2TC_CoopOwnership'.static.GetOwner(Squad[i]) == class'X2TC_CoopOwnership'.const.OWNER_HOST)
 		{
 			Own.AddItem(Squad[i]);
+		}
+	}
+	// 0.8.0: VIPs, civilians and other non-soldiers the host controls, after its soldiers.
+	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+	{
+		if (class'X2TC_CoopOwnership'.static.IsHostOnlyUnit(UnitState) && class'X2TC_CoopOwnership'.static.UnitCanAct(UnitState))
+		{
+			Own.AddItem(UnitState);
 		}
 	}
 	if (Own.Length == 0)
@@ -1117,6 +1164,7 @@ function UnlockHost(string Why)
 // and show NO SOLDIERS ASSIGNED while the guest has none to control.
 function GuestTurnUI()
 {
+	MaybeReleaseHeldHack(); // 0.8.1: the hold's time limit
 	MaybeHideBanner();
 	UpdateBanner();
 	// 0.5.3: the refusal message goes after REFUSAL_SECONDS.
@@ -1175,6 +1223,15 @@ function ShowBanner(string Why)
 // Both (0.5.1): the one banner on screen. FRIENDLY ACTION first; otherwise, on the guest
 // during XCOM's input phase with no soldier it may control, NO SOLDIERS ASSIGNED (Run 1,
 // Kc); otherwise none. Changes the overlay only when the wanted text changes.
+// 0.8.1 (0.8.0b Run 2: the banner came up during a player's own last action, as soon as
+// its action points hit 0): the "out of moves" banner waits until that action has played
+// (the visualizer is idle). Fix switch: "Banner waits for the last action".
+function bool LastActionStillPlaying()
+{
+	return class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_BANNER_IDLE)
+		&& class'XComGameStateVisualizationMgr'.static.VisualizerBusy();
+}
+
 function UpdateBanner()
 {
 	local X2TC_CoopReplayMgr Follower;
@@ -1190,7 +1247,8 @@ function UpdateBanner()
 		Wanted = class'X2TC_CoopTurnUI'.const.FRIENDLY_TEXT;
 	}
 	else if (Role == eCoopRole_Host && bGuestFollowing && OwnershipOn() && CurrentTurnTeam() == eTeam_XCom
-		&& !class'X2TC_CoopOwnership'.static.PlayerHasActions(class'X2TC_CoopOwnership'.const.OWNER_HOST))
+		&& !class'X2TC_CoopOwnership'.static.PlayerHasActions(class'X2TC_CoopOwnership'.const.OWNER_HOST)
+		&& !LastActionStillPlaying())
 	{
 		// 0.5.2 (Run 2, Kc): a player out of moves keeps the banner until its soldiers
 		// have actions again (a new turn, or e.g. Teamwork).
@@ -1209,7 +1267,8 @@ function UpdateBanner()
 			{
 				Wanted = class'X2TC_CoopTurnUI'.const.NO_SOLDIERS_TEXT;
 			}
-			else if (OwnershipOn() && !class'X2TC_CoopOwnership'.static.PlayerHasActions(class'X2TC_CoopOwnership'.const.OWNER_GUEST))
+			else if (OwnershipOn() && !class'X2TC_CoopOwnership'.static.PlayerHasActions(class'X2TC_CoopOwnership'.const.OWNER_GUEST)
+				&& !LastActionStillPlaying())
 			{
 				// 0.5.2: the guest out of moves, as on the host.
 				Wanted = class'X2TC_CoopTurnUI'.const.FRIENDLY_TEXT;
@@ -1606,6 +1665,7 @@ function Poll()
 	}
 
 	LogHitch();
+	LogEngineMultiplayerChange("poll"); // 0.8.1
 
 	bServer = NetworkMgr.HasServerConnection();
 	bClient = NetworkMgr.HasClientConnection();
@@ -1775,6 +1835,19 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		{
 			MissionEndAckedSecond = Seconds;
 			`log("Coop mission end (host): the guest shows \"mission over\"; closing in" @ MISSION_END_DISCONNECT_SECONDS $ "s", , 'X2TC');
+		}
+		return;
+	}
+
+	if (Command == CMD_HACK_CHOICE)
+	{
+		if (Role == eCoopRole_Host)
+		{
+			Params = RawParams;
+			PendingHackOption = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
+			PendingHackTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+			`log("Coop hack (host): the partner chose" @ HackOptionText(PendingHackOption) $ "; applying it on this PC's hidden hack screen", , 'X2TC');
+			HostDriveHack();
 		}
 		return;
 	}
@@ -2193,6 +2266,7 @@ function OnReceiveHistory(XComGameStateHistory InHistory, X2EventManager EventMa
 		`log("Coop guest: mission already loading; ignoring this history", , 'X2TC');
 		return;
 	}
+	ScrubReplayVisuals(0, History.GetNumGameStates() - 1); // 0.8.0b
 
 	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
 	if (BattleData == none || BattleData.m_strMapCommand == "")
@@ -2267,6 +2341,9 @@ function InstallFollower(XComTacticalGRI TacticalGRI)
 		return;
 	}
 
+	// 0.8.0b: again here, before the replay builds any visualization (in case the map
+	// load replaced the history's objects).
+	ScrubReplayVisuals(0, `XCOMHISTORY.GetNumGameStates() - 1);
 	NewMgr = TacticalGRI.Spawn(class'X2TC_CoopReplayMgr', TacticalGRI);
 	if (NewMgr == none)
 	{
@@ -2286,6 +2363,133 @@ function InstallFollower(XComTacticalGRI TacticalGRI)
 		OldMgr.Destroy();
 	}
 	`log("Coop guest: follower installed (replaced" @ OldName $ ")", , 'X2TC');
+	// 0.8.0: as on the host (the guest's map is the host's mission from here on).
+	EnsureMapCleanup();
+	LogNetDiagnostics("guest follower installed");
+	class'X2TC_CoopFixes'.static.LogState("JOIN");
+}
+
+// 0.8.0 (crash on leaving a map, Stage 8.1 run 0): one X2TC_CoopMapCleanup in this map,
+// which tells the session when the map is cleaned up (before it unloads). Not kept in a
+// variable: a reference from this session (which outlives the map) to an actor of the map
+// would itself keep the map from being freed.
+function EnsureMapCleanup()
+{
+	local WorldInfo World;
+	local X2TC_CoopMapCleanup Existing;
+
+	World = class'WorldInfo'.static.GetWorldInfo();
+	if (World == none)
+	{
+		return;
+	}
+	foreach World.DynamicActors(class'X2TC_CoopMapCleanup', Existing)
+	{
+		return;
+	}
+	if (World.Spawn(class'X2TC_CoopMapCleanup') == none)
+	{
+		`log("Coop cleanup: couldn't spawn the map cleanup actor", , 'X2TC');
+	}
+}
+
+// 0.8.0: called by X2TC_CoopMapCleanup when the map is cleaned up. Stock multiplayer
+// disconnects or resets the network manager here (X2TacticalMPGameRuleset.uc L108-138);
+// the single-player ruleset doesn't, so a session still open (the host quit mid-mission,
+// or the guest left and the host played on) left contexts in the manager that point into
+// the old map ("World ... not cleaned up by garbage collection").
+function OnMapCleanup()
+{
+	local PlayerController PC;
+
+	if (!IsActive())
+	{
+		return;
+	}
+	if (!class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_CRASH_CLEANUP))
+	{
+		`log("Coop cleanup: the map is closing with the session open (" $ RoleName() $ "); crash cleanup is off, nothing done", , 'X2TC');
+		return;
+	}
+	`log("Coop cleanup: the map is closing with the session open (" $ RoleName() $ ", frames=" $ `XCOMHISTORY.GetNumGameStates() $ "); closing it", , 'X2TC');
+	PC = class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController();
+	if (PC != none)
+	{
+		PC.bIgnoreNetworkMessages = true;
+	}
+	ReleaseNetworkData("map closing", true);
+	DestroySteamGame("map closing");
+	ResetSession();
+}
+
+// 0.8.0: empty the network manager's per-connection data: the list of every context sent
+// or received (ContextHistory, XComGameStateNetworkManager.uc L65-73) and the rest, with
+// the native ResetConnectionData (L255), as stock multiplayer does when it keeps the
+// connection (X2TacticalMPGameRuleset.uc L129-136). Disconnects first if asked. Logs the
+// list's length before and after (what ResetConnectionData empties is native: a guess
+// until this line shows it).
+function ReleaseNetworkData(string Why, bool bDisconnect)
+{
+	local XComGameStateNetworkManager NetworkMgr;
+	local int Before;
+
+	if (!class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_CRASH_CLEANUP))
+	{
+		`log("Coop cleanup: crash cleanup is off; network data kept (" $ Why $ ")", , 'X2TC');
+		return;
+	}
+	NetworkMgr = `XCOMNETMANAGER;
+	if (NetworkMgr == none)
+	{
+		return;
+	}
+	Before = NetworkMgr.ContextHistory.Length;
+	if (bDisconnect)
+	{
+		NetworkMgr.Disconnect();
+	}
+	NetworkMgr.ResetConnectionData();
+	`log("Coop cleanup (" $ RoleName() $ "): network data released (" $ Why $ "); sent and received contexts" @ Before @ "->" @ NetworkMgr.ContextHistory.Length $ ", disconnected here=" $ bDisconnect @ "connections now=" $ NetworkMgr.HasConnections(), , 'X2TC');
+}
+
+// 0.8.1 diagnostics: log when the engine's multiplayer flag changes while a session runs
+// (with the connection state), to find what turns it on and whether it turns off again.
+function LogEngineMultiplayerChange(string Why)
+{
+	local XComEngine Engine;
+	local XComGameStateNetworkManager NetworkMgr;
+	local int Value;
+
+	Engine = `XENGINE;
+	NetworkMgr = `XCOMNETMANAGER;
+	if (Engine == none)
+	{
+		return;
+	}
+	Value = Engine.IsMultiPlayerGame() ? 1 : 0;
+	if (Value == LastEngineMultiplayer)
+	{
+		return;
+	}
+	LastEngineMultiplayer = Value;
+	`log("Coop diagnostics (" $ Why $ "): engine multiplayer game now" @ (Value == 1) @ "(" $ RoleName()
+		$ ", server=" $ (NetworkMgr != none && NetworkMgr.HasServerConnection())
+		@ "client=" $ (NetworkMgr != none && NetworkMgr.HasClientConnection())
+		@ "connections=" $ (NetworkMgr != none ? NetworkMgr.Connections.Length : -1) $ ")", , 'X2TC');
+}
+
+// 0.8.0 (camera question, plans/m4-plan.md): the follow camera is skipped when the engine
+// reports a multiplayer game (X2Action_CameraFollowUnit.uc L47-61). Log what it reports.
+static function LogNetDiagnostics(string Why)
+{
+	local WorldInfo World;
+	local XComEngine Engine;
+
+	World = class'WorldInfo'.static.GetWorldInfo();
+	Engine = `XENGINE;
+	`log("Coop diagnostics (" $ Why $ "): engine multiplayer game=" $ (Engine != none && Engine.IsMultiPlayerGame())
+		@ "net mode=" $ (World != none ? string(World.NetMode) : "none")
+		@ "follow-camera override has run=" $ class'X2TC_CoopFixes'.static.CameraOverrideRan(), , 'X2TC');
 }
 
 // True if this guest's follower replaced the stock replay manager.
@@ -2325,6 +2529,9 @@ function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager 
 	{
 		return;
 	}
+	// 0.8.0b: before the follower replays these frames.
+	ScrubReplayVisuals(Max(PreviousFrames, 0), Frames - 1);
+	LogInterruptFrames("guest, as received", Max(PreviousFrames, 0), Frames - 1, 0); // 0.8.1
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Frames, Params);
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_HISTORY_RECEIVED, Params);
 
@@ -2335,6 +2542,61 @@ function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager 
 	}
 	// Owners may have changed in these frames.
 	RefreshSquadScreen();
+}
+
+// Guest (0.8.0b; 0.8.0 Run 1 crash): a change container's optional visualization function
+// (XComGameStateContext_ChangeContainer.uc L15) is sent by name only. When the host bound
+// it to an object that isn't in the history, the guest can't find it and the game asserts
+// ("Failed to find function BuildVisualizationForNoiseAlert", from the Community
+// Highlander's civilian noise alert, Issue #510, X2AIBTDefaultActions.uc L1150, L1211;
+// Firaxis's own note: such delegates "cannot work when performing a replay", L31). For
+// the known cases, clear the function on the guest's copy before the follower replays the
+// frame: the guest loses only that frame's flyover. Every other received change container
+// that has one is logged, to find more cases. Fix switch: "Partner skips visuals it can't
+// build".
+function ScrubReplayVisuals(int FromFrame, int ToFrame)
+{
+	local XComGameStateHistory History;
+	local XComGameState GameState;
+	local XComGameStateContext_ChangeContainer ChangeContext;
+	local int Frame;
+
+	History = `XCOMHISTORY;
+	for (Frame = Max(FromFrame, 0); Frame <= ToFrame && Frame < History.GetNumGameStates(); Frame++)
+	{
+		GameState = History.GetGameStateFromHistory(Frame);
+		if (GameState == none)
+		{
+			continue;
+		}
+		ChangeContext = XComGameStateContext_ChangeContainer(GameState.GetContext());
+		if (ChangeContext == none || ChangeContext.BuildVisualizationFn == none)
+		{
+			continue;
+		}
+		if (IsUnbuildableVisual(ChangeContext.ChangeInfo))
+		{
+			if (class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_REPLAY_VISUALS))
+			{
+				ChangeContext.BuildVisualizationFn = none;
+				`log("Coop guest: frame" @ Frame @ "\"" $ ChangeContext.ChangeInfo $ "\": visualization function removed (it can't be found on this PC)", , 'X2TC');
+			}
+			else
+			{
+				`log("Coop guest: frame" @ Frame @ "\"" $ ChangeContext.ChangeInfo $ "\": known to crash this PC, kept because the fix is off", , 'X2TC');
+			}
+		}
+		else
+		{
+			`log("Coop guest: frame" @ Frame @ "change container \"" $ ChangeContext.ChangeInfo $ "\" has a visualization function (kept)", , 'X2TC');
+		}
+	}
+}
+
+// Change containers whose visualization function the guest can't find (by ChangeInfo).
+static function bool IsUnbuildableVisual(string ChangeInfo)
+{
+	return ChangeInfo == "BehaviorTree - DoNoiseAlert"; // Highlander Issue #510 (0.8.0 Run 1)
 }
 
 // Guest (Stage 6): true if any frame in FromFrame..ToFrame is an ability (moves are the
@@ -2487,7 +2749,37 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 	PartialSentSecond = Seconds;
 	PartialSentFrames = Frames;
 	`log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
+	LogInterruptFrames("host, as sent", LastSentFrames, Frames - 1, 0); // 0.8.1
 	LastSentFrames = Frames;
+}
+
+// 0.8.1 diagnostics (0.8.0b Run 2: the guest's soldier sometimes stopped partway, then
+// jumped ahead at its next move). A move cut by an interrupt is pruned as "terminal" when
+// the interrupt frame's context has no resume link (ResumeHistoryIndex -1 with status
+// Interrupt; XComGameStateContext.MergeIntoVisualizationTree, SDK L432-445), and that link
+// is written into the interrupt frame only when the resume frame is added
+// (InterruptionPostProcess, L640-656). Log every interrupt/resume frame with its links: the
+// host when it sends them (and again 1 batch later, ExtraFrames), the guest when it
+// receives them. Matching lines = the guest's copy has the links; a -1 on the guest only
+// would confirm the guess.
+static function LogInterruptFrames(string Who, int FromFrame, int ToFrame, int ExtraFrames)
+{
+	local XComGameStateHistory History;
+	local XComGameState GameState;
+	local XComGameStateContext Context;
+	local int Frame;
+
+	History = `XCOMHISTORY;
+	for (Frame = Max(FromFrame - ExtraFrames, 0); Frame <= ToFrame && Frame < History.GetNumGameStates(); Frame++)
+	{
+		GameState = History.GetGameStateFromHistory(Frame);
+		Context = GameState != none ? GameState.GetContext() : none;
+		if (Context == none || Context.InterruptionStatus == eInterruptionStatus_None)
+		{
+			continue;
+		}
+		`log("Coop interrupts (" $ Who $ "): frame" @ Frame @ Context.InterruptionStatus @ "interrupted-from=" $ Context.InterruptionHistoryIndex @ "resumes-at=" $ Context.ResumeHistoryIndex @ "(" $ Context.SummaryString() $ ")", , 'X2TC');
+	}
 }
 
 // Total bytes and bunches waiting in the network manager's outgoing queue. Read before
@@ -2669,6 +2961,7 @@ function HostEndSession(string Why)
 	}
 	class'X2TC_CoopTurnUI'.static.SetStatusText("");
 	`XCOMNETMANAGER.Disconnect();
+	ReleaseNetworkData("host session closed", false); // 0.8.0
 	DestroySteamGame("host session closed");
 	ResetSession();
 	`log("Coop mission end (host): session closed; HOST works again in the next mission", , 'X2TC');
@@ -2767,6 +3060,9 @@ function OnConnectionClosed(int ConnectionIdx)
 		bMovePending = false;
 		bAbilityPending = false;
 		`log("Coop host: the guest is gone; partial history sends stopped, the mission goes on", , 'X2TC');
+		// 0.8.0: the contexts sent so far point into this map; release them now (the
+		// server stays up). Stage 8.1 run 0 crashed leaving the map after this case.
+		ReleaseNetworkData("the guest left", false);
 	}
 }
 
@@ -2841,6 +3137,256 @@ function ClearGuestUnitMoving()
 
 // Guest (Stage 5b): send a captured ability (template, source, primary target, target
 // locations) to the host.
+// 0.8.0 hack routing: "CANCEL" or "reward option N".
+static function string HackOptionText(int Option)
+{
+	if (Option == 0)
+	{
+		return "CANCEL";
+	}
+	return "reward option" @ string(Option);
+}
+
+// The hack screen on this machine's screen stack, or none.
+static function UIHackingScreen FindHackScreen()
+{
+	local XComPresentationLayer Pres;
+
+	Pres = class'X2TC_CoopTurnUI'.static.GetPres();
+	if (Pres == none || Pres.ScreenStack == none)
+	{
+		return none;
+	}
+	return UIHackingScreen(Pres.ScreenStack.GetScreen(class'UIHackingScreen'));
+}
+
+// Guest (0.8.1; 0.8.0b Run 2: the host's hack froze the guest): a hack's FinalizeHack (or
+// CancelHack) visual is merged into the hack action's tree while that action still waits
+// for its screen (FinalizeHackAbility_MergeVisualization, Highlander
+// X2Ability_DefaultAbilitySet.uc L2119-2160). On the guest the result frame always comes
+// later from the host, so a screen that finished first (0.8.0 ended the other player's
+// copy after 0.5 s) left nothing to merge into ("InsertSubtree called with a NULL
+// InsertionTreeNode") and the visualizer stalled. Hold the screen's "done" callback
+// (X2Action_Hack.SetupHackingScreen sets OnHackingComplete, L238) until the replay has
+// passed the result frame for this target; then end the screen through its own HackEnded
+// (UIHackingScreen.uc L490-498). Part of the "Hacks" fix switch.
+function GuestHoldHack(UIHackingScreen HackScreen, bool bMine)
+{
+	if (HeldHackScreen != none)
+	{
+		`log("Coop hack (guest): a new hack screen opened while another was held; releasing the old one", , 'X2TC');
+		ReleaseHeldHack("a new hack screen opened");
+	}
+	HeldHackScreen = HackScreen;
+	HeldHackComplete = HackScreen.OnHackingComplete;
+	HackScreen.OnHackingComplete = OnHeldHackScreenDone;
+	HeldHackTargetID = HackScreen.OriginalContext != none ? HackScreen.OriginalContext.InputContext.PrimaryTarget.ObjectID : -1;
+	HeldHackFinalizeName = HackScreen.FinalizeHackAbility != none ? HackScreen.FinalizeHackAbility.GetMyTemplateName() : '';
+	HeldHackCancelName = HackScreen.CancelHackAbility != none ? HackScreen.CancelHackAbility.GetMyTemplateName() : '';
+	HeldHackScanFrame = `XCOMHISTORY.GetNumGameStates();
+	bHeldHackMine = bMine;
+	bHeldHackScreenDone = false;
+	bHeldHackResultSeen = false;
+	HeldHackTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	`log("Coop hack (guest): holding the hack screen until its result is replayed (target" @ HeldHackTargetID $ ", result abilities" @ HeldHackFinalizeName $ "/" $ HeldHackCancelName $ ", started here=" $ bMine $ ", from frame" @ HeldHackScanFrame $ ")", , 'X2TC');
+}
+
+// The held screen's own end (its owner pressed a key after the result, or cancelled).
+function OnHeldHackScreenDone()
+{
+	bHeldHackScreenDone = true;
+	`log("Coop hack (guest): the hack screen is done (result replayed=" $ bHeldHackResultSeen $ ")", , 'X2TC');
+	MaybeReleaseHeldHack();
+}
+
+// Called by the follower after each replay step: did the replay pass the result frame?
+static function GuestCheckHackResult()
+{
+	local X2TC_CoopSession Session;
+
+	Session = FindGuestSession();
+	if (Session != none && Session.HeldHackScreen != none)
+	{
+		Session.CheckHeldHackResult();
+	}
+}
+
+function CheckHeldHackResult()
+{
+	local XComGameStateHistory History;
+	local XComGameState GameState;
+	local XComGameStateContext_Ability AbilityContext;
+	local XComTacticalGRI TacticalGRI;
+	local X2TC_CoopReplayMgr Follower;
+	local int Frame, LastFrame;
+
+	TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
+	if (TacticalGRI != none)
+	{
+		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+	}
+	if (Follower == none || bHeldHackResultSeen)
+	{
+		return;
+	}
+	History = `XCOMHISTORY;
+	LastFrame = Min(Follower.CurrentHistoryFrame, History.GetNumGameStates() - 1);
+	for (Frame = HeldHackScanFrame; Frame <= LastFrame; Frame++)
+	{
+		GameState = History.GetGameStateFromHistory(Frame);
+		AbilityContext = GameState != none ? XComGameStateContext_Ability(GameState.GetContext()) : none;
+		if (AbilityContext != none && AbilityContext.InputContext.PrimaryTarget.ObjectID == HeldHackTargetID
+			&& (AbilityContext.InputContext.AbilityTemplateName == HeldHackFinalizeName || AbilityContext.InputContext.AbilityTemplateName == HeldHackCancelName))
+		{
+			bHeldHackResultSeen = true;
+			`log("Coop hack (guest): the replay passed the hack's result," @ AbilityContext.InputContext.AbilityTemplateName @ "at frame" @ Frame, , 'X2TC');
+			break;
+		}
+	}
+	HeldHackScanFrame = Max(HeldHackScanFrame, LastFrame + 1);
+	MaybeReleaseHeldHack();
+}
+
+// Release once the result has been replayed and (for the guest's own hack) its screen is
+// done; the other player's copy is released on the result alone. After
+// HACK_HOLD_MAX_SECONDS, release anyway (a stall is better than a permanent freeze).
+function MaybeReleaseHeldHack()
+{
+	if (HeldHackScreen == none)
+	{
+		return;
+	}
+	if (bHeldHackResultSeen && (bHeldHackScreenDone || !bHeldHackMine))
+	{
+		ReleaseHeldHack("result replayed");
+	}
+	else if (class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - HeldHackTime > HACK_HOLD_MAX_SECONDS)
+	{
+		ReleaseHeldHack("no result after" @ HACK_HOLD_MAX_SECONDS $ "s");
+	}
+}
+
+function ReleaseHeldHack(string Why)
+{
+	local UIHackingScreen Screen;
+
+	Screen = HeldHackScreen;
+	if (Screen == none)
+	{
+		return;
+	}
+	Screen.OnHackingComplete = HeldHackComplete;
+	ClearHeldHack();
+	`log("Coop hack (guest): hack screen released (" $ Why $ ")", , 'X2TC');
+	Screen.HackEnded(); // calls the hack action's own callback, then clears the UI busy flag
+}
+
+// Forget the held screen without ending it (session reset, map cleanup).
+function ClearHeldHack()
+{
+	HeldHackScreen = none;
+	HeldHackComplete = none;
+	HeldHackTargetID = -1;
+	bHeldHackScreenDone = false;
+	bHeldHackResultSeen = false;
+}
+
+// Guest (0.8.0): its choice on its own hack screen (captured by X2TC_CoopReplayMgr when the
+// screen submits FinalizeHack or CancelHack), sent instead of the ability: the host's
+// FinalizeHack reads the reward option from the hack screen on its own screen stack
+// (X2Ability_DefaultAbilitySet.uc L1787-1800), so the host plays it on its hidden copy.
+function SendHackChoice(int Option)
+{
+	local array<byte> Params;
+
+	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Option, Params);
+	`XCOMNETMANAGER.SendRemoteCommand(CMD_HACK_CHOICE, Params);
+	`log("Coop hack (guest): sent" @ HackOptionText(Option) @ "to the host (frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+}
+
+// Host (0.8.0), five times a second while a hack choice is pending or running: apply the
+// guest's choice on the host's hidden hack screen (X2TC_CoopHackListener hid it), as the
+// screen's own buttons would (UIHackingScreen.InitiateHack L501-553, OnCancel L326-343):
+// the host's game rolls and submits FinalizeHack (or CancelHack) itself. Then, once the
+// hidden screen shows its result and waits for a key (bWaitingForInput, OnCommand
+// "HackEnded" L434-447), end it so the hack action carries on (HackEnded L490-498).
+function HostDriveHack()
+{
+	local UIHackingScreen HackScreen;
+	local XComGameStateHistory History;
+	local XComGameStateContext_Ability ResultContext;
+	local float Now;
+	local int Option;
+
+	Now = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	HackScreen = FindHackScreen();
+
+	if (bHostHackDriven)
+	{
+		if (HackScreen == none)
+		{
+			bHostHackDriven = false;
+			`log("Coop hack (host): the hidden hack screen closed by itself", , 'X2TC');
+			return;
+		}
+		if (HackScreen.bWaitingForInput || Now - HostHackDrivenTime > HACK_RESULT_WAIT_SECONDS)
+		{
+			bHostHackDriven = false;
+			`log("Coop hack (host): the hidden screen's result is done (waiting for a key=" $ HackScreen.bWaitingForInput $ ", after" @ (Now - HostHackDrivenTime) $ "s); ending it", , 'X2TC');
+			HackScreen.HackEnded();
+		}
+		return;
+	}
+
+	if (PendingHackOption < 0)
+	{
+		return;
+	}
+	if (HackScreen == none)
+	{
+		if (Now - PendingHackTime > HACK_CHOICE_WAIT_SECONDS)
+		{
+			`log("Coop hack (host): no hack screen opened within" @ HACK_CHOICE_WAIT_SECONDS $ "s; the partner's" @ HackOptionText(PendingHackOption) @ "is dropped", , 'X2TC');
+			PendingHackOption = -1;
+		}
+		return;
+	}
+	Option = PendingHackOption;
+	PendingHackOption = -1;
+	if (class'X2TC_CoopOwnership'.static.GetOwner(HackScreen.UnitState) != class'X2TC_CoopOwnership'.const.OWNER_GUEST)
+	{
+		`log("Coop hack (host): the open hack screen is for unit" @ (HackScreen.UnitState != none ? HackScreen.UnitState.ObjectID : -1) $ ", not a partner's soldier; the partner's choice is dropped", , 'X2TC');
+		return;
+	}
+	if (HackScreen.m_hackStarted)
+	{
+		`log("Coop hack (host): the hidden hack already started; the partner's choice is dropped", , 'X2TC');
+		return;
+	}
+	if (Option == 0)
+	{
+		if (HackScreen.CancelHackAbility == none)
+		{
+			`log("Coop hack (host): this hack can't be cancelled; the partner's cancel is dropped", , 'X2TC');
+			return;
+		}
+		`log("Coop hack (host): cancelling the hack of unit" @ HackScreen.UnitState.ObjectID @ "on the hidden screen", , 'X2TC');
+		HackScreen.OnCancel();
+		return;
+	}
+	HackScreen.SelectedHackRewardOption = Option;
+	`log("Coop hack (host): starting the hack of unit" @ HackScreen.UnitState.ObjectID @ "with" @ HackOptionText(Option) @ "(chance" @ HackScreen.GetHackChance(Option) $ "%) on the hidden screen", , 'X2TC');
+	HackScreen.InitiateHack();
+	bHostHackDriven = true;
+	HostHackDrivenTime = Now;
+	History = `XCOMHISTORY;
+	ResultContext = XComGameStateContext_Ability(History.GetGameStateFromHistory(History.GetNumGameStates() - 1).GetContext());
+	if (ResultContext != none)
+	{
+		`log("Coop hack (host): submitted" @ ResultContext.InputContext.AbilityTemplateName @ "(roll" @ ResultContext.ResultContext.StatContestResult $ "), frames now" @ History.GetNumGameStates(), , 'X2TC');
+	}
+}
+
 function SendGuestAbility(XComGameStateContext_Ability AbilityContext, int FramesNow)
 {
 	local array<byte> Params;
@@ -3041,12 +3587,47 @@ function TryApplyGuestAbility()
 		SendMoveResult(true, string(PendingAbilityName) @ "unit" @ PendingAbilitySourceID);
 		HostMaybeSendPartial(`XCOMNETMANAGER); // Run 6: don't wait for the next poll
 		ShowBanner("P2's" @ PendingAbilityName @ "unit" @ PendingAbilitySourceID);
+		HostLookAtPartnerAbility(PendingAbilityName, PendingAbilitySourceID); // 0.8.1
 	}
 	else
 	{
 		`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "not applied: ActivateAbility returned false", , 'X2TC');
 		SendMoveResult(false, string(PendingAbilityName) $ ": ActivateAbility returned false");
 	}
+}
+
+// Host (0.8.1; 0.8.0b Run 2: the host's camera didn't go to the partner's Overdrive): the
+// game never adds a "look at the user" camera for a player-controlled unit (the player
+// is already looking at it; XComGameStateContext_Ability.InsertSourceUnitLookAtAction
+// returns early for IsPlayerControlled, Highlander L761-811), and abilities that skip
+// exit cover get no framing camera at all (X2Action_ExitCover). In co-op the host isn't
+// looking at the partner's soldier, so for those abilities look at it for 1.5 s. Fix
+// switch: "Host camera looks at partner's actions".
+function HostLookAtPartnerAbility(name AbilityName, int SourceUnitID)
+{
+	local X2AbilityTemplate Template;
+	local XComGameState_Unit UnitState;
+	local X2Camera_LookAtActorTimed LookAtCamera;
+
+	if (!class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_PARTNER_LOOKAT))
+	{
+		return;
+	}
+	Template = class'X2AbilityTemplateManager'.static.GetAbilityTemplateManager().FindAbilityTemplate(AbilityName);
+	if (Template == none || !Template.bSkipExitCoverWhenFiring)
+	{
+		return; // attacks exit cover, and their framing camera already shows them
+	}
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(SourceUnitID));
+	if (UnitState == none || UnitState.GetVisualizer() == none || `CAMERASTACK == none)
+	{
+		return;
+	}
+	LookAtCamera = new class'X2Camera_LookAtActorTimed';
+	LookAtCamera.ActorToFollow = UnitState.GetVisualizer();
+	LookAtCamera.LookAtDuration = 1.5;
+	`CAMERASTACK.AddCamera(LookAtCamera);
+	`log("Coop camera: host looks at the partner's unit" @ SourceUnitID @ "for" @ AbilityName, , 'X2TC');
 }
 
 function RefuseGuestAbility(string Reason)
@@ -3176,6 +3757,7 @@ function TryApplyGuestMove()
 	Path.MovingUnitRef = UnitState.GetReference();
 	Path.MovementTiles = PendingMoveTiles;
 	Paths.AddItem(Path);
+	AddAttachedUnitPaths(UnitState, PendingMoveTiles, Paths); // 0.8.1
 
 	FramesBefore = `XCOMHISTORY.GetNumGameStates();
 	bMovePending = false;
@@ -3190,6 +3772,54 @@ function TryApplyGuestMove()
 	{
 		`log("Coop host: guest move" @ MovesReceived @ "not applied: GameStateMoveUnit returned false", , 'X2TC');
 		SendMoveResult(false, "GameStateMoveUnit returned false");
+	}
+}
+
+// Host (0.8.1; Kc's test 2026-11-21, logs m4-080-*-3: once the partner joined, its SPARK's
+// BIT stopped following and fired rockets from where it was left): the game's own click
+// path adds a follow path for each cosmetic unit attached to the mover, a SPARK's BIT or
+// a Specialist's Gremlin (XComTacticalController.GameStateMoveUnitSingle, Highlander
+// L1189-1213); the guest's moves went through GameStateMoveUnit with the mover's path
+// only. Add the same paths here: to the mover's last tile, raised by the unit's offset
+// for its attached cosmetic unit, built by the path solver. Fix switch: "BIT and Gremlin
+// follow partner's moves".
+function AddAttachedUnitPaths(XComGameState_Unit MovingUnit, array<TTile> MoverTiles, out array<PathingInputData> Paths)
+{
+	local array<XComGameState_Unit> AttachedUnits;
+	local array<TTile> TilePath;
+	local PathingInputData PathData;
+	local XGUnit CosmeticVisualizer;
+	local TTile Destination;
+	local int i;
+
+	if (!class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_ATTACHED_MOVES) || MoverTiles.Length == 0)
+	{
+		return;
+	}
+	MovingUnit.GetAttachedUnits(AttachedUnits);
+	for (i = 0; i < AttachedUnits.Length; i++)
+	{
+		if (AttachedUnits[i] == none)
+		{
+			continue;
+		}
+		Destination = MoverTiles[MoverTiles.Length - 1];
+		Destination.Z += MovingUnit.GetDesiredZTileOffsetForAttachedCosmeticUnit();
+		TilePath.Length = 0;
+		if (!class'X2PathSolver'.static.BuildPath(AttachedUnits[i], AttachedUnits[i].TileLocation, Destination, TilePath) || TilePath.Length == 0)
+		{
+			`log("Coop host: no follow path for attached unit" @ AttachedUnits[i].ObjectID @ "of unit" @ MovingUnit.ObjectID @ "(from" @ class'X2TC_CoopReplayMgr'.static.TileText(AttachedUnits[i].TileLocation) @ "to" @ class'X2TC_CoopReplayMgr'.static.TileText(Destination) $ ")", , 'X2TC');
+			continue;
+		}
+		CosmeticVisualizer = XGUnit(AttachedUnits[i].GetVisualizer());
+		if (CosmeticVisualizer != none)
+		{
+			CosmeticVisualizer.bNextMoveIsFollow = true;
+		}
+		PathData.MovingUnitRef = AttachedUnits[i].GetReference();
+		PathData.MovementTiles = TilePath;
+		Paths.AddItem(PathData);
+		`log("Coop host: attached unit" @ AttachedUnits[i].ObjectID @ "follows unit" @ MovingUnit.ObjectID @ "(" $ TilePath.Length @ "tiles, from" @ class'X2TC_CoopReplayMgr'.static.TileText(AttachedUnits[i].TileLocation) $ ")", , 'X2TC');
 	}
 }
 
@@ -3242,6 +3872,7 @@ function LeaveAsGuest()
 		PC.bIgnoreNetworkMessages = true;
 	}
 	`XCOMNETMANAGER.Disconnect();
+	ReleaseNetworkData("guest left", false); // 0.8.0
 	DestroySteamGame("guest left");
 	ResetSession();
 	`log("Coop guest: disconnected; opening the main menu:" @ LEAVE_MAP_COMMAND, , 'X2TC');
@@ -3308,10 +3939,20 @@ function ResetSession()
 	bSteamGameCreated = false;
 	bSteamInviteArmed = false;
 	bSteamJoinStarted = false;
+	// 0.8.0.
+	PendingHackOption = -1;
+	bHostHackDriven = false;
+	// 0.8.1.
+	ClearHeldHack();
+	class'X2TC_CoopSPRules'.static.EndSession();
+	LastEngineMultiplayer = -1;
 }
 
 defaultproperties
 {
 	Role = eCoopRole_None
 	bOwnershipOn = true
+	PendingHackOption = -1
+	LastEngineMultiplayer = -1
+	HeldHackTargetID = -1
 }

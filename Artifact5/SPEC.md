@@ -115,17 +115,23 @@ Checks: a mission with both players' soldiers on XCOM's side, each acting
 with their own soldiers during XCOM's turn, played for three full turns,
 with Launch.log from both machines.
 
-### M4: Same-turn check and shared-turn polish
-- The same-turn check: both players act in the same turn; the host
-  applies actions in the order they arrive; the other player waits while
-  one resolves; both screens show the same result
-- Shared-turn polish: feedback when an action is refused, a camera
-  option, actions arriving close together
-- An optional split-turn mode (one player's phase, then the other's)
+### M4: Toward a release (rewritten 2026-11-20, plans/m4-plan.md)
+- 0.8.0: release blockers (the crash when leaving a map, hacking on both
+  machines, bound soldiers selectable on the guest, VIPs and the partner
+  banner) and the guest's two most visible display gaps (camera, move
+  range and cover icons), each behind an on-screen switch with a SAFE
+  MODE; tests of a campaign mission, the rocket, and the same-turn check
+- 0.8.1: the remaining guest display polish and what the campaign test
+  finds
+- Release materials: Workshop description, friend setup, known issues,
+  release checklist (name decided by about Dec 3)
+- Later: network-size optimization, split turns (moved out of M4)
 
-Checks: a scripted test in which both players act in the same turn, with
-no desync for five turns, actions applied in arrival order; any desync
-recorded with its log lines.
+Checks: checklists/m4-080.md passed on the PC and laptop, including the
+same-turn check (both players act in the same turn for five turns, the
+host applies actions in arrival order, matching `Coop sync` lines, no
+desync); a short friend session over Steam; results with build IDs in
+LOG.md.
 
 ### M5: Campaign hookup
 - Start a co-op mission from the host's campaign; the guest joins it
@@ -172,8 +178,9 @@ Checks: feedback recorded; fixes logged with how they were verified.
   5 card showing progress
 - Week 6: M0, M1, M2
 - Week 7: M3
-- Week 8: M4
-- Week 9: M5; friends start playtesting
+- Week 8: M4 (0.8.0 by ~Nov 24, 0.8.1 by ~Nov 29; plans/m4-plan.md)
+- Week 9: M5; friends start playtesting (release candidate ~Dec 1-3)
+- By Dec 6: 1.0 published (Kc, 2026-11-20)
 - Monday, December 7: final show and tell in class
 - December 7 to 13: M6 fixes, release if ready, final log, portfolio card
 - Sunday, December 13, 11:59 PM: due

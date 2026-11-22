@@ -125,7 +125,8 @@ static function bool GuestHasActions()
 	return PlayerHasActions(OWNER_GUEST);
 }
 
-// True if any soldier of this owner (OWNER_HOST or OWNER_GUEST) can still act.
+// True if any soldier of this owner (OWNER_HOST or OWNER_GUEST) can still act. 0.8.0: the
+// host's also include the non-soldier XCOM units it controls (IsHostOnlyUnit).
 static function bool PlayerHasActions(int Owner)
 {
 	local XComGameState_Unit UnitState;
@@ -136,8 +137,24 @@ static function bool PlayerHasActions(int Owner)
 		{
 			return true;
 		}
+		if (Owner == OWNER_HOST && IsHostOnlyUnit(UnitState) && UnitCanAct(UnitState))
+		{
+			return true;
+		}
 	}
 	return false;
+}
+
+// 0.8.0 (Stage 8.1 run 0: the host moved a VIP with the FRIENDLY ACTION banner up): a
+// living XCOM-team unit on the board that isn't a soldier (a rescued VIP or civilian, a
+// mind-controlled enemy...). These have no owner value, so they are the host's (P1), but
+// only soldiers were counted when deciding whether the host still had actions. Not on the
+// squad screen. Fix switch: "VIPs and civilians count as the host's".
+static function bool IsHostOnlyUnit(XComGameState_Unit UnitState)
+{
+	return class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_VIP_HOST)
+		&& UnitState != none && UnitState.GetTeam() == eTeam_XCom && !UnitState.IsSoldier()
+		&& !UnitState.IsDead() && !UnitState.bRemovedFromPlay && !UnitState.GetMyTemplate().bIsCosmetic;
 }
 
 // 0.6.3 (Stage 7 Run 2): whether a soldier can do anything now, the way the game decides
@@ -154,6 +171,16 @@ static function bool UnitCanAct(XComGameState_Unit UnitState)
 		return false;
 	}
 	Rules = `TACTICALRULES;
+	// 0.8.1 (0.8.0b Run 2: a bound soldier was still selectable on the guest): the unit
+	// cache's bAnyActionsAvailable also counts abilities the player can't trigger (e.g. a
+	// 0-cost placeholder), so a bound soldier with its action points "could act". Use the
+	// game's own rule, which the controller uses for selection: not bound, not panicked, and
+	// an input-triggered ability available (X2TacticalGameRuleset.UnitHasActionsAvailable,
+	// SDK L4186; Highlander L4526-4556). Fix switch: "Can-act check uses the game's rule".
+	if (Rules != none && class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_CAN_ACT))
+	{
+		return Rules.UnitHasActionsAvailable(UnitState);
+	}
 	if (Rules != none && Rules.GetGameRulesCache_Unit(UnitState.GetReference(), UnitCache))
 	{
 		return UnitCache.bAnyActionsAvailable;

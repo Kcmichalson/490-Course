@@ -136,7 +136,7 @@ function RefreshRows()
 	local X2TC_CoopSession Session;
 	local XComGameState_Unit UnitState;
 	local bool bCanEdit, bHost;
-	local int i, Owner;
+	local int i, OwnerValue; // not "Owner": that's Actor's field (compiler warning, 0.8.0 build)
 	local string Label, Who;
 
 	Session = class'X2TC_CoopSession'.static.FindSession();
@@ -160,9 +160,9 @@ function RefreshRows()
 	for (i = 0; i < SoldierRows.Length; i++)
 	{
 		UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(RowUnitIDs[i]));
-		Owner = class'X2TC_CoopOwnership'.static.GetOwner(UnitState);
+		OwnerValue = class'X2TC_CoopOwnership'.static.GetOwner(UnitState);
 		Label = "P1 (host)";
-		if (Owner == class'X2TC_CoopOwnership'.const.OWNER_GUEST)
+		if (OwnerValue == class'X2TC_CoopOwnership'.const.OWNER_GUEST)
 		{
 			Label = "P2 (partner)";
 		}

@@ -54,6 +54,16 @@ The 2K launcher doesn't list local mods. Use the Alternative Mod Launcher
 Chosen. Leave `-allowConsole` off.
 
 ## Building
+0. Before every build handoff, run the static checks from the `Artifact5`
+   folder (brackets and strings, locals at the top of functions, and
+   run-time `default.` assignments, which compile only on config
+   variables):
+
+   ```
+   python tools\check_unrealscript.py
+   ```
+
+   It must end with `problems: 0`. It doesn't replace the compiler.
 1. In VS Code's user settings (per machine, not committed), set
    `xcom.highlander.sdkroot` to the SDK folder and
    `xcom.highlander.gameroot` to the game's `XCom2-WarOfTheChosen` folder.

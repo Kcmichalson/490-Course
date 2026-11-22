@@ -31,7 +31,8 @@ CLAUDE.md describes.
   and from the multiplayer menu, one full turn each); all 11 rows pass
   on 8270065 by the travel route**; exiting a match hangs on both
   sides, a lead is in sdk-findings)
-- [ ] M3: Two humans on one team (plan drafted in Session 6, approved
+- [x] M3: Two humans on one team (**closed by Kc on 2026-11-19 on the
+  8.1 run 2 result, mod 0.7.0, buildid 8270065 on both machines**. Plan drafted in Session 6, approved
   2026-11-12 in Session 7, plans/m3-plan.md: single-player mission, host
   authoritative, guest follows, Highlander route for the guest's
   actions; mod 0.3.0. Stage 1 passed 2026-11-13: PC online and laptop
@@ -64,20 +65,27 @@ CLAUDE.md describes.
   click-to-move still fails; 0.4.3 fix D (fresh pathing pawn). Run 9:
   fix D works, right-click moves; Stage 5 settled. Stage 6 (shared turn,
   owners, banner, end-turn rules): Run 1 (0.5.0), **Run 2 (0.5.1)
-  passed 2026-11-15**; Run 3 (0.5.3 items) not run yet. **Stage 7
-  (Steam invite) Run 2 passed 2026-11-15 (0.6.2, a friend over the
-  internet): 14 turns, 51 guest actions applied**; problems fixed in
-  0.6.3 (not built or tested). Stage 8 (send only new frames) approved
-  2026-11-15; **8.1 written as 0.7.0 (includes 0.6.3), not built**; its
-  LAN run with the laptop carries the 0.6.3 checks, Stage 6 Run 3 and
-  the formal M3 check (checklists/m3-stage8.md). **8.1 run 2026-11-18:
-  new-frames sync is a stop case (frames not added to the guest's
-  history); with it off, the M3 check was met (7 full turns, guest acting
-  every turn, logs from both machines; buildid 8270065 on both)**; a PC
-  crash on leaving a map traced to the network manager. New-frames sync
-  dropped for now (Kc: optimization after the basics). M3 closes on
-  Kc's word)
-- [ ] M4: Same-turn actions
+  passed 2026-11-15**; Run 3's keys, Backspace and host-leaves items
+  not run (carried over). **Stage 7 (Steam invite) Run 2 passed
+  2026-11-15 (0.6.2, a friend over the internet): 14 turns, 51 guest
+  actions applied.** Stage 8 (send only new frames) approved 2026-11-15,
+  8.1 as 0.7.0 (includes 0.6.3). **8.1 run 2026-11-18: new-frames sync
+  is a stop case (frames not added to the guest's history); with it off,
+  the M3 check was met (7 full turns, guest acting every turn, matching
+  turn lines, logs from both machines)**; 0.6.3's mission end and guest
+  grenade pass. New-frames sync dropped for now (Kc: optimization after
+  the basics). Carried over: the map-exit crash, hacking on both
+  machines, VIP/civilian control, the laptop's display gaps, the bound
+  soldier selectable on the laptop, the off-map rocket; see
+  plans/m3-plan.md Stage 8 "8.1 run")
+- [ ] M4: Toward a release (rewritten 2026-11-20; plan approved
+  2026-11-20, plans/m4-plan.md). 0.8.0 Run 1: laptop crash (Highlander
+  noise alert). **0.8.0b Run 2 2026-11-20: no crashes in 4 LAN missions;
+  borders, cover icons, the laptop camera and VIP handling work; a
+  Gatecrasher campaign mission returned the right results.** Open: the
+  host's hack hangs the laptop, the bound soldier is still selectable,
+  path preview during moves, rockets in co-op. 0.8.1 next. Release drafts
+  in release/. 1.0 by Dec 6
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
 
@@ -4355,3 +4363,472 @@ yet.
   8.3 deferred; the switch stays off by default). **Misreads / rule
   breaks:** I had guessed the rocket was a laptop display problem; Kc's
   answer corrected it. **How It Was Verified:** n/a (records only).
+
+### 2026-11-19 — Session 8 (continued): M3 closed
+Claude Opus 5.5, PC. No code, no test.
+- **Planned:** SPEC.md M3: both players act with their own soldiers in a
+  shared XCOM turn, against the AI.
+- **Changed over M3:** mod 0.3.0 → 0.7.0 (direct IP and Steam invite,
+  history snapshot and live follow, the guest's moves and abilities
+  applied by the host, owners, banner, end-turn rules, mission end).
+- **Problems carried to M4:** the items in the status block above;
+  partial-history size growth (up to 427 KB per send).
+- **Checks:** SPEC M3 check met in the 8.1 run 2 (`stage8-pc-2.log`,
+  `stage8-laptop-2.log`, 0.7.0, buildid 8270065 on both): 7 full turns,
+  guest actions in every XCOM turn, 36 identical turn-start lines.
+- **Prompt:** "Yes, close M3" **Provided:** M3 marked closed in the
+  status block; this entry. **Misreads / rule breaks:** none. **How It
+  Was Verified:** n/a (records only; the check is the 8.1 run above).
+
+### 2026-11-20 — Session 8 (continued): M4 planned and approved; 0.8.0 written (not built)
+Claude Opus 5.5, PC. No test.
+- **Planned:** plans/m4-plan.md (approved 2026-11-20); SPEC.md M4
+  rewritten to the release scope, schedule added.
+- **Changed (0.8.0):**
+  - new classes `X2TC_CoopFixes`, `X2TC_CoopFixesScreen` (CO-OP: FIXES,
+    SAFE MODE), `X2TC_CoopMapCleanup`, `X2TC_CoopHackListener`;
+  - new class override `X2TC_Action_CameraFollowUnit`
+    (Config/XComEngine.ini);
+  - session: network-data release, hack choice, diagnostics;
+  - follower: bound skip, tutorial-controls flag, fix D switch, hack
+    capture;
+  - ownership: VIPs count as the host's;
+  - listener: FIXES button, HOST refused in the tutorial mission;
+  - version 0.8.0.
+
+  Also checklists/m4-080.md and release/ (Workshop description, friend
+  setup, known issues, release checklist).
+- **Problems:** not compiled (Kc builds). The release drafts' name
+  placeholders use double braces, which GitHub Pages' Liquid may render
+  as blank on the published site (a guess).
+- **Checks:**
+  - a rough bracket, string and locals check on all classes: 0 problems;
+  - every new function defined and called;
+  - SDK lines checked against the Community Highlander's copies
+    (`UIHackingScreen.uc` L226-229, L391-416; `XComTacticalInput.uc`
+    L1955-1956; `X2Ability_DefaultAbilitySet.uc` L1820, L1931-1935; no
+    Highlander copy of `X2Action_CameraFollowUnit`);
+  - `Actor.uc` L2134-2139, L2399; `XComGameStateNetworkManager.uc` L73,
+    L254-259; `XComGameReplicationInfo.uc` L159-166; `X2Action.uc`
+    L54-91.
+
+  The SDK research was done by three read-only agents; their key lines
+  were spot-checked by me (the hack gate, the reward lookup, `CanCancel`,
+  the tutorial branch, the camera's multiplayer check).
+
+### Session 8 prompt log (continued, M4)
+- **Prompt:** "M3 is closed. Plan M4 toward a release, split into two
+  builds. Show me the plan before writing code. [0.8.0: crash, hacking,
+  bound soldier, VIP banner, camera, cover icons and range, early
+  low-code tests (campaign, rocket, Stage 6 Run 3, repeated exits);
+  on-screen toggles plus safe mode; 0.8.1 plan only; release drafts;
+  later items; one checklist by area with a friend section]"
+  **Provided:** the SDK research (three agents plus my reading of the
+  mod) and the plan in the reply, with five questions. **Misreads /
+  rule breaks:** none. **How It Was Verified:** the spot checks above.
+- **Prompt:** "Answers: 1. Camera: approve [...] 2. Yes, rewrite SPEC.md's
+  M4 [...] 3. Release name: decided by about Dec 3 [...] placeholder
+  [...] rough schedule [...] 4. Alien Hunters Highlander: check its own
+  documentation [...] 5. Code first, then the release drafts [...] Fix D:
+  keep it as a toggle [...] Tutorial: confirm nothing we do affects
+  normal single-player [...] Save the plan as plans/m4-plan.md and go
+  ahead." **Provided:** the plan saved with the answers and schedule;
+  SPEC.md M4 and schedule; 0.8.0; the checklist; release/ drafts.
+  - The DLC2 readme (L5-7) confirms Kc's understanding.
+  - Single-player is unchanged by design: every change checks for an
+    active co-op session, and the camera override returns the stock
+    answer outside one. Only the checklist's solo and tutorial tests
+    show it.
+  - One deviation from the plan: the network delegates are not cleared,
+    because they point at the session object, not the map, and clearing
+    them would break the next HOST. It's said in the plan.
+
+  **Misreads / rule breaks:** none. **How It Was Verified:** the checks
+  above; in-game is Kc's.
+
+### 2026-11-20 — Session 8 (continued): 0.8.0 build errors fixed (not rebuilt)
+- **Problem (Kc's build):**
+  - 3 errors "Can't change default values of non-config properties"
+    (`X2TC_CoopFixes.uc` L66, L80; `X2TC_Action_CameraFollowUnit.uc`
+    L45): the same rule as Stage 2. My mistake: I repeated it, and my
+    check script didn't look for it.
+  - 1 warning: the local `Owner` in `X2TC_CoopSquadScreen.uc` L139 clashes
+    with Actor's field.
+- **Fix:**
+  - `X2TC_CoopFixes` is now `config(X2TacticalCoopFixes)`, with the
+    switches as `var config bool`, never saved (no SaveConfig), so they
+    reset each launch and survive map loads.
+  - Not the session's named-object lookup: 0.6.1 showed an unreferenced
+    transient object is garbage collected on a map load, which would reset
+    SAFE MODE between missions.
+  - The camera's "has run" flag moved into `X2TC_CoopFixes`.
+  - The local is renamed `OwnerValue`.
+- **Checks:**
+  - The check script now flags run-time `default.` assignments on
+    anything that isn't a config variable of the target class. A bad
+    sample was flagged (1 of 1), and all 18 class files passed (0). (The
+    first version of this entry said 15: a miscount.)
+  - Every remaining run-time `default.` assignment is on a config variable
+    (9 in `X2TC_CoopFixes`, `Entries` in `X2TC_CoopOwnerMemory`).
+  - The other locals named `Owner` are in non-Actor classes.
+- **Rule breaks / blocked:** the CLAUDE.md convention edit was denied by
+  the permission settings (M0 guardrail). Stopped and gave Kc the text.
+  The check script is in my scratchpad, not the repo.
+- **Prompt:** "0.8.0 failed to compile with three errors [...] And a
+  warning [...] Fix all of them [...] explain which you chose. Then add a
+  check for runtime "default." assignments [...] note this rule in
+  CLAUDE.md's code conventions [...] Log it compactly." **Provided:** the
+  fix, the check, this entry; the CLAUDE.md text in the reply. **How It
+  Was Verified:** the checks above; Kc rebuilds.
+- **Prompt:** "Yes, save the check script as tools/check_unrealscript.py,
+  mention it in mod/README.md, and run it before every build handoff.
+  I've added the CLAUDE.md rule myself." **Provided:**
+  - `tools/check_unrealscript.py`: the same checks, with no arguments it
+    checks every class in mod/, and it exits 1 on problems;
+  - step 0 of mod/README.md "Building".
+
+  **Misreads / rule breaks:** the earlier "15 classes" was a miscount
+  (18), corrected above. **How It Was Verified:**
+  - on the mod: "checked 18 files; problems: 0", exit 0;
+  - on a sample with a non-config `default.` assignment and a late
+    `local`: 2 problems, exit 1.
+
+### 2026-11-20 — Session 8 (continued): 0.8.0 Run 1 (laptop crash) diagnosed; no code
+Claude Opus 5.5, PC. Test by Kc on the LAN, 0.8.0, buildid 8270065 on
+both. Logs: `local\m3-logs\stage9-pc-1.log`, `stage9-laptop-1.log`,
+`stage-9-laptop-1-crash.log`. Details and proposed fixes:
+plans/m4-plan.md, "Results".
+- **Crash:** the Community Highlander's civilian noise alert (Issue #510)
+  binds its visualization to an object only the PC has. The laptop
+  asserts "Failed to find function BuildVisualizationForNoiseAlert"
+  (crash log L6732-6733). Not caused by 0.8.0: no fix was on on the
+  laptop.
+- **Switches:**
+  - all started off on both machines;
+  - the laptop's were never ticked (Kc's correction, below);
+  - so the laptop's borders and camera results weren't tests of the
+    fixes, and the tutorial flag was never set.
+- **Camera:** `engine multiplayer game=True` on both machines. The
+  override restored the PC's own follow camera (10 lines `used=True`).
+- **Selection ping-pong** from 0.6.3 (5508 lines; 2885 in 8.1 run 2)
+  explains the edge scroll snapping back.
+- **Passed or neutral:** the rocket with co-op off works; the PC exited
+  cleanly through the map-closing cleanup.
+- **Prompt:** "0.8.0 Run 1, stopped early: the laptop crashed during the
+  aliens' turn. [...] [results: rocket fine; switches start OFF; no range
+  or cover icons with fix D on or off; ability glow; camera doesn't
+  follow, edge scroll snaps back; checkbox X only on the PC; crash]
+  Diagnose the crash first [...] check whether the laptop's tutorial flag
+  was actually on [...] Don't write code until you've told me the
+  causes." **Provided:** the causes above with log lines; four proposed
+  fixes, not written. **Misreads / rule breaks:** none. The logs were in
+  `local\m3-logs\` with `stage9` names, not the checklist's `m4-logs`
+  names; I read them where they were. **How It Was Verified:**
+  - greps of the three logs;
+  - the SDK and Highlander source for the noise-alert function, the
+    change container (L29-38) and the checkbox click code;
+  - a count of `selected unit` lines in the 0.7.0 logs.
+- **Prompt:** "I never manually enabled the laptop fixes on the laptop's
+  end, I left them unticked incase the PC's enabled ticks handled it and
+  the laptop would disturb it." **Provided:** the finding corrected in the
+  plan and here; proposed fix 3 (toggle buttons) dropped. **Misreads /
+  rule breaks:** I took "ticked manually on both" plus the missing click
+  lines as clicks that failed. That was an inference, not a test result,
+  and I didn't label it as a guess. **How It Was Verified:** Kc's account;
+  it matches the laptop log (no `switched` lines).
+
+### 2026-11-20 — Session 8 (continued): 0.8.0b written (not built)
+Claude Opus 5.5, PC. No test.
+- **Changed:**
+  - guest scrub of the noise-alert visualization function, with a new
+    8th switch;
+  - switches stored as "off" flags, so all are on at launch;
+  - the selection loop stops when no guest unit can act;
+  - the fixes screen header and height;
+  - version 0.8.0b.
+
+  Details: plans/m4-plan.md, "0.8.0b". checklists/m4-080.md has a Run 2
+  note at the top.
+- **Checks:**
+  - `tools/check_unrealscript.py`: 18 files, 0 problems;
+  - no old switch names left;
+  - the 3 new functions are defined and called (8 references).
+
+  `ChangeInfo` "BehaviorTree - DoNoiseAlert" is the Highlander's
+  description (`X2AIBTDefaultActions.uc` L1145), which
+  `CreateEmptyChangeContainer` stores in `ChangeInfo`
+  (`XComGameStateContext_ChangeContainer.uc` L44).
+- **Prompt:** "Yes, write them" **Provided:** the three fixes above.
+  **Misreads / rule breaks:** none. **How It Was Verified:** the checks
+  above; in-game is Kc's.
+
+### 2026-11-20 — Session 8 (continued): 0.8.0b Run 2 (3 sessions) read; no code
+Claude Opus 5.5, PC. Tests by Kc: four LAN missions, the tutorial solo,
+and Gatecrasher with the laptop. 0.8.0b, buildid 8270065 on both, no
+crashes. Logs: `local\m4-logs\m4-080-*.log`. Results and causes:
+plans/m4-plan.md, "0.8.0b Run 2"; release/known-issues.md updated.
+- **Pass:**
+  - crash cleanup (4 missions);
+  - the noise-alert scrub (3 removed);
+  - switches on at launch;
+  - laptop borders and cover icons;
+  - laptop camera (79 `used=True`);
+  - VIP banner;
+  - selection loop gone;
+  - SAFE MODE;
+  - tutorial refusal;
+  - campaign results (kills, wound and loot match Kc's notes).
+- **Fail / open:**
+  - the host's hack hangs the laptop (our early HackEnded breaks
+    FinalizeHack's merge);
+  - the laptop can still select its bound soldier;
+  - the laptop's specialist can't use an access point (guess: stale unit
+    cache);
+  - the path preview during moves (Highlander `XComTacticalInput.uc`
+    L1846-1847);
+  - rockets from the start position in co-op;
+  - the PC doesn't pan to the laptop's non-move actions;
+  - the banner during a player's own last action;
+  - the ability glow.
+- **Prompt:** "[Run 2 report, three sessions: rocket fine with co-op
+  off; range and cover icons good, odd preview line during moves; fix D
+  only changes a colour; ability glow; laptop camera follows everything;
+  PC doesn't pan to the laptop's Overdrive; laptop rocket from the start
+  position on both; keys, VIP, turn end OK; bound soldiers selectable;
+  SAFE MODE hack as before; banner during own last action; laptop
+  specialist can't hack the access point; host's hack hangs the laptop on
+  a grey tablet; after the partner leaves the PC controls all; 4 missions,
+  no crashes; tutorial; Gatecrasher kills and loot look right] Please
+  give me a report of your findings." **Provided:** the report in the
+  reply; the plan results; known issues. **Misreads / rule breaks:**
+  none. **How It Was Verified:**
+  - greps of all five logs;
+  - Highlander `XComTacticalInput.uc` L1840-1850;
+  - SDK `X2Action_ExitCover.uc` L500-536, `X2Action_Hack.uc` L156;
+  - a count of 24 script files calling `IsMultiPlayerGame()`.
+
+### 2026-11-21 — Session 8 (continued): 0.8.1 research; plan drafted (not approved)
+Claude Opus 5.5, PC. No code, no test. Three read-only research agents
+(stopped by the usage limit, resumed from their transcripts). The plan was
+drafted in the reply, not saved (it waits for approval).
+
+**Key findings, spot-checked by me** (H = Highlander copy):
+- **Hack hang:** FinalizeHack's visual merges into the hack step only
+  while that step runs (H `X2Ability_DefaultAbilitySet.uc` L2119-2160).
+  So the laptop's hack step must stay open until the result frame is
+  replayed, for its own hacks too.
+- **Bound soldier:** `UnitCanAct` used `bAnyActionsAvailable`, which
+  counts abilities the player can't trigger. The game's own check is
+  `UnitHasActionsAvailable` (H `X2TacticalGameRuleset.uc` L4526-4556:
+  bound, panicked, input-triggered `AA_Success`). Not a stale cache.
+- **Ability glow:** the follower's `IsNextAbility` returns true, and
+  `RefreshShine` shows the shine in tutorial mode (H
+  `UITacticalHUD_Ability.uc` L307-320).
+- **Engine multiplayer flag** (true on both machines while connected):
+  - autosave and quicksave are off (H `XComAutosaveMgr.uc` L271, L358);
+  - the pause menu doesn't pause (SDK `UIPauseMenu.uc` L88);
+  - flanking crits use the multiplayer bonus (H
+    `X2AbilityToHitCalc_StandardAim.uc` L629);
+  - units spawned mid-mission lose abilities not marked for multiplayer
+    (H `X2TacticalGameRuleset.uc` L889; no log hits yet).
+- **Detection tiles:** the Highlander makes the concealment components
+  public (H `XComPathingPawn.uc` L172-175).
+- **Moves stopping short:** the interrupt prune (SDK
+  `XComGameStateContext.uc` L432-445) is a candidate (a guess).
+- **Slow alien turn:** zip mode is off whenever tutorial mode is on (H
+  `X2Action.uc` L1192).
+- **Rocket:** fired by the BIT drone, which is likely still at its start
+  tile (a guess).
+- **No pan to Overdrive:** single-player rule; no look-at for
+  player-controlled units.
+
+### Session 8 prompt log (continued, 0.8.1)
+- **Prompt:** "Yes, plan 0.8.1" **Provided:** the research, then the
+  draft plan. **Misreads / rule breaks:** none. **How It Was Verified:**
+  the spot checks above.
+- **Prompt:** "You ran out of usage, please check your current work and
+  ensure nothing broke mid-way through" **Provided:**
+  - checked the tool log: no Edit or Write after the last LOG.md entry,
+    and no writing shell commands among the agents' calls;
+  - the check script passes (18 files, 0 problems);
+  - resumed the three agents.
+
+  **Misreads / rule breaks:** none. **How It Was Verified:** the tool
+  log greps and the check script.
+- **Prompt:** "Tool loaded." **Provided:** the agents resumed.
+  **Misreads / rule breaks:** none. **How It Was Verified:** n/a.
+- **Prompt:** "what does multiplayer franking units? And what does units
+  marked for multiplayer abilities spawned mid mission mean?"
+  **Provided:** a plain explanation.
+  - Flanking crit: 30 in multiplayer (`MP_FLANKING_CRIT_BONUS`) instead of
+    the unit's stat (soldiers 50; enemies 33-40).
+  - The ability game-area filter for units created after HOST.
+
+  **Misreads / rule breaks:** none. **How It Was Verified:**
+  - H `X2AbilityToHitCalc_StandardAim.uc` L627-636;
+  - H `X2TacticalGameRuleset.uc` L896-908;
+  - the game's `DefaultGameCore.ini` L1783 and
+    `DefaultGameData_CharacterStats.ini` (read only).
+
+### 2026-11-21 — Session 8 (continued): 0.8.1 plan approved and written (not built)
+Claude Opus 5.5, PC. Kc's BIT test read (`local\m4-logs\m4-080-*-3.log`,
+0.8.0b, buildid 8270065): the flag turns on at HOST (PC L425), yet the BIT
+followed until the partner joined.
+- **Planned:** plans/m4-plan.md, "0.8.1 (approved by Kc, 2026-11-21)",
+  with Kc's change: a multiplayer-flag fix attempt, not only diagnostics.
+- **Changed (0.8.1):**
+  - hack hold on the guest, and the other player watches the screen;
+  - BIT/Gremlin follow paths for the guest's moves (root cause in source:
+    the host's `GameStateMoveUnit` carried the mover's path only);
+  - can-act uses `UnitHasActionsAvailable`;
+  - path preview hidden when input turns off;
+  - the banner waits for the last action;
+  - single-player rules: ability templates and the pause menu (new
+    `X2TC_CoopSPRules`, `X2TC_CoopPauseListener`);
+  - the ability glow hidden;
+  - mouse-wheel fallback;
+  - the host looks at the guest's self-abilities;
+  - all pending frames stepped at once outside XCOM's turn;
+  - diagnostics: the multiplayer flag, hack abilities, interrupt links;
+  - fix D removed;
+  - 16 switches;
+  - version 0.8.1.
+
+  Also checklists/m4-081.md and release/known-issues.md.
+- **Problems:**
+  - **Detection tiles deferred:** private in the SDK source the build uses.
+  - **Correction to the research:** autosave isn't blocked by the flag,
+    only quicksave and quickload (Highlander `XComAutosaveMgr.uc` L259,
+    L338).
+  - **Waiting for Kc's decision:** flanking crit, suppression, Skulljack,
+    Shadowbind and stage-1 visuals need a class override or an effect.
+- **Checks:**
+  - `tools/check_unrealscript.py`: 20 files, 0 problems;
+  - the 20 new functions are defined and referenced;
+  - no fix D references left;
+  - SDK members checked:
+    - `X2DataTemplate.uc` L56-85;
+    - `X2AbilityTemplateManager.uc` L123-140;
+    - `UIPauseMenu.uc` L78-91, L800-802;
+    - `XComGameState_Unit.uc` L6911, L13369;
+    - `X2PathSolver.uc` L77 (Highlander);
+    - `X2TacticalGameRuleset.uc` L545, L4186;
+    - `XComReplayMgr.uc` L13, L104;
+    - `UIHackingScreen.uc` L13-14, L65;
+    - `X2Camera_LookAtActor(Timed).uc`;
+    - `UITacticalHUD_Ability.uc` L20, L284;
+    - `XComLevelVolume.uc` L58-59;
+    - `X2GameRuleset.uc` L41-75;
+    - `XComGameState.uc` L14-19;
+    - `XComGameStateContext.uc` L34-36, L597.
+- **Prompt:** "0.8.1 plan approved, with one change: the multiplayer flag
+  is more than diagnostics [...] add a fix attempt behind its own switch
+  if the source shows a feasible one [...] as close to single player
+  gameplay as possible. [Answers: Gatecrasher autosaved every turn; BIT
+  test: the BIT follows when hosting alone, desyncs once the partner
+  joins, rockets fly from each machine's stuck BIT straight through walls,
+  logs m4-080-*-3; hacks: the other player watches, the starter
+  controls.] Save the plan, then write 0.8.1 with switches under SAFE
+  MODE as before." **Provided:** the plan saved; 0.8.1 as above; the
+  checklist; the plan notes on what can't be fixed from script.
+  **Misreads / rule breaks:** none. The research agent's autosave claim
+  was wrong; corrected here and in the plan. **How It Was Verified:** the
+  checks above; in-game is Kc's.
+
+### 2026-11-21 — Session 8 (continued): remaining multiplayer rules planned (no code)
+- **Planned:** plans/m4-plan.md, "Remaining multiplayer rules". The
+  Highlander has no hook on any of them.
+  - No override needed:
+    - flanking crit: a hidden passive whose effect adds the shooter's stat
+      minus 30;
+    - suppression: a config variable set to -50 for the session;
+    - Skulljack and Shadowbind: template swaps to mod subclasses.
+  - One override needed: `X2Action_ExitCover`, for the fog reveal on
+    shots.
+  - Documented, not fixed: stage-1 sync visuals and quicksave.
+- **Correction:** I'd called the stage-1 checks "enemy area-attack
+  warnings". They're sync visuals, which only run when a scene is rebuilt;
+  the live warnings are unaffected.
+- **Session 8 prompt log:**
+  - **Prompt:** "Not yet. Plan only: for each remaining multiplayer rule,
+    check the Highlander first for an event or hook [...] Rank them by
+    impact [...] For any that truly need an override, list the class,
+    what else overrides it in common mods if you can tell, and the risk.
+    Add it to the plan; I'll decide after testing 0.8.1."
+  - **Provided:** the ranked table, the override details and two
+    questions for Kc. Two web searches, read as data.
+  - **Misreads / rule breaks:** my 0.8.1 summary misdescribed the stage-1
+    checks (corrected above).
+  - **How It Was Verified:** every `IsMultiplayerGame()` call in SrcOrig
+    was compared with the Highlander copies, the code around each was
+    read, and the GameCore.ini values were read. Nothing was tested in
+    game.
+  - **Tool:** "Tool loaded." (WebSearch schema loaded).
+
+### 2026-11-21 — Session 8 (continued): compatibility pass on the plan (no code)
+- **Planned:** plans/m4-plan.md, "Compatibility pass".
+  - The `X2Action_ExitCover` override is dropped (Kc).
+  - A new visual watcher restores the shooter's fog reveal. It could also
+    replace the camera override, which stays until the watcher is tested.
+    It's a per-tick read of the visualizer tree, with no override,
+    template edit or game state.
+  - The Skulljack and Shadowbind swaps apply only to the stock classes.
+  - The flanking line is labelled "Flanking (co-op)".
+- **Correction:** fog impact downgraded. `X2Action_Fire` already reveals
+  the target and the shooter on unit-targeted shots, so only a thrower in
+  the fog stays hidden.
+- **LWOTC:**
+  - Its 15 class overrides were read from its public XComEngine.ini; none
+    match ours.
+  - Its Skulljack, Shadowbind, suppression and flank changes weren't
+    checked, because GitHub code search needs a sign-in.
+- release/known-issues.md updated (multiplayer rules split into three
+  lines).
+- **Session 8 prompt log:**
+  - **Prompt:** "Compatibility matters a lot here [...] ideally including
+    Long War of the Chosen in the future. 1. Don't add the
+    X2Action_ExitCover override. Research a way to restore fog reveal
+    [...] 2. Do the same check for the existing camera override [...]
+    3. Compatibility audit [...] LWOTC's [...] class override list [...]
+    4. A second shot-breakdown line is fine if labeled clearly [...]
+    Plan only; I'll decide after testing 0.8.1."
+  - **Provided:** the watcher design for fog and camera, the rejected
+    routes, the LWOTC audit, and the known-issues update. A web-fetch
+    agent read LWOTC's repo, as data.
+  - **Misreads / rule breaks:** my previous plan overstated the fog
+    impact (corrected).
+  - **How It Was Verified:**
+    - SrcOrig was read:
+      - `X2Action_ExitCover.uc` L401-422, L500-557;
+      - `X2Action_Fire.uc` L526-543;
+      - `X2Action_EnterCover.uc` L342-356;
+      - `X2Action_CameraFollowUnit.uc` L63-96;
+      - `XComGameStateVisualizationMgr.uc` L117, L459;
+      - `X2EventManager.uc` L287-296.
+    - Highlander `XComGameStateContext_Ability.uc` L1555-1565 was read.
+    - LWOTC's XComEngine.ini was fetched by the agent.
+    - Nothing was tested in game.
+  - **Prompt:** "I'll clone it, give me github desktop directions please.
+    Also please plan a full code audit before 1.0 release to determine
+    every single file you've written, it's purpose, its
+    risks/liabilities and if there's any superior alternates, but that
+    will wait for the end."
+  - **Provided:**
+    - GitHub Desktop steps to clone LWOTC into `local\refs\lwotc`;
+    - the audit plan (plans/m4-plan.md, "Code audit before 1.0");
+    - a line in release/release-checklist.md.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** documents only; no code changed.
+  - **Prompt:** "I've also been recommended to confirm compatibility with
+    covert infiltration, another popular mod, give instructions for that
+    too"
+  - **Provided:**
+    - the repo URL, found by one web search (read as data);
+    - GitHub Desktop steps to clone it into
+      `local\refs\CovertInfiltration`;
+    - its audit items in plans/m4-plan.md (overrides, template edits,
+      mission start, UI listeners, mission end, license, a later in-game
+      check).
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** documents only. The URL comes from search
+    results and was not opened.

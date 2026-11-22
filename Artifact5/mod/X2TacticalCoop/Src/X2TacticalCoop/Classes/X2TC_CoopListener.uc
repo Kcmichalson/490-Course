@@ -16,7 +16,9 @@
 //  the partner's soldiers can act; guest: tells the host it is ready) and a status line
 //  (a UIText named X2TC_CoopStatus that X2TC_CoopTurnUI sets), and CO-OP: SQUAD, which
 //  opens X2TC_CoopSquadScreen. Stage 7 (0.6.0): CO-OP: HOST (STEAM) on the host's HUD
-//  (then INVITE (STEAM)) and CO-OP: JOIN (STEAM) on the main menu.
+//  (then INVITE (STEAM)) and CO-OP: JOIN (STEAM) on the main menu. 0.8.0: CO-OP: FIXES on
+//  both HUDs (X2TC_CoopFixesScreen), and HOST refused in the campaign's tutorial mission
+//  (XComGameReplicationInfo.uc L159-166 spawns XComTutorialMgr there).
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -53,6 +55,12 @@ event OnInit(UIScreen Screen)
 		// Stage 7: join over Steam (accept the host's Steam invite after clicking this).
 		AddButton(Screen, 'X2TC_CoopJoinSteamButton', "CO-OP: JOIN (STEAM)", OnJoinSteamClicked, 340);
 		`log("Coop: JOIN button added to" @ string(Screen.Class.Name), , 'X2TC');
+		class'X2TC_CoopSession'.static.LogNetDiagnostics("main menu"); // 0.8.1
+	}
+	else if (UIAvengerHUD(Screen) != none)
+	{
+		// 0.8.1: is the engine's multiplayer flag off again back on the Avenger?
+		class'X2TC_CoopSession'.static.LogNetDiagnostics("Avenger");
 	}
 	else if (UITacticalHUD(Screen) != none && IsSinglePlayerTactical(Screen))
 	{
@@ -73,8 +81,11 @@ event OnInit(UIScreen Screen)
 			// buttons: from 0.5.3 fix D, the fresh pathing pawn, is permanent (Kc).
 			// The co-op squad screen (owners and settings; view only unless allowed).
 			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 470);
-			AddStatusText(Screen, 530);
-			`log("Coop: LEAVE, NEXT SOLDIER, MOVE, END TURN and SQUAD buttons added to the guest's tactical HUD", , 'X2TC');
+			// 0.8.0: the fix switches and SAFE MODE (this machine only).
+			AddButton(Screen, 'X2TC_CoopFixesButton', "CO-OP: FIXES", OnFixesClicked, 520);
+			AddStatusText(Screen, 580);
+			`log("Coop: LEAVE, NEXT SOLDIER, MOVE, END TURN, SQUAD and FIXES buttons added to the guest's tactical HUD", , 'X2TC');
+			class'X2TC_CoopFixes'.static.LogState("guest's tactical HUD");
 		}
 		else
 		{
@@ -86,8 +97,11 @@ event OnInit(UIScreen Screen)
 			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 360);
 			// Stage 7: host over Steam (private Steam session, then the invite overlay).
 			AddButton(Screen, 'X2TC_CoopHostSteamButton', "CO-OP: HOST (STEAM)", OnHostSteamClicked, 410);
-			AddStatusText(Screen, 470);
-			`log("Coop: HOST and END TURN buttons added to the tactical HUD", , 'X2TC');
+			// 0.8.0: the fix switches and SAFE MODE (this machine only).
+			AddButton(Screen, 'X2TC_CoopFixesButton', "CO-OP: FIXES", OnFixesClicked, 460);
+			AddStatusText(Screen, 520);
+			`log("Coop: HOST, END TURN and FIXES buttons added to the tactical HUD (tutorial mission=" $ IsTutorialMission() $ ")", , 'X2TC');
+			class'X2TC_CoopSession'.static.LogNetDiagnostics("tactical HUD, before HOST"); // 0.8.1
 		}
 	}
 	else if (UIReplay(Screen) != none)
@@ -165,6 +179,10 @@ function OnHostSteamClicked(UIButton Button)
 	local X2TC_CoopSession Session;
 
 	PlayClickSound(Button);
+	if (RefuseInTutorial("HOST (STEAM)"))
+	{
+		return;
+	}
 	Session = class'X2TC_CoopSession'.static.GetSession();
 	if (Session.IsHost() && Session.bSteamSession && Session.IsPollRunning())
 	{
@@ -237,10 +255,41 @@ function PlayClickSound(UIButton Button)
 	}
 }
 
+// 0.8.0: the fixes screen, on either machine.
+function OnFixesClicked(UIButton Button)
+{
+	PlayClickSound(Button);
+	class'X2TC_CoopFixesScreen'.static.Open();
+}
+
+// 0.8.0 (Kc): the campaign's tutorial mission runs its own scripted replay manager
+// (XComTutorialMgr, spawned when the tutorial is on: XComGameReplicationInfo.uc L159-166);
+// co-op isn't offered there.
+function bool IsTutorialMission()
+{
+	return XComTutorialMgr(`REPLAY) != none;
+}
+
+// True (and a short message) if this is the tutorial mission.
+function bool RefuseInTutorial(string What)
+{
+	if (!IsTutorialMission())
+	{
+		return false;
+	}
+	`log("Coop:" @ What @ "refused: this is the tutorial mission", , 'X2TC');
+	class'X2TC_CoopTurnUI'.static.SetStatusText("Co-op isn't available in the tutorial mission");
+	return true;
+}
+
 function OnHostClicked(UIButton Button)
 {
 	`log("Coop: HOST clicked", , 'X2TC');
 	PlayClickSound(Button);
+	if (RefuseInTutorial("HOST"))
+	{
+		return;
+	}
 	if (class'X2TC_CoopSession'.static.GetSession().StartHost())
 	{
 		Button.SetText("CO-OP: HOSTING" @ VersionTag());

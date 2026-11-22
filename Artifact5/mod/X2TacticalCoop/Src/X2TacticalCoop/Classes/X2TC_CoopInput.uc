@@ -37,6 +37,7 @@ const MOVE_KEY = 'M';
 const PREVIOUS_KEY = 'H'; // 0.5.3: previous soldier (Kc: not Shift+Tab, Steam's overlay)
 
 var bool bShiftDown;      // 0.6.0: a Shift key is held (for Shift+Tab)
+var int WheelEventsLogged; // 0.8.1: wheel events logged so far (the first few only)
 
 // Installs the input once per game. Logs whether it was installed now or already there.
 static function Install()
@@ -79,9 +80,9 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 
 	// The squad screen handles its own keys and clicks (a right-click there closes it
 	// and must not move a soldier).
-	if (class'X2TC_CoopSquadScreen'.static.FindOpen() != none)
+	if (class'X2TC_CoopSquadScreen'.static.FindOpen() != none || class'X2TC_CoopFixesScreen'.static.IsOpen())
 	{
-		return false;
+		return false; // 0.8.1: the fixes screen too (its list scrolls with the wheel)
 	}
 
 	// Stage 6, host: Backspace and End end the turn (XComTacticalInput.uc Key_Backspace
@@ -165,6 +166,48 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 		{
 			`log("Coop input:" @ Key @ "-> soldier" @ Direction, , 'X2TC');
 			Follower.SelectGuestUnitStep(Direction);
+		}
+		return true;
+	}
+
+	// 0.8.1 (0.8.0b Run 2: the wheel didn't change floors on the guest; F and C did): the
+	// game binds MouseScrollUp/Down to the same F/C handlers (DefaultInput.ini, tactical
+	// section), which in move mode call the 3D cursor's AscendFloor / DescendFloor
+	// (XComTacticalInput ActiveUnit_Moving Key_F/Key_C, XCom3DCursor.uc L355-364). The
+	// wheel is lost somewhere before that on the guest (cause not found in source). While
+	// the guest's input is on, step the floor here. The first few wheel events are logged
+	// either way. Fix switch: "Partner: mouse wheel changes floors".
+	if (Key == 'MouseScrollUp' || Key == 'MouseScrollDown')
+	{
+		TacticalGRI = XComTacticalGRI(class'WorldInfo'.static.GetWorldInfo().GRI);
+		if (TacticalGRI != none)
+		{
+			Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
+		}
+		if (Follower == none)
+		{
+			return false; // the host's own game handles its wheel
+		}
+		if (WheelEventsLogged < 6)
+		{
+			WheelEventsLogged++;
+			TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+			`log("Coop input:" @ Key @ EventType @ "(guest input on=" $ Follower.bGuestInputOn @ "input state" @ (TacticalController != none ? string(TacticalController.GetInputState()) : "none") $ ")", , 'X2TC');
+		}
+		if (!Follower.bGuestInputOn || !class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_WHEEL))
+		{
+			return false;
+		}
+		if (EventType == IE_Pressed)
+		{
+			if (Key == 'MouseScrollUp')
+			{
+				`CURSOR.AscendFloor();
+			}
+			else
+			{
+				`CURSOR.DescendFloor();
+			}
 		}
 		return true;
 	}

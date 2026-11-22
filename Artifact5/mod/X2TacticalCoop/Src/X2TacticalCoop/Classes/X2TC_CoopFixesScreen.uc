@@ -19,7 +19,7 @@
 class X2TC_CoopFixesScreen extends UIScreen;
 
 const PANEL_WIDTH = 700;
-const PANEL_HEIGHT = 760; // 0.8.1: 17 rows; the list scrolls (UIList adds a scrollbar)
+const PANEL_HEIGHT = 760; // 0.8.1: 17 rows; 0.8.2: 26; the list scrolls (UIList adds a scrollbar)
 const LIST_HEIGHT = 580;
 
 var UIPanel Container;

@@ -15,7 +15,8 @@
 //  0.5.1: left-click selects a soldier on the guest. 0.5.3: H = previous soldier on both
 //  sides; on the host, Tab and H cycle only its own soldiers that can act; on the guest,
 //  Backspace and End end the turn when "Partner may end the turn" is on. The host builds the path
-//  (X2TC_CoopSession, X2PathSolver.BuildPath).
+//  (X2TC_CoopSession, X2PathSolver.BuildPath). 0.8.2: Escape on the guest opens the pause
+//  menu while its input is off (GuestOpenPauseMenu).
 //
 //  How: an Interaction inserted at the front of the game viewport's global interactions
 //  (GameViewportClient.InsertInteraction, Engine\Classes\GameViewportClient.uc L756),
@@ -28,6 +29,9 @@
 //    Engine\Classes\Interaction.uc          (OnReceivedNativeInputKey L87)
 //    Engine\Classes\GameViewportClient.uc   (InsertInteraction L756-788)
 //    XComGame\Classes\XComPathingPawn.uc    (PathTiles L142)
+//    XComGame\Classes\XComPresentationLayerBase.uc (UIPauseMenu L1802-1830,
+//                                           IsPauseMenuRaised L1832)
+//    XComGame\Classes\XComTacticalController.uc (ShouldBlockPauseMenu L2208-2217)
 //---------------------------------------------------------------------------------------
 
 class X2TC_CoopInput extends Interaction;
@@ -38,6 +42,7 @@ const PREVIOUS_KEY = 'H'; // 0.5.3: previous soldier (Kc: not Shift+Tab, Steam's
 
 var bool bShiftDown;      // 0.6.0: a Shift key is held (for Shift+Tab)
 var int WheelEventsLogged; // 0.8.1: wheel events logged so far (the first few only)
+var int EscapeEventsLogged; // 0.8.2: Escape presses logged while the partner waits (the first few only)
 
 // Installs the input once per game. Logs whether it was installed now or already there.
 static function Install()
@@ -212,6 +217,20 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 		return true;
 	}
 
+	// 0.8.2 (0.8.1 Run 1: the laptop couldn't pause while none of its soldiers could act):
+	// the guest's input is then InReplayPlayback, whose Escape goes to the global
+	// Start_Button (XComTacticalInput.uc L1696-1709 -> UIPauseMenu(, true)). That opens
+	// nothing while ShouldBlockPauseMenu() is true (XComPresentationLayerBase.uc L1813;
+	// XComTacticalController.uc L2208-2217: the player's state is 'EndingTurn' or the shot
+	// HUD is up). The guess: the guest's player sits in 'EndingTurn' while it has nothing to
+	// do. Logged below. While the guest's input is off, Escape opens the pause menu here,
+	// without the gameplay block and with saving off (only the host saves). The pause
+	// listener then pauses only this PC, as before. Fix switch: "Partner: pause while waiting".
+	if (Key == 'Escape' && Follower != none && !Follower.bGuestInputOn)
+	{
+		return EventType == IE_Released && GuestOpenPauseMenu();
+	}
+
 	// 0.5.1: left-click on a soldier selects it on the guest (the follower checks the HUD,
 	// move mode and ownership); every other left-click passes through.
 	if (Key == 'LeftMouseButton')
@@ -241,6 +260,44 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 	`log("Coop input:" @ Key @ "-> move to cursor", , 'X2TC');
 	Follower.MoveActiveUnitToCursor();
 	return true;
+}
+
+// 0.8.2, guest, Escape released while its input is off: open the pause menu unless one is
+// already up, a dialog or hack screen is open, or the switch is off. Returns true if it
+// opened it (the key is then consumed); false leaves Escape to the game.
+function bool GuestOpenPauseMenu()
+{
+	local XComTacticalController TacticalController;
+	local XComPresentationLayer Pres;
+	local bool bBlocked, bOn;
+
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController == none)
+	{
+		return false;
+	}
+	Pres = XComPresentationLayer(TacticalController.Pres);
+	if (Pres == none || Pres.ScreenStack == none || Pres.IsPauseMenuRaised() || Pres.UIIsShowingDialog()
+		|| class'X2TC_CoopSession'.static.FindHackScreen() != none)
+	{
+		return false; // the open screen has the key
+	}
+	bBlocked = TacticalController.ShouldBlockPauseMenu();
+	bOn = class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_PARTNER_PAUSE);
+	if (EscapeEventsLogged < 6)
+	{
+		EscapeEventsLogged++;
+		`log("Coop input: Escape while the partner's input is off (input state" @ string(TacticalController.GetInputState())
+			@ "player state" @ (TacticalController.m_XGPlayer != none ? string(TacticalController.m_XGPlayer.GetStateName()) : "none")
+			@ "game blocks pause=" $ bBlocked @ "input blocked=" $ Pres.ScreenStack.IsInputBlocked
+			@ "fix=" $ bOn $ ")", , 'X2TC');
+	}
+	if (!bOn)
+	{
+		return false;
+	}
+	Pres.UIPauseMenu(true, true); // true: past the gameplay block; true: no saving on the partner
+	return Pres.IsPauseMenuRaised();
 }
 
 // True while a dialog box is up (our End Turn question included), so its own keys work.

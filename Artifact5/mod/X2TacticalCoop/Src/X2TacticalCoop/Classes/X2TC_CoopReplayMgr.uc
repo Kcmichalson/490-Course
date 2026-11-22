@@ -84,6 +84,7 @@ var bool bLoggedNoneCanAct;      // 0.8.0: "none of the guest's soldiers can act
 var bool bTutorialControlsSet;   // 0.8.0: this follower turned bIsTutorialAllowingControls on
 var string LastTutorialControlsWhy; // 0.8.0: the reason last logged for that flag
 var string LastHackAvailability;    // 0.8.1: the last logged hack-ability line
+var int ObjectChecks;               // 0.8.2: map-object checks so far (X2TC_CoopObjectLink)
 
 const MISSION_END_WAIT_SECONDS = 8.0; // 0.5.3: longest wait for the visualizer after the end frame
 
@@ -264,6 +265,9 @@ function UpdateGuestInput()
 		bInTutorial = true;
 		`log("Coop follower: XCOM input phase begins (tutorial mode on, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 		TellSessionInputPhase(true);
+		// 0.8.2: map objects against the host's states (objective hacks); detail the first time.
+		ObjectChecks++;
+		class'X2TC_CoopObjectLink'.static.CheckObjects("XCOM turn" @ ObjectChecks, ObjectChecks == 1);
 	}
 	else if (!bWantPhase && bInputPhase)
 	{
@@ -1145,6 +1149,17 @@ function bool SendHackChoiceIfHack(XComGameStateContext_Ability AbilityContext, 
 		return false;
 	}
 	TemplateName = AbilityContext.InputContext.AbilityTemplateName;
+	// 0.8.2 (0.8.1 Run 1: the laptop picked and rolled on the PC's hack): a choice from the
+	// host's hack (watched here) is never sent. True: nothing is applied here either.
+	// Switch "Hacks: watcher can't click".
+	if (class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_HACK_NO_CLICK)
+		&& class'X2TC_CoopOwnership'.static.GetOwner(HackScreen.UnitState) != class'X2TC_CoopOwnership'.const.OWNER_GUEST
+		&& ((HackScreen.FinalizeHackAbility != none && TemplateName == HackScreen.FinalizeHackAbility.GetMyTemplateName())
+			|| (HackScreen.CancelHackAbility != none && TemplateName == HackScreen.CancelHackAbility.GetMyTemplateName())))
+	{
+		`log("Coop follower: captured" @ TemplateName @ "from the host's hack (watched here); dropped, not sent", , 'X2TC');
+		return true;
+	}
 	if (HackScreen.FinalizeHackAbility != none && TemplateName == HackScreen.FinalizeHackAbility.GetMyTemplateName())
 	{
 		`log("Coop follower: captured" @ TemplateName @ "from this PC's hack screen (reward option" @ HackScreen.SelectedHackRewardOption $ "); sending the choice, not the ability", , 'X2TC');

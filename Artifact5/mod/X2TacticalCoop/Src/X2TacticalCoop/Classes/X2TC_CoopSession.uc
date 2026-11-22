@@ -272,6 +272,7 @@ var int PendingHackOption;     // host: the guest's hack choice waiting for the 
 var float PendingHackTime;     // host: WorldInfo.RealTimeSeconds when it arrived
 var bool bHostHackDriven;      // host: InitiateHack ran on the hidden screen; end it when its result shows
 var float HostHackDrivenTime;  // host: when
+var name HackWatchLockedName;  // 0.8.2: the hack screen this PC watches and locked (marked started; X2TC_CoopHackListener)
 // 0.8.1 hack hold (guest): the hack screen's "done" callback is held until the hack's
 // result frame (FinalizeHack or CancelHack) has been replayed. Cleared on release,
 // ResetSession and map cleanup (they point at objects of the map).
@@ -434,6 +435,7 @@ function bool StartHostServer(bool bSteam)
 	// 0.8.0: release the network manager's data before this map unloads; the switches
 	// and the engine's multiplayer flag, for the camera question.
 	EnsureMapCleanup();
+	class'X2TC_CoopVisualWatcher'.static.EnsureInMap(); // 0.8.2: fog reveal, watcher camera
 	LogNetDiagnostics("host started");
 	class'X2TC_CoopFixes'.static.LogState("HOST");
 	class'X2TC_CoopSPRules'.static.BeginSession(); // 0.8.1
@@ -2365,6 +2367,7 @@ function InstallFollower(XComTacticalGRI TacticalGRI)
 	`log("Coop guest: follower installed (replaced" @ OldName $ ")", , 'X2TC');
 	// 0.8.0: as on the host (the guest's map is the host's mission from here on).
 	EnsureMapCleanup();
+	class'X2TC_CoopVisualWatcher'.static.EnsureInMap(); // 0.8.2
 	LogNetDiagnostics("guest follower installed");
 	class'X2TC_CoopFixes'.static.LogState("JOIN");
 }
@@ -3295,6 +3298,13 @@ function ClearHeldHack()
 // screen submits FinalizeHack or CancelHack), sent instead of the ability: the host's
 // FinalizeHack reads the reward option from the hack screen on its own screen stack
 // (X2Ability_DefaultAbilitySet.uc L1787-1800), so the host plays it on its hidden copy.
+// 0.8.2: X2TC_CoopHackListener marked this watched screen as started (no clicks); the
+// host's HostDriveHack clears it again before it plays the partner's choice.
+function MarkHackWatchLocked(UIHackingScreen HackScreen)
+{
+	HackWatchLockedName = HackScreen.Name;
+}
+
 function SendHackChoice(int Option)
 {
 	local array<byte> Params;
@@ -3357,6 +3367,15 @@ function HostDriveHack()
 	{
 		`log("Coop hack (host): the open hack screen is for unit" @ (HackScreen.UnitState != none ? HackScreen.UnitState.ObjectID : -1) $ ", not a partner's soldier; the partner's choice is dropped", , 'X2TC');
 		return;
+	}
+	// 0.8.2: a lock set by the watcher fix isn't a real start; clear it so the screen's own
+	// InitiateHack / OnCancel run (both assert the flag is false, UIHackingScreen.uc L330, L510;
+	// the Highlander's OnCancel also returns early while it's set, its L412).
+	if (HackScreen.m_hackStarted && HackWatchLockedName != '' && HackScreen.Name == HackWatchLockedName)
+	{
+		HackScreen.m_hackStarted = false;
+		HackWatchLockedName = '';
+		`log("Coop hack (host): watcher lock cleared to play the partner's choice", , 'X2TC');
 	}
 	if (HackScreen.m_hackStarted)
 	{

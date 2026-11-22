@@ -15,6 +15,21 @@ Schedule: plans/m4-plan.md. Kc does every upload and every public step.
 - [ ] Decide whether the M2 main-menu MULTIPLAYER button ships.
 - [ ] Full code audit done (plans/m4-plan.md, "Code audit before 1.0");
       findings in LOG.md, and any fixes Kc approves are built and tested.
+- [ ] **Save without the mod (Kc; one PC, no co-op needed; plans/m4-plan.md,
+  0.8.2 "Saves and the co-op passive").** With the mod enabled:
+  1. In a Skirmish or campaign mission (not hosting), make one move and
+     save from the pause menu (tactical save).
+  2. In a campaign, save on the Avenger (strategy save).
+  3. Quit, disable X2TacticalCoop in the launcher (keep the Highlander),
+     and load the tactical save. Note any warning and its buttons, then
+     load anyway.
+  4. Play two turns (a flanking shot, end turn) and finish or evac the
+     mission. Note any crash, freeze or error popup.
+  5. Load the strategy save, play one mission and return.
+  6. Re-enable the mod and copy each `Launch.log`.
+
+  Result decides the known-issues line, the Workshop note, or the fallback
+  in the plan.
 - [ ] Version set to 1.0.0 (`X2DownloadableContentInfo_X2TacticalCoop.uc`).
 - [ ] `SHOW_TEST_BUTTONS` is false (`X2TC_MainMenuListener.uc`).
 - [ ] Release-candidate friend playtest (~Dec 1-3); feedback in LOG.md in

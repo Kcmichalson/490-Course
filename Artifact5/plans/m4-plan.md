@@ -341,7 +341,7 @@ rebuild the scene after a load (row 3).
 | 1 | Flanking crit: flat `MP_FLANKING_CRIT_BONUS`=30 instead of the shooter's stat (soldiers 50, most enemies 33) (`X2AbilityToHitCalc_StandardAim.uc` L534-544; Highlander copy L627-636) | High: every flanking shot | **Yes.** The effects loop right after it (L546-560) calls each shooter effect's `GetToHitModifiers` with the shooter and `bFlanking`. | A hidden passive ability added to every character template (`OnPostTemplatesCreated`). Its effect adds (shooter's flank crit − 30) as a crit modifier when the shot flanks, isn't melee, a session is on, and the switch is on. Costs: the breakdown shows a second "Flanking" line; the ability needs the multiplayer area (SP rules already add it); a mid-mission save made in co-op needs the mod to load. |
 | 2 | Shooter not revealed in the fog: `ShouldRevealFOW()` returns false (`X2Action_ExitCover.uc` L500-505), so the shooter's 3 m reveal and forced visibility (`HideFOW`, L401-422) are skipped. Its `ShouldFrameCamera()` (L507-537) also skips the camera for unseen enemy shooters | **Medium (downgraded; revised 2026-11-21):** the fire action reveals both the target and the shooter anyway, in every mode (`X2Action_Fire.uc` L526-543). So shots at a unit are revealed, just later. Grenades and other area attacks, which have no unit target, leave a thrower in the fog hidden | **Yes, by a watcher (no override; Kc dropped the override).** See "Visual watcher" below. | Revised 2026-11-21. |
 | 3 | Stage-1 sync visuals: Blazing Pinions (`X2Ability_Archon.uc` L408-420, `DLC_2\...ArchonKing.uc` L287-299), Codex psi bomb (`X2Ability_Cyberus.uc` L857-867), Avatar rift (`X2Ability_PsiWitch.uc` L270-280), Chryssalid cocoon (`X2Ability_ChryssalidCocoon.uc` L141-151) | Low: they only run when a saved or joined scene is rebuilt. The host loads before HOST, when the flag is still off. The guest might hit one if it joins during a pending attack (guess) | Yes in principle (re-point the templates' sync delegates), but that means rewriting SDK functions | **No fix.** Note it in known issues. |
-| 4 | Suppression: every shooter gets `MultiplayerTargetAimPenalty`=-35; in single player, aliens suppressed by XCOM get -50 (`X2Effect_Suppression.uc` L14-19; GameCore.ini L1841-1843) | Medium: XCOM's suppression is weaker | **Yes.** It's a config variable, so setting it at run time is allowed. | Set it to `SoldierTargetAimPenalty` (-50) at HOST; restore it at the session's end (like SP rules). Exact unless an enemy suppresses XCOM: no vanilla character template has Suppression (grep; mods may add it). The ability text (`X2AbilityTag.uc` L189) follows. |
+| 4 | Suppression: every shooter gets `MultiplayerTargetAimPenalty`=-35; in single player, aliens suppressed by XCOM get -50 (`X2Effect_Suppression.uc` L14-19; GameCore.ini L1841-1843) | Medium: XCOM's suppression is weaker | **Yes.** It's a config variable, so setting it at run time is allowed. | **Revised after the LWOTC audit:** no config write. The Flanking (co-op) passive adds -15 for a suppressed non-XCOM shooter (see "Audit results"). |
 | 5 | Skulljack and Stasis Lance: the 70% base chance is skipped, so 0% except on Captains and Codices (100%) (`X2AbilityToHitCalc_StasisLance.uc` L81) | Low | **Yes, by a template edit** (not an override) | A subclass whose `GetHitChance` takes the single-player branch while a session is on, swapped into the templates that use this calc (`X2Ability_ItemGrantedAbilitySet.uc`). Risk: mods that edit Skulljack's hit calc. |
 | 6 | Shadowbind: the copy gets 0 action points on spawn (`X2Effect_SpawnShadowbindUnit.uc` L36-40) | Low (makes Spectres weaker) | **Yes, by a template edit** | A subclass of the effect that saves the copy's action points, calls the original, then restores them. Swapped into the Spectre's Shadowbind templates (`X2Ability_Spectre.uc`). |
 | 7 | Quicksave and quickload off (Highlander `XComAutosaveMgr.uc` L271, L358; no hook) | Low: autosave works (Kc saw it). The pause menu's Save Game isn't gated by the flag (`UIPauseMenu.uc` L245-254), so the host can probably still save by hand (guess) | Not needed | **No fix.** Quickload must stay off in co-op anyway, because it would drop the session. Add "host: pause menu → Save Game" to a checklist. |
@@ -444,12 +444,534 @@ recommended to confirm compatibility with covert infiltration")**
   returns to the Avenger. Not scheduled yet; it goes with the
   release-candidate tests if Kc wants it in 1.0.
 
+### Audit results: LWOTC and Covert Infiltration (2026-11-21, from source, not tested)
+Clones: `local\refs\lwotc` and `local\refs\CovertInfiltration`. Kc cloned
+both with GitHub Desktop. I didn't read their commit IDs: my command
+included `git`, which was denied, and I didn't get them another way.
+
+**Licenses:**
+- Covert Infiltration: MIT (`LICENSE`, "Copyright (c) 2019
+  WOTCStrategyOverhaul").
+- LWOTC: I found no license file at its top level, and its README doesn't
+  mention one. Only its build tools (`.scripts/X2ModBuildCommon/LICENSE`)
+  have one.
+- We reuse no code from either.
+
+**Class overrides:**
+- **LWOTC:** 16 classes. 15 are in `Config/XComEngine.ini` L59-85; one
+  more (`UIPersonnel_SoldierListItem`) is in `Config/XComLW_Overhaul.ini`
+  L4 and is added at run time by `PatchModClassOverrides`
+  (`X2DownloadableContentInfo_LongWarOfTheChosen.uc` L1005-1018).
+- **Covert Infiltration:** 4 strategy UI classes (`Config/XComEngine.ini`
+  L12-17: `UIEventQueue`, `UIStrategyMapItem_CovertAction`,
+  `UIStrategyMapItem_Mission`, `UICovertActions`).
+- **No conflict with our `X2Action_CameraFollowUnit` override.** (LWOTC and
+  Covert Infiltration both override `UIStrategyMapItem_Mission`, so the
+  two mods conflict with each other, not with us; they aren't meant to be
+  used together.)
+
+**Our planned fixes against each mod:**
+
+| Fix | LWOTC | Covert Infiltration |
+|---|---|---|
+| Flanking (co-op) passive | OK. LWOTC's hit calc is XModBase's copy (`XMBAbilityToHitCalc_StandardAim.uc` L534-558), which keeps the same multiplayer branch *and* the same effects loop, so the passive is still asked. LWOTC's graze band runs afterwards, through Highlander #555 (`X2LWAbilitiesModTemplate.uc` L78). LWOTC's own anti-flank effects subtract the shooter's flank stat (`X2Effect_SmokeFlankingCritProtection.uc` L32, `X2Effect_ShieldGuard.uc` L23). ~~With the flat 30 plus our +20 they'd leave +20; a later step can make the passive skip targets protected that way.~~ **Corrected 2026-11-22:** with the passive they leave exactly 0, as in single player (30 + 20 − 50); without it, -20. So no skip is needed (0.8.2, item 5). **Risk: medium; needs a test with LWOTC.** | Not touched |
+| Suppression -50 (row 4) | **Problem.** LWOTC gives aliens the stock Suppression ability (`X2Item_LWAlienWeapons.uc` L212, L333, L892). A single -50 would make alien suppression on XCOM soldiers -50 instead of -35. **Revised:** no config write. The Flanking (co-op) passive also corrects suppression: when the shooter isn't XCOM and has a Suppression effect, it adds (`SoldierTargetAimPenalty` − `MultiplayerTargetAimPenalty`), which is -15. That's exact for both sides, with any mod's values. It also covers LWOTC's `X2Effect_AreaSuppression`, which extends the stock effect (guess: it keeps the stock `GetToHitModifiers`). The ability's tooltip still says -35. | Not touched |
+| Skulljack (row 5) | OK. LWOTC only changes the icon colour and shooter exclusions (`LWTemplateMods.uc` L2029; `X2DownloadableContentInfo_LongWarOfTheChosen.uc` L388-392). The calc stays stock, so our swap applies | Not touched (it only checks soldiers' gear for Skulljack, `UISSManager_CovertAction.uc` L422-480) |
+| Shadowbind (row 6) | Not referenced | Not referenced |
+| Visual watcher (fog, camera) | LWOTC adds stock `X2Action_ExitCover` actions to its own visuals (e.g. `X2Ability_PerkPackAbilitySet.uc` L1144, L3151); the watcher treats them like any other. OK | Not touched |
+| SP rules (multiplayer area on abilities) | OK for abilities. **But see below** | OK |
+
+**LWOTC: one problem the mod can't fix.**
+- LWOTC's `FinalizeUnitAbilitiesForInit` (a Highlander hook) returns early
+  in multiplayer (`X2DownloadableContentInfo_LongWarOfTheChosen.uc`
+  L3024-3034). That hook adds LWOTC's per-unit abilities, such as its
+  infiltration modifier.
+- In co-op the flag is on from HOST, so units created after HOST would
+  miss those abilities: reinforcements, and units created by abilities.
+- It's LWOTC's own check, so nothing in our mod can change it.
+- Also cosmetic: Perfect Information's shot wings skip part of the
+  display in multiplayer (`XCom_Perfect_Information_UITacticalHUD_ShotWings.uc`
+  L242).
+- **Verdict:** LWOTC co-op is possible but not exact. Its reinforcements
+  would be weaker. Leave it out of 1.0; it needs its own test and maybe a
+  request to LWOTC's authors (Kc's call).
+
+**Covert Infiltration: mostly strategy-side; its tactical parts look safe
+(a guess until tested).**
+- **Runs on the host only:** its tactical listeners (`X2EventListener_Infiltration.uc` L1395-1409) run mission-start and reinforcement logic as game states the guest then replays:
+  - `OnTacticalBeginPlay`, `PostAliensSpawned`, `OnUnitBeginPlay`;
+  - reinforcement calls on `SquadConcealmentBroken` and `ScamperEnd`.
+- **Before HOST:** encounter and reinforcement creation (`X2DownloadableContentInfo_CovertInfiltration.uc` L1411, L1436), `OnPreMission` (L775).
+- **After the mission, host only:** `OnPostMission` (L887).
+- **Guest, cosmetic (guess):** on its Supply Extraction mission, it shows and hides the dropship mesh in visualization windows (`X2EventListener_Infiltration.uc` L1406-1407, L1639-1667). Those windows come from game events, which the guest doesn't submit, so on the laptop the dropship may show or hide at the wrong time.
+- **No multiplayer-flag checks; no tactical HUD or pause-menu screen listeners.** Its reinforcement countdown text comes through a Highlander UI event (`X2EventListener_Infiltration_UI.uc` L884-889); guess: it fires on both machines.
+- **Squad size:** its squads come from covert-action style infiltration. CO-OP: SQUAD lists whatever soldiers are in the mission (guess), so check it with a larger squad.
+- **Verdict:** a good candidate for a 1.0 compatibility test. Checklist items (Kc plays; both PCs run it):
+  - one infiltration mission in co-op, with reinforcements;
+  - one Supply Extraction mission, watching the dropship on the laptop;
+  - the return to the Avenger and the covert-action report on the PC.
+
 **Proposed order (each behind its own switch under SAFE MODE; no new overrides):**
-1. Rows 1, 4, 5 and 6, plus the watcher's fog part (row 2).
+1. Rows 1, 5 and 6, row 4 now inside the row-1 passive, plus the watcher's fog part (row 2).
 2. The watcher's camera part next to the existing override; remove the override after a passing test.
 3. Rows 3 and 7: documented, not fixed (known issues).
 
-**For Kc:** clone LWOTC into local/refs for the remaining audit? (Optional.)
+**For Kc:**
+- Should Covert Infiltration's co-op check go into the release-candidate
+  tests?
+- LWOTC stays out of 1.0 (recommended)?
+
+## 0.8.2 (approved by Kc, 2026-11-22)
+
+**Kc (2026-11-22):** "Approved: 0.8.2 = A + B, 0.8.3 = C. Write 0.8.2 and
+its checklist." Answers:
+- Drop the smoke skip ("your math is right").
+- Item 9: hide MOVE TO CURSOR; drop the MULTIPLAYER button ("stock PvP,
+  not needed and Mr.Fear's area"); rename HOST/JOIN to "BY IP".
+- New for 0.8.3: one "Co-op" button in the top-right HUD icon row (see C,
+  item 13).
+- Verbose log: on by default in playtest builds, off in 1.0.
+- Covert Infiltration: in the release-candidate tests only if a friend runs
+  it; otherwise after 1.0. LWOTC: out of 1.0.
+
+### As built (2026-11-22; differences from the draft below)
+Nothing here is tested yet (checklists/m4-082.md).
+- **A1 pause:** the source points at a likely cause, a guess until the log
+  shows it. The global Escape handler calls `UIPauseMenu(, true)`, which
+  returns without opening anything while `ShouldBlockPauseMenu()` is true
+  (`XComPresentationLayerBase.uc` L1813). That happens when the player's
+  state is `EndingTurn` or the shot HUD is up (`XComTacticalController.uc`
+  L2208-2217). So the fix opens the menu with `UIPauseMenu(true, true)`:
+  past the gameplay block, saving off. It logs the player state and the
+  block for the first few presses.
+- **A2 hacks:** as planned. The host remembers its lock by the screen's
+  name and clears it before `InitiateHack` *and* before `OnCancel` (the
+  Highlander's `OnCancel` also returns early while the flag is set, its
+  L412). The blocker is a `UIBGBox` at 1% alpha, 1920x1080.
+- **A3 objects:** new class `X2TC_CoopObjectLink`. It runs at the start of
+  each XCOM turn on the guest (detail lines the first time, then only the
+  summary), not when the hack line changes. That line changes too often,
+  and a repair switched on mid-mission takes effect at the next XCOM turn.
+  Matching is by `ActorId`, then by name and location (as the stock
+  search).
+- **B5:** as planned (`X2TC_CoopRulesAbility`, `X2TC_CoopRulesEffect`).
+  The first 5 lines of each kind are logged; hit chances are also worked
+  out for previews, so a line isn't proof of a shot. **Note:** the passive
+  is on every character template from start-up, so *every* tactical save
+  made with the mod holds it (not only co-op saves).
+- **B6 Shadowbind: added, not swapped.** The template's effect list is
+  `protectedwrite` in SrcOrig (`X2AbilityTemplate.uc` L57), and `new` with
+  a parent-class template object isn't safe in UE3 (a guess). So a small
+  extra effect, `X2TC_CoopShadowbindActions`, is appended after the stock
+  spawn effect, only in templates that have that effect's exact stock
+  class. In the same game state it finds the copy and gives its standard
+  action points back if its group is the acting one. That's exactly what
+  the spawn manager gave it in single player (`XComAISpawnManager.uc`
+  L472-475). Skulljack is swapped as planned (`X2TC_CoopStasisLanceCalc`).
+- **B7/B8 watcher:** `X2TC_CoopVisualWatcher`, spawned with the map
+  cleanup actor.
+  - **Camera:** it acts on a follow-camera action that it saw waiting and
+    that then *finished* without a camera, while that move's
+    camera-remove action hasn't run. The stock action decides and
+    completes in its Begin code, so "executing" alone isn't enough.
+  - The stock camera-remove action at the move's end removes the
+    watcher's camera by tag, as it would the stock one.
+- **Version:** 0.8.2. Switches: 25.
+
+### Saves and the co-op passive (Kc, 2026-11-22: check before release)
+Kc: check what the game does when a tactical save references
+`X2TC_CoopRules` and the mod is removed. If it only warns, note it in
+known issues; if it could break a save, propose an alternative. A
+disclaimer ("don't add or remove mid-mission; mid-campaign is fine") is
+also fine with Kc.
+
+**From source (not tested):**
+- **Load:** a save missing a mod or DLC gets a warning dialog with "Load
+  anyway" and Cancel (`UILoadGame.uc` L385-397). The check itself is
+  native (`XComOnlineEventMgr.CheckSaveDLCRequirements`, L3236), so whether
+  it names this mod is a guess.
+- **What the save holds:** no object of the mod's classes. There's the
+  unit's ability state (stock class, holding the template *name*) and its
+  effect state (stock class; the effect is found through the template's
+  name and index, `XComGameState_Effect.GetX2Effect` L41-44). Without the
+  mod, both lookups return None. `X2TC_CoopShadowbindActions` and the
+  Skulljack calc live only on templates, never in a save.
+- **Script paths with None:** the hit calc skips an effect that returns
+  None (`X2AbilityToHitCalc_StandardAim.uc` L551-553). Others don't check,
+  for example the turn tick (`XComGameState_Effect.uc` L49) and mission end
+  (`XComGameState_Unit.OnEndTacticalPlay` L2391). In UnrealScript that is
+  an "Accessed None" log line, not a crash. **Unknown:** native code that
+  reads the ability's template (`GetMyTemplate` is native, L57); a crash
+  there can't be ruled out from script.
+- **Strategy saves:** at mission end every unit's ability and effect lists
+  are emptied (`OnEndTacticalPlay` L2401-2405). The passive comes from the
+  character template at each mission start. So a strategy save holds no
+  trace of it (guess: nothing else keeps the old states).
+
+**Test:** release checklist, "Save without the mod" (one PC, ~15 min).
+
+**If the test shows a broken save, the fallback (not built):**
+- Add the passive only for a session. At HOST, add it to the character
+  templates (removed again when the session ends, as `X2TC_CoopSPRules`
+  does with the multiplayer area), so units created during the session
+  get it.
+- For units already on the map at HOST, create its ability state
+  (`X2TacticalGameRuleset.InitAbilityForUnit`, L788) and apply its effect
+  in one game state on the host. The guest replays it.
+- **Cost:** the unit-start trigger has already fired for those units, so
+  the effect must be applied by hand (more code and a new risk).
+- Only saves made during a co-op session would hold it.
+- **Recommendation:** run the test first. If it only warns, keep the
+  current design, with the known-issues line and the Workshop note
+  ("don't add or remove mid-mission; between missions is fine").
+
+Kc (2026-11-22): "Plan 0.8.2 as one bigger step toward 1.0. Show me the
+plan before code. Every gameplay fix behind its own switch under SAFE
+MODE, as before." The items are Kc's (A 1-4, B 5-8, C 9-12). Found from
+source; nothing below is tested.
+
+### Split (my recommendation)
+- **0.8.2 = A + B** (gameplay; one LAN run plus one campaign mission,
+  ~Nov 24-28). The watcher camera (item 8) is included, so the Nov 28-29
+  camera slot is free.
+- **0.8.3 = C** (no gameplay risk; one short run, ~Nov 28-29), built
+  only after 0.8.2 passes. Why:
+  - Item 10 touches most of the 318 log calls in 20 classes. Mixed with
+    A and B, one diff would hold both gameplay changes and hundreds of log
+    edits. That makes a 0.8.2 failure harder to trace, and the code audit
+    (Nov 30) harder too.
+  - The 0.8.2 run needs the full logs (the new hack, object and flanking
+    lines).
+  - C's UI changes (hidden buttons, labels) are easier to check on their
+    own.
+- Either way, the code audit stays at Nov 30-Dec 1.
+
+### A. 0.8.1 leftovers
+**1. The partner pauses while it has no soldier that can act** (switch
+"Partner: pause while waiting").
+- **Found:** the guest's input is then `InReplayPlayback`.
+  - That state has no pause handler of its own (Highlander
+    `XComTacticalInput.uc` L493-530).
+  - The global `Start_Button`/`EscapeKey` (L1741-1754) would open the
+    pause menu.
+  - Why it doesn't is not found. The pre-check (L173-240) has several
+    gates.
+- **Fix (works whatever the cause):** in `X2TC_CoopInput.HandleKey`, on
+  Escape released, when all of these hold:
+  - the guest's input is off;
+  - no pause menu or dialog is up;
+  - no hack screen, squad screen or fixes screen is open;
+
+  open it the way the game does: `XComPresentationLayer.UIPauseMenu(,
+  true)`.
+- The existing pause listener then pauses only the laptop.
+- The first few Escape presses are logged, with the input state.
+- **Risk:** low. If the game also handled it, the menu could open twice.
+  The "no pause menu up" check prevents that.
+
+**2. Hacks: the watcher can't click; the partner sends only its own
+hacks** (switch "Hacks: watcher can't click").
+- **Found:** `SetInputState(eInputState_None)` blocks keys only. The
+  screen's mouse callback (`UIHackingScreen.OnMouseEvent`, SrcOrig
+  L345-365) starts a hack on a click, unless `m_hackStarted` is true.
+  - The screen is drawn in the Gremlin's render-to-texture movie
+    (`X2Action_Hack.uc` L232-237), so it isn't certain that a 2D panel
+    on top would catch the mouse.
+- **Fix, three layers:**
+  1. **From source:** on the watcher's copy, set `m_hackStarted = true`
+     (an instance variable, not a default). That disables Hack and Cancel
+     by mouse and keys.
+     - On the host's watching copy, `HostDriveHack` sets it back to false
+       just before it calls `InitiateHack` (L3379). That function asserts
+       the flag is false (SrcOrig L510).
+  2. **Your blocker:** a transparent full-size panel, a child of the
+     watcher's copy. It takes mouse events (`ProcessMouseEvents`) so
+     reward picks don't move either. It's a guess that it works in that
+     movie; each click it catches is logged once.
+  3. **The guest's capture** (`SendHackChoiceIfHack`): when the open hack
+     screen's soldier isn't the guest's, it sends nothing and logs
+     "dropped". It still returns true, so nothing is applied locally.
+- **Risk:**
+  - Layer 1 depends on the guest staying in tutorial-style replay. The
+    screen's own auto-start (`StartScaryComputerLoopAkEvent`, L161-170)
+    runs only in a non-tutorial replay.
+  - The 0.8.1 log shows no auto-start.
+
+**3. Objective hack on the partner: test the object-ID guess and try a
+fix** (diagnostic always on while connected; repair switch "Partner:
+re-link objects to the host's states").
+- **Found in source:**
+  - A hack target counts only if `X2Condition_Interactive` finds the
+    actor among the unit's interaction points (SrcOrig L28-34).
+  - `GetUnitInteractionPoints` drops any point whose actor's
+    `GetInteractiveState()` is None or can't be hacked
+    (`X2Condition_UnitInteractions.uc` L31-75).
+  - `GetInteractiveState` → `FindExistingState`
+    (`XComDestructibleActor.uc` L235-310):
+    - if the actor already has an `ObjectID`, it trusts it;
+    - only an actor with ID 0 searches the history by its `ActorId`
+      (name and location).
+  - The guest's actors got their IDs from its own map load. Its history
+    is the host's. If the IDs differ, every lookup misses (the guess).
+- **Diagnostic** (guest, once after the history arrives, and again when
+  the selected unit's hack line changes):
+  - for each `XComInteractiveLevelActor` with a hack or interaction
+    ability: its name, its `ObjectID`, the class and `ActorId` name of the
+    history object with that ID, and the object whose `ActorId` matches
+    the actor;
+  - `MATCH` or `MISMATCH`;
+  - for the matching object: `IsEnabled`, `MustBeHacked`, `HasBeenHacked`,
+    and its hack reward count.
+  - One summary line: N actors, M mismatched.
+- **Repair (behind its switch, guest only, after the diagnostic):** for a
+  mismatched actor:
+  - call its public `SetObjectIDFromState(the matching object)`
+    (`XComDestructibleActor.uc` L461-467);
+  - point the history's visualizer for that object at the actor
+    (`History.SetVisualizer`).
+  - Write only `ObjectID` this way, never directly: it's `protectedwrite`
+    (L146).
+- **Risks:**
+  - The setter asserts the old ID was 0 or equal. That only matters if
+    asserts stop the game in this build (a guess: they log).
+  - Doors are the same actor class, so the repair re-links doors too. The
+    diagnostic counts them first.
+  - If the diagnostic shows no mismatch, the repair does nothing, and the
+    guess is wrong.
+- **Test:** one Skirmish run with an objective workstation, the repair on
+  then off.
+
+**4. The game's call-stack traces: leave them** (no switch, no code).
+- **Found:**
+  - `X2GameRuleset.SubmitGameStateContext` traces every context it
+    submits while the network manager has connections and the context
+    isn't marked for sending (SrcOrig L236-249, L340-349). That's every
+    context on the host, because our session sends the history itself.
+- **Cheap ways to stop them, all rejected:**
+  - **Mark the contexts for sending.** The engine would then queue them
+    and send them to the guest itself, alongside our history. The native
+    behaviour is unknown, which risks a desync or a crash.
+  - **Report no connections.** That would break our own connection.
+  - **Suppress `ScriptLog` in the mod's `XComEngine.ini`.** It would hide
+    every untagged log line, the game's and other mods', and it changes
+    engine config.
+- **Cost of leaving them:** log size only (about 60% of the PC log's
+  lines). They were in 0.8.0 too, with no effect seen. Item 10 keeps the
+  X2TC lines easy to find.
+
+### B. Single-player rules (no class overrides; designed in "Remaining multiplayer rules" and "Compatibility pass")
+**5. The Flanking (co-op) passive** (switches "Flanking crit as in single
+player" and "Suppression penalty as in single player").
+- **New:**
+  - `X2TC_CoopRulesAbility` (creates the hidden passive
+    `X2TC_CoopRules`, with the multiplayer game area set directly);
+  - `X2TC_CoopRulesEffect` (an `X2Effect_Persistent`, infinite, no
+    visuals).
+- **Template edit at start-up:** add the passive to every character
+  template. This goes in `OnPostTemplatesCreated`, which the mod's
+  DLCInfo already runs; it doesn't replace anything.
+- **`GetToHitModifiers`** (SrcOrig `X2Effect_Persistent.uc` L653). It's
+  called with the shooter by the effects loop (`X2AbilityToHitCalc_StandardAim.uc`
+  L546-560). It does nothing unless all of these hold:
+  - a co-op session is on;
+  - the engine reports multiplayer (exactly when the flat 30 applies,
+    L536-539);
+  - the calc is `X2AbilityToHitCalc_StandardAim` or a subclass.
+
+  Then:
+  - **Flanking:** when `bFlanking` and not `bMelee`, add crit (the
+    shooter's `eStat_FlankingCritChance` − `MP_FLANKING_CRIT_BONUS`).
+    Labelled "Flanking (co-op)".
+  - **Suppression:** when not `bIndirectFire` and the shooter has an
+    `X2Effect_Suppression` (or a subclass), add aim:
+    - for XCOM shooters, (`AlienTargetAimPenalty` −
+      `MultiplayerTargetAimPenalty`);
+    - for others, (`SoldierTargetAimPenalty` − `MultiplayerTargetAimPenalty`).
+
+    Labelled "Suppression (co-op)". Stock values: 0 and -15
+    (`DefaultGameCore.ini` L1841-1843). **Correction:** the earlier plan
+    covered only non-XCOM shooters. The stock effect also has an XCOM
+    branch (`X2Effect_Suppression.uc` L14-19).
+- **Your smoke request, I recommend against it:** LWOTC's smoke and
+  ShieldGuard effects subtract the shooter's own flank stat
+  (`X2Effect_SmokeFlankingCritProtection.uc` L32, `X2Effect_ShieldGuard.uc`
+  L23).
+  - With the passive: 30 + (50 − 30) − 50 = **0**, exactly single player.
+  - Skipping those targets would leave 30 − 50 = **-20**, a penalty
+    single player doesn't have. Our passive is what makes that case
+    right, so no skip.
+- **Risks:**
+  - A save made mid-mission in co-op holds the passive, so it needs the
+    mod loaded.
+  - The shot breakdown shows the extra lines.
+  - A hit calc that skips the effects loop leaves the flat 30.
+
+**6. Skulljack / Stasis Lance and Shadowbind swaps** (switches "Skulljack
+chance as in single player" and "Shadowbind copy acts as in single
+player").
+- **New:**
+  - `X2TC_CoopStasisLanceCalc` (extends
+    `X2AbilityToHitCalc_StasisLance`). While a session is on and its
+    switch is on, it takes the single-player branch of L81; otherwise it
+    calls the stock one.
+  - `X2TC_CoopSpawnShadowbindEffect` (extends
+    `X2Effect_SpawnShadowbindUnit`). It keeps the copy's action points
+    across the original's multiplayer branch (L36-40); with the switch
+    off, it's stock.
+- **Swap at start-up:** only where the template's calc or effect class is
+  exactly the stock one. Each swap and each skip is logged.
+
+**7. The visual watcher's fog reveal** (switch "Reveal shooters in the
+fog").
+- **New:** `X2TC_CoopVisualWatcher` (an Actor), as designed under "Visual
+  watcher": its own fog viewer, plus forced visibility on an executing
+  `X2Action_ExitCover` that skipped them, removed when the action ends.
+- It runs on both machines while connected. One log line per action.
+
+**8. The watcher's camera** (switch "Camera: watcher (no override)", next
+to the existing "Camera follows moves while connected", the override).
+- It adds an `X2Camera_FollowMovingUnit` only when an executing
+  `X2Action_CameraFollowUnit` has no camera, so with the override on it
+  stays idle.
+- **To compare:** run one mission with the override on and the watcher
+  off, then one with them swapped. The override comes out only after the
+  watcher passes, in a later build.
+
+**Switches:** 9 new (pause, hack click, object re-link, flanking,
+suppression, Skulljack, Shadowbind, fog, watcher camera), 25 in all, all
+under SAFE MODE. Each template-based fix is checked when it runs, so with
+its switch off the game behaves as stock.
+
+**Checklist (written after approval): `checklists/m4-082.md`.**
+- Skirmish on the LAN:
+  - the laptop pauses with no soldier that can act;
+  - the PC hacks and the laptop can't click;
+  - the laptop hacks the objective with the repair on, then off;
+  - a flanking shot's breakdown on both PCs;
+  - a suppressed alien's shot;
+  - the camera comparison;
+  - a grenade thrown from the fog.
+- Plus item 12's campaign checks:
+  - a campaign mission with reinforcements or the Chosen (abilities, and
+    the Skulljack chance if a Codex or Officer is there);
+  - the mouse wheel with a USB mouse on the laptop;
+  - the host saving from the pause menu (in a mission and back on the
+    Avenger).
+
+### C. Release readiness (0.8.3; split approved 2026-11-22)
+**9. Release UI.**
+- **How:** one constant, `RELEASE_UI` (in `X2TC_CoopListener`, like
+  `SHOW_TEST_BUTTONS`). The test build flips it.
+- **Proposed final buttons:**
+
+| Where | Shown in release | Hidden in release |
+|---|---|---|
+| Main menu | CO-OP: JOIN (STEAM) (v1.0.0); CO-OP: JOIN BY IP | the M2 MULTIPLAYER button and the MP trace listeners' lines (release checklist: "decide whether it ships", I recommend not) |
+| Host, before hosting | CO-OP: HOST (STEAM) (v1.0.0); CO-OP: HOST BY IP; CO-OP: FIXES | END TURN and SQUAD (no use before hosting) |
+| Host, hosting | CO-OP: INVITE (STEAM) / HOSTING; CO-OP: SQUAD; CO-OP: END TURN; CO-OP: FIXES | |
+| Partner | CO-OP: SQUAD; CO-OP: END TURN (READY); CO-OP: NEXT SOLDIER; CO-OP: FIXES; CO-OP: LEAVE | MOVE TO CURSOR (clicking tiles works since 0.8.0; M and right-click stay) |
+| Hack | CO-OP: CANCEL HACK | |
+
+- **FIXES labels:**
+  - Grouped and in plain words, for example:
+    - "Partner screen: hide the path while moving";
+    - "Rules: flanking crit as in single player";
+    - "Camera: follow moves (override)".
+  - Header: "Turn one off only if it misbehaves, and tell the host."
+  - SAFE MODE explained in one line.
+  - The internal letters (A-D) and test notes go.
+
+**10. Verbose logging** (switch "Verbose log", off by default; on the
+FIXES screen but not under SAFE MODE, since it isn't a fix).
+- A helper, `class'X2TC_CoopFixes'.static.Verbose()`, wraps the
+  per-frame and per-turn lines.
+- **Wrapped (verbose only):**
+  - follower move state;
+  - partial history sent, received and replayed;
+  - squad state;
+  - camera follow;
+  - owner cycling;
+  - banner and status text;
+  - screen names;
+  - interrupts;
+  - hack abilities;
+  - the wheel;
+  - the MP trace listeners.
+- **Always kept:**
+  - version, HOST and JOIN, connect and disconnect, refusals, errors;
+  - fixes state, SP rules summaries, the hack flow, mission end, owner
+    changes.
+- **Target:** under about 300 X2TC lines per mission, against the
+  laptop's 3,786 in 0.8.1.
+- Turn it on for any bug report (friend-setup says so).
+
+**11. Join flow for 1.0.**
+- **Main path, Steam invite:**
+  - the host clicks HOST (STEAM), then INVITE (STEAM) and picks the
+    friend;
+  - the partner clicks JOIN (STEAM) on the main menu and accepts the
+    invite.
+- **Advanced:** HOST BY IP / JOIN BY IP on the same network, or with port
+  forwarding.
+- **`release/friend-setup.md`:**
+  - a short "Host" section to match;
+  - the advanced IP section;
+  - "turn on Verbose log and send Launch.log" for bug reports;
+  - the button names as in item 9.
+- **When:** written with 0.8.3, so the names match what ships. In 0.8.2
+  only the checklist changes.
+
+**12. Checklist additions:** under item 8 above (in
+`checklists/m4-082.md`). The release checklist also gets "campaign
+mission with reinforcements or the Chosen passed" and "host pause-menu
+save works".
+
+**13. The Co-op HUD button (Kc, 2026-11-22; plan only, for 0.8.3).**
+Kc: replace the column of CO-OP buttons with one "Co-op" button in the
+top-right HUD icon row, inline with the game's icons, styled like them,
+anchored to that group so it holds at other resolutions and doesn't
+overlap icons other mods add.
+- **Found (source, not tested):** that row is
+  `UITacticalHUD_MouseControls`, one Flash panel with up to 10 icon slots
+  (`ButtonItems.Length = 10`, L58). It fills them itself from the stock
+  icons plus the unit's "command abilities" (L77-150). The command
+  abilities are how other mods add icons there. There's no slot or hook
+  for a non-ability button.
+- **Proposal:**
+  - A separate icon-style button, anchored top-right like the row.
+  - Its x position is computed from the row's active icon count, so it
+    sits just left of the row and moves when a mod's icon appears.
+    Re-checked a few times a second while the HUD shows.
+  - The icon size and spacing are measured in game (screenshot) before it
+    is fixed.
+- **Dropdown or panel: I propose a small panel.** It opens under the
+  button and lists the role's actions as normal stock buttons, each with
+  one line of help. Clicking outside it or pressing Escape closes it.
+  - A dropdown (`UIDropdown`) fits one choice from a list, not five
+    actions with on/off states such as INVITE/HOSTING.
+- **Kept visible without opening the menu (recommended):**
+  - the status line (role, whose turn, the partner's state), in small
+    text under the icon row;
+  - **the partner's END TURN (READY)**, as a second icon next to "Co-op",
+    because it's pressed every turn.
+  - The host's END TURN stays on the game's own End Turn icon (the co-op
+    check already catches Backspace and End).
+- **Not a class override; risk:** the row's icon width may differ with
+  some UI mods (guess). The position is logged.
+
+### For Kc
+**Answered 2026-11-22**, see the top of this section.
+1. Split: 0.8.2 = A + B, 0.8.3 = C?
+2. Item 5: drop the smoke skip (math above)?
+3. Item 9:
+   - hide MOVE TO CURSOR in release?
+   - drop the MULTIPLAYER button?
+   - rename CO-OP: JOIN / HOST to "BY IP"?
+4. Item 10: should Verbose log also be on by default during the
+   release-candidate playtest, for better reports?
+5. Still open:
+   - Covert Infiltration in the release-candidate tests?
+   - LWOTC out of 1.0?
 
 ## Code audit before 1.0 (plan only; Kc: "that will wait for the end")
 

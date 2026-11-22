@@ -53,6 +53,10 @@ Setup steps for the partner: {{LINK_TO_FRIEND_SETUP}}.
   Highlander.
 - Multiplayer-style connections break with the developer console on or
   edited config files; play with a clean setup.
+- Don't add or remove this mod in the middle of a mission.
+  {{SAVE_TEST_RESULT}} (after the release checklist's "Save without the
+  mod" test, for example: "Adding or removing it between missions, on the
+  Avenger, is fine.")
 - If something misbehaves, **CO-OP: FIXES** on the tactical screen turns
   individual fixes off, or all of them at once with SAFE MODE.
 

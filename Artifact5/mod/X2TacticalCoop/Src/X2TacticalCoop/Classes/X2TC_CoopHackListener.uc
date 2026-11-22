@@ -15,6 +15,8 @@
 //    - 0.8.1: on the guest, both kinds of screen are held open until the host's result
 //      frame has been replayed (X2TC_CoopSession.GuestHoldHack), so the result's visual
 //      can merge into the still-running hack action.
+//    - 0.8.2: the watcher's copy is also locked against clicks (LockWatcherCopy, switch
+//      "Hacks: watcher can't click").
 //  Outside a co-op session, or with the fix switch off ("Hack screen only for the
 //  hacker"), it only logs (in a session) and changes nothing.
 //
@@ -22,12 +24,17 @@
 //  UIHackingScreen has the same members):
 //    XComGame\Classes\UIHackingScreen.uc  (UnitState L15, CancelHackAbility L14,
 //                                          m_SkullJacking/m_SkullMining L23-24,
-//                                          OnCancel L326, HackEnded L490)
+//                                          OnCancel L326, HackEnded L490,
+//                                          m_hackStarted L25, OnMouseEvent L345-365)
+//    XComGame\Classes\UIBGBox.uc          (InitBG L18)
+//    XComGame\Classes\UIPanel.uc          (ProcessMouseEvents L203, SetAlpha L471)
 //    XComGame\Classes\UIScreen.uc         (Hide L184, SetInputState L236)
 //    XComGame\Classes\UIButton.uc         (InitButton, AnchorTopRight)
 //---------------------------------------------------------------------------------------
 
 class X2TC_CoopHackListener extends UIScreenListener dependson(UIScreen);
+
+var int BlockerClicksLogged; // 0.8.2: clicks caught on the watcher's copy, logged (the first few)
 
 event OnInit(UIScreen Screen)
 {
@@ -79,6 +86,45 @@ event OnInit(UIScreen Screen)
 	// guest's copy ends when the host's result frame has been replayed.
 	HackScreen.SetInputState(eInputState_None);
 	`log("Coop hack (" $ Session.RoleName() $ "): watching the other player's hack (no input here)", , 'X2TC');
+
+	// 0.8.2 (0.8.1 Run 1: the laptop could still click and roll on the PC's hack): the input
+	// state blocks keys only. Fix switch "Hacks: watcher can't click".
+	if (class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_HACK_NO_CLICK))
+	{
+		LockWatcherCopy(HackScreen, Session);
+	}
+}
+
+// 0.8.2: two layers on the watcher's copy.
+//  1. Mark the hack as started (an instance variable, not a default): the screen's mouse
+//     callback starts or cancels a hack only while it's false (UIHackingScreen.OnMouseEvent
+//     L345-365), and so do its keys (L388, L411, L421). On the host, HostDriveHack clears
+//     it again just before it plays the partner's choice (the session remembers the lock).
+//  2. A nearly transparent full-size box on top that takes mouse events, so clicks on the
+//     reward options ("SelectReward", OnCommand L473) don't reach the screen either. A
+//     guess: the screen is drawn on the soldier's pad (X2Action_Hack.uc L232-237), and it
+//     isn't known whether a panel there catches the mouse. Each caught click is logged
+//     (the first few).
+function LockWatcherCopy(UIHackingScreen HackScreen, X2TC_CoopSession Session)
+{
+	local UIBGBox Blocker;
+
+	HackScreen.m_hackStarted = true;
+	Session.MarkHackWatchLocked(HackScreen);
+	Blocker = HackScreen.Spawn(class'UIBGBox', HackScreen);
+	Blocker.InitBG('X2TC_CoopHackBlocker', 0, 0, 1920, 1080);
+	Blocker.SetAlpha(0.01); // 1% (UIPanel.SetAlpha converts 0-1 to Flash's 0-100)
+	Blocker.ProcessMouseEvents(OnBlockerMouse);
+	`log("Coop hack (" $ Session.RoleName() $ "): watcher's copy locked (marked started; click blocker added)", , 'X2TC');
+}
+
+function OnBlockerMouse(UIPanel Panel, int Cmd)
+{
+	if (BlockerClicksLogged < 4 && Cmd == class'UIUtilities_Input'.const.FXS_L_MOUSE_UP)
+	{
+		BlockerClicksLogged++;
+		`log("Coop hack: click on the watcher's copy caught by the blocker", , 'X2TC');
+	}
 }
 
 // Guest: the co-op Cancel. The screen's own OnCancel submits CancelHack, which the follower

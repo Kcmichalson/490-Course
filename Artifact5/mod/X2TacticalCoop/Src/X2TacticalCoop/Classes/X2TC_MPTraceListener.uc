@@ -34,7 +34,7 @@ event OnInit(UIScreen Screen)
 		GameClassName = string(Screen.WorldInfo.Game.Class.Name);
 	}
 
-	`log("screen" @ string(Screen.Class.Name) $ ", game" @ GameClassName, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("screen" @ string(Screen.Class.Name) $ ", game" @ GameClassName, , 'X2TC');
 
 	MPScreen = UIMPShell_Base(Screen);
 	if (MPScreen != none)
@@ -57,11 +57,11 @@ function LogMPState(UIMPShell_Base MPScreen)
 	ShellManager = MPScreen.m_kMPShellManager;
 	if (ShellManager == none)
 	{
-		`log("MP state: no shell manager on" @ string(MPScreen.Class.Name), , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("MP state: no shell manager on" @ string(MPScreen.Class.Name), , 'X2TC');
 		return;
 	}
 
-	`log("MP state network=" $ ShellManager.m_bPassedNetworkConnectivityCheck @ "online=" $ ShellManager.m_bPassedOnlineConnectivityCheck, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("MP state network=" $ ShellManager.m_bPassedNetworkConnectivityCheck @ "online=" $ ShellManager.m_bPassedOnlineConnectivityCheck, , 'X2TC');
 }
 
 // The values a host publishes and a searcher sends (XComShellPresentationLayer.
@@ -78,18 +78,18 @@ function LogMPCriteria()
 	Line = Line @ "ini=" $ class'Helpers'.static.NetGetMPINIHash();
 	Line = Line @ "devconsole=" $ class'Helpers'.static.IsDevConsoleEnabled();
 	Line = Line @ "modsinstalled=" $ class'Helpers'.static.NetAreModsInstalled();
-	`log(Line, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log(Line, , 'X2TC');
 
 	Line = "MP criteria packages=" $ class'Helpers'.static.NetGetVerifyPackageHashes();
-	`log(Line, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log(Line, , 'X2TC');
 
 	Names = class'Helpers'.static.GetInstalledModNames();
 	JoinArray(Names, Joined, ", ");
-	`log("MP criteria mod names:" @ Joined, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("MP criteria mod names:" @ Joined, , 'X2TC');
 
 	Names = class'Helpers'.static.GetInstalledDLCNames();
 	JoinArray(Names, Joined, ", ");
-	`log("MP criteria DLC names:" @ Joined, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("MP criteria DLC names:" @ Joined, , 'X2TC');
 }
 
 defaultproperties

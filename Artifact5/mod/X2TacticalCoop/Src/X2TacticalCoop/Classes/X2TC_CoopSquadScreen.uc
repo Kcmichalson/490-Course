@@ -145,7 +145,7 @@ function RefreshRows()
 
 	if (Session == none || !Session.IsActive())
 	{
-		Who = "Not in a co-op session (click CO-OP: HOST first)";
+		Who = "Not in a co-op session (host first: the Co-op icon, then HOST)";
 	}
 	else if (bCanEdit)
 	{

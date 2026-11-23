@@ -59,7 +59,7 @@ event OnInit(UIScreen Screen)
 {
 	if (UIMPShell_Lobby(Screen) != none)
 	{
-		`log("Lobby opened", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Lobby opened", , 'X2TC');
 		LastLobbyPlayers = -2;
 		bLobbyTimerSeen = false;
 		LogLobbyState();
@@ -76,12 +76,12 @@ event OnRemoved(UIScreen Screen)
 	if (UIMPShell_Lobby(Screen) != none)
 	{
 		Screen.ClearTimer(nameof(PollLobby), self);
-		`log("Lobby closed", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Lobby closed", , 'X2TC');
 	}
 	else if (UITacticalHUD(Screen) != none)
 	{
 		Screen.ClearTimer(nameof(PollTurn), self);
-		`log("Tactical HUD closed", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Tactical HUD closed", , 'X2TC');
 	}
 }
 
@@ -91,7 +91,7 @@ function PollLobby()
 	if (!bLobbyTimerSeen)
 	{
 		bLobbyTimerSeen = true;
-		`log("Lobby poll timer running", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Lobby poll timer running", , 'X2TC');
 	}
 
 	LogLobbyState();
@@ -129,7 +129,7 @@ function LogLobbyState()
 	bLastHasConnections = bHasConnections;
 	bLastCanStartMatch = Lobby.bCanStartMatch;
 
-	`log("Lobby state: players=" $ Players @ "opponent joined=" $ Lobby.bOpponentJoined @ "connections=" $ bHasConnections @ "can start=" $ Lobby.bCanStartMatch, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Lobby state: players=" $ Players @ "opponent joined=" $ Lobby.bOpponentJoined @ "connections=" $ bHasConnections @ "can start=" $ Lobby.bCanStartMatch, , 'X2TC');
 }
 
 function OnTacticalHUD(UIScreen Screen)
@@ -144,7 +144,7 @@ function OnTacticalHUD(UIScreen Screen)
 		bMultiplayer = Screen.WorldInfo.Game.IsA('XComMPTacticalGame');
 	}
 
-	`log("Tactical HUD opened, game" @ string(GameClassName) $ ", multiplayer=" $ bMultiplayer, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Tactical HUD opened, game" @ string(GameClassName) $ ", multiplayer=" $ bMultiplayer, , 'X2TC');
 
 	if (bMultiplayer)
 	{
@@ -166,7 +166,7 @@ function PollTurn()
 	if (!bTurnTimerSeen)
 	{
 		bTurnTimerSeen = true;
-		`log("Turn poll timer running", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Turn poll timer running", , 'X2TC');
 	}
 
 	Rules = `TACTICALRULES;
@@ -200,7 +200,7 @@ function PollTurn()
 	LastTurnPlayerID = PlayerRef.ObjectID;
 	LastTurnCount = PlayerState.PlayerTurnCount;
 
-	`log("Turn start: player object" @ PlayerRef.ObjectID @ "team" @ int(PlayerState.TeamFlag) @ "turn count" @ PlayerState.PlayerTurnCount @ "local player=" $ (PlayerRef.ObjectID == Rules.GetLocalClientPlayerObjectID()), , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Turn start: player object" @ PlayerRef.ObjectID @ "team" @ int(PlayerState.TeamFlag) @ "turn count" @ PlayerState.PlayerTurnCount @ "local player=" $ (PlayerRef.ObjectID == Rules.GetLocalClientPlayerObjectID()), , 'X2TC');
 }
 
 // Logs once per tactical HUD why the turn poll has nothing to report yet.
@@ -212,7 +212,7 @@ function LogTurnWait(string Reason)
 	}
 
 	bTurnWaitLogged = true;
-	`log("Turn poll waiting:" @ Reason, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Turn poll waiting:" @ Reason, , 'X2TC');
 }
 
 // Finds a screen by class on the local player's screen stack, without keeping a reference.

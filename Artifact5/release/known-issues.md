@@ -1,8 +1,9 @@
 # {{DECIDED_MOD_NAME}}: known issues (draft)
 
-Status as of 0.8.2 Runs 1-3 (2026-11-22, build 8270065;
-checklists/m4-082.md); 0.8.3 written 2026-11-22, not built or tested
-(checklists/m4-083.md). Each line names where it's tracked; update after
+Status as of 0.8.3 Run 1 (2026-11-22, build 8270065;
+checklists/m4-083.md; plans/m4-plan.md "0.8.3 results"). 0.8.4 written
+2026-11-22 (release UI, Verbose log, logging only for the lag cap and the
+hack), not built or tested (checklists/m4-084.md). Each line names where it's tracked; update after
 every test (checklists/, LOG.md).
 
 ## Limits by design
@@ -18,17 +19,17 @@ every test (checklists/, LOG.md).
 ## Open issues
 | Issue | Status |
 |---|---|
-| Long missions get slower for the partner: every update the host sends grows with the mission (up to about 450 KB), so late alien turns play several seconds behind on the partner's screen (about 10 s at worst in 0.8.2 Run 3) | Known; tested (each update's round trip grew from about 0.5 s to 3-4 s). 0.8.3 logs each stage (no fix yet, Kc); the fix is chosen from that run |
+| Long missions get slower for the partner: every update the host sends grows with the mission (up to about 450 KB), so late alien turns play several seconds behind on the partner's screen (about 10 s at worst in 0.8.2 Run 3) | Known; tested. 0.8.3 Run 1: the transfer between the PCs takes about 60% of each update's delay (about 210 KB/s; 0.5 s early, 3 s late), and waiting for the previous update about 25-30%; even a one-frame update is 260-290 KB late. The engine's rate settings (10-20 KB/s) don't explain the ~210 KB/s cap; 0.8.4 measures it. Fix: "new frames, second try" in 0.8.5 (approved plan; first to cut) |
 | Partner: can't select another soldier while one is still moving (the host can, as in single-player: Tab during a move); the camera snaps back to the moving soldier | Open (0.8.2 Run 2). The partner's move is played on the host and replayed back; while replaying, the partner's input is off |
-| Partner: the NO SOLDIERS ASSIGNED banner can show while the alien turn is still playing on its screen (its soldiers died in that turn) | Fix in 0.8.3 (the banner waits for the animations); untested |
+| Partner: the NO SOLDIERS ASSIGNED banner can show while the alien turn is still playing on its screen (its soldiers died in that turn) | Fix in 0.8.3 (the banner waits for the animations); not in the 0.8.3 Run 1 logs |
 | Partner: NO SOLDIERS ASSIGNED doesn't show once one of its soldiers is bleeding out, even with every soldier taken away | Open (0.8.2). Not matched in the logs yet (they show the banner set in the bleeding-out turns); needs Kc's detail |
-| Partner: a mistyped address on JOIN needs a game restart (JOIN does nothing while the failed attempt is still open) | Fix in 0.8.3 (JOIN reads "CONNECTING (CANCEL)"; a click or 5 s after the last failed attempt frees it); untested |
+| Partner: a mistyped address on JOIN needs a game restart (JOIN does nothing while the failed attempt is still open) | Fix in 0.8.3 (JOIN reads "CONNECTING (CANCEL)"; a click or 5 s after the last failed attempt frees it); not in the 0.8.3 Run 1 laptop log |
 | Host's hack: the "take control of a random enemy" reward did nothing visible | Open (0.8.2 Run 2). Not yet known whether co-op causes it; needs the same reward in single-player for comparison |
 | On the partner's own hack, its screen may show a result its game didn't roll; the host's game decides the real result | Open (not in 0.8.1) |
 | Partner: the mouse wheel doesn't change floors (F and C work) | 0.8.1: no wheel input reached the game on a laptop touchpad; retest with a USB mouse in 0.8.2 |
 | Partner: can't pause while none of its soldiers can act | Fixed in 0.8.2 (tested, Run 1 step 6) |
 | 0.8.2: the partner's game crashed when the host gave it soldiers back (native crash, right after its input turned on) | No crash with the re-link switch off (Run 2) or with it on and nothing to re-link (Run 3). Cause: the object re-link linking a tower to another tower's state. The re-link is removed in 0.8.3 |
-| Partner: can't hack objectives (no hack icon, also from range with a Gremlin or BIT); the same soldier can when given to the host | Open. 0.8.2 ruled out wrong object links (every object matched, Runs 2-3). The partner's copy of each objective reports 0 hack rewards, and the game needs more than 0. 0.8.3 logs the same check on both PCs (reward flags, BattleData's reward lists, can-hack per soldier); untested |
+| Partner: can't hack objectives (no hack icon, also from range with a Gremlin or BIT); the same soldier can when given to the host | Open. 0.8.2 ruled out wrong object links (every object matched, Runs 2-3). 0.8.3 Run 1: both PCs log the same, and the game's object check passes for every soldier on both (rewards come from BattleData), so rewards aren't the cause. On the partner, the hack abilities find no targets (`AA_NoTargets`). 0.8.4 probes each targeting step on both PCs; the fix follows in 0.8.5. Workaround: give the soldier to the host for the hack |
 | Host's hack: the partner can still click its copy and see its own result (the host's game ignores it) | Fixed in 0.8.2 (tested, Runs 2-3) |
 | Host: the camera doesn't pan to the partner's non-move actions | Fix in 0.8.1 (a short look-at); logged, not yet confirmed on screen |
 | Partner: all ability icons glow | Fixed in 0.8.1 (tested) |

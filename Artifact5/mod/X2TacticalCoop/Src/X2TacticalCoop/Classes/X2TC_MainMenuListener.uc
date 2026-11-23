@@ -9,6 +9,8 @@
 //  It also fixes the return from a lobby or match: when the main menu opens with the
 //  game's "go on to the multiplayer menu" request, it travels there itself
 //  (ReturnToMPMenuIfAsked; plans/m2-live-test-plan.md).
+//  0.8.4: with X2TC_CoopListener.RELEASE_UI this listener only logs that the main menu
+//  opened; the MULTIPLAYER button and the lobby-return travel are off.
 //  The PC test build (SHOW_TEST_BUTTONS) adds MP TEST buttons that try other ways to load
 //  a map: the "open" console command for three maps, and ClientTravel.
 //
@@ -56,6 +58,14 @@ event OnInit(UIScreen Screen)
 	}
 
 	`log("Main menu listener loaded, screen class:" @ string(Screen.Class.Name), , 'X2TC');
+
+	// 0.8.4 (Kc, 2026-11-22: "drop the MULTIPLAYER button", stock PvP is not needed and is
+	// Mr.Fear's area): the release layout adds nothing here and leaves the return from a
+	// multiplayer lobby to the game.
+	if (class'X2TC_CoopListener'.const.RELEASE_UI)
+	{
+		return;
+	}
 
 	AddMPButton(Screen);
 	if (SHOW_TEST_BUTTONS)

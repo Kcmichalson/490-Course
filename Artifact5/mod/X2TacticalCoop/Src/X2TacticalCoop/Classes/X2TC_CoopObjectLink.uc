@@ -25,6 +25,13 @@
 //      object's IsEnabled / MustBeHacked / HasBeenHacked / hack reward count. One summary.
 //  Called at the start of each XCOM turn by X2TC_CoopReplayMgr on the guest and by
 //  X2TC_CoopSession's poll on the host.
+//  0.8.4 (0.8.3 Run 1: both PCs' lines matched and CanInteractHack was true for every
+//  soldier, yet the partner's hack abilities found no targets): ProbeHack logs each step
+//  of the hack target check for the selected unit near a must-hack object, on both PCs,
+//  from X2TC_CoopSession's poll (X2Condition_HackingTarget.uc L44-78,
+//  X2Condition_UnitInteractions.uc L31-71, X2AbilityTarget_Single.uc L16-17,
+//  XComGameState_Ability.uc GatherAbilityTargets L287, X2GameRulesetVisibilityManager.uc
+//  GetVisibilityInfo L167).
 //
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\XComDestructibleActor.uc       (ObjectID L146, FindExistingState
@@ -39,9 +46,10 @@
 //    Engine\Classes\Actor.uc                         (GetActorId L2524)
 //---------------------------------------------------------------------------------------
 
-class X2TC_CoopObjectLink extends Object;
+class X2TC_CoopObjectLink extends Object dependson(X2Condition_UnitInteractions);
 
 const MAX_DETAIL_LINES = 40;
+const PROBE_TILES = 3; // 0.8.4: the hack probe looks at must-hack objects this close (or in view)
 
 // 0.8.3: "840:r0 tac strat can 24n 27y": rewards, the object's reward flags, and
 // CanInteractHack for each living squad soldier.
@@ -156,15 +164,131 @@ static function CheckObjects(string Why, bool bDetail)
 			Text $= "); matching state" @ MatchState.ObjectID @ "enabled=" $ MatchState.IsEnabled
 				@ "must hack=" $ MatchState.MustBeHacked() @ "hacked=" $ MatchState.HasBeenHacked()
 				@ "rewards=" $ MatchState.GetHackRewards('').Length;
-			`log("Coop objects:" @ Text, , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop objects:" @ Text, , 'X2TC');
 		}
 	}
-	`log("Coop objects (" $ Why $ "):" @ Total @ "interactive actors," @ Mismatched @ "mismatched," @ NoState @ "with no state,"
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop objects (" $ Why $ "):" @ Total @ "interactive actors," @ Mismatched @ "mismatched," @ NoState @ "with no state,"
 		@ Hackable @ "must be hacked", , 'X2TC');
 	// 0.8.3: the hack check for the must-hack objects, the same on both PCs.
 	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
-	`log("Coop objects hack (" $ Why $ "): BattleData rewards tac" @ (BattleData != none ? string(BattleData.TacticalHackRewards.Length) : "?")
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop objects hack (" $ Why $ "): BattleData rewards tac" @ (BattleData != none ? string(BattleData.TacticalHackRewards.Length) : "?")
 		@ "strat" @ (BattleData != none ? string(BattleData.StrategyHackRewards.Length) : "?")
 		@ "tactical hack done=" $ class'XComGameState_BattleData'.static.TacticalHackCompleted()
 		$ "; objects:" @ (HackList != "" ? HackList : "none"), , 'X2TC');
+}
+
+// 0.8.4 hack probe (plans/m4-plan.md, "1.0 plan" item 4): for the selected unit, each
+// step of the hack target check against every unhacked must-hack object within
+// PROBE_TILES tiles, or seen by the unit (for a Gremlin's or BIT's ranged hack). Logs only
+// when the text changes from LastText. Steps, as X2Condition_HackingTarget.uc L44-78 runs
+// them: "pts" (the object among the unit's hack interaction points), "tmpl" (the actor's
+// HackAbilityTemplateName), "hp", "can" (CanInteractHack), "vis" (visible to the unit, the
+// ranged hack's check); then per hack ability the unit has: "cond" (the condition's own
+// result), "valid" (X2AbilityTarget_Single.ValidatePrimaryTargetOption, native) and
+// "gather" (XComGameState_Ability.GatherAbilityTargets L287, native: its code, target
+// count, and whether the object is among them).
+static function ProbeHack(XComGameState_Unit Unit, string Who, out string LastText)
+{
+	local XComGameStateHistory History;
+	local XComGameState_InteractiveObject ObjectState;
+	local XComInteractiveLevelActor LevelActor;
+	local array<XComInteractPoint> Points;
+	local GameRulesCache_VisibilityInfo VisInfo;
+	local X2TacticalGameRuleset Rules;
+	local bool bPoint, bVisible;
+	local int i, Tiles;
+	local name Tmpl;
+	local string Text, ObjText;
+
+	History = `XCOMHISTORY;
+	if (Unit == none || History == none)
+	{
+		return;
+	}
+	Rules = `TACTICALRULES;
+	Points = class'X2Condition_UnitInteractions'.static.GetUnitInteractionPoints(Unit, eInteractionType_Hack);
+	foreach History.IterateByClassType(class'XComGameState_InteractiveObject', ObjectState)
+	{
+		if (!ObjectState.MustBeHacked() || ObjectState.HasBeenHacked())
+		{
+			continue;
+		}
+		Tiles = Max(Abs(ObjectState.TileLocation.X - Unit.TileLocation.X), Abs(ObjectState.TileLocation.Y - Unit.TileLocation.Y));
+		bVisible = Rules != none && Rules.VisibilityMgr != none
+			&& Rules.VisibilityMgr.GetVisibilityInfo(Unit.ObjectID, ObjectState.ObjectID, VisInfo) && VisInfo.bVisibleGameplay;
+		if (Tiles > PROBE_TILES && !bVisible)
+		{
+			continue;
+		}
+		LevelActor = XComInteractiveLevelActor(ObjectState.GetVisualizer());
+		bPoint = false;
+		for (i = 0; i < Points.Length; i++)
+		{
+			if (LevelActor != none && Points[i].InteractiveActor == LevelActor)
+			{
+				bPoint = true;
+				break;
+			}
+		}
+		Tmpl = LevelActor != none ? LevelActor.HackAbilityTemplateName : '';
+		ObjText = "obj" @ ObjectState.ObjectID @ "tiles" @ Tiles @ "dz" @ (ObjectState.TileLocation.Z - Unit.TileLocation.Z)
+			@ "pts" @ (bPoint ? "y" : "n") @ "tmpl" @ Tmpl @ "hp" @ ObjectState.Health
+			@ "can" @ (ObjectState.CanInteractHack(Unit) ? "y" : "n") @ "vis" @ (bVisible ? "y" : "n");
+		if (Tmpl != '')
+		{
+			ObjText @= ProbeAbility(Unit, ObjectState, Tmpl, Tmpl);
+			// The Gremlin / BIT version of the same hack (IntrusionProtocol, IntrusionProtocol_Chest, ...).
+			ObjText @= ProbeAbility(Unit, ObjectState, name(Repl(string(Tmpl), "Hack", "IntrusionProtocol")), Tmpl);
+		}
+		Text $= (Text != "" ? "; " : "") $ ObjText;
+	}
+	if (Text == "")
+	{
+		Text = "no must-hack object within" @ PROBE_TILES @ "tiles or in view";
+	}
+	Text = "unit" @ Unit.ObjectID @ "at" @ Unit.TileLocation.X $ "," $ Unit.TileLocation.Y $ "," $ Unit.TileLocation.Z @ "|" @ Text;
+	if (Text == LastText)
+	{
+		return;
+	}
+	LastText = Text;
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop hack probe (" $ Who $ "):" @ Text, , 'X2TC');
+}
+
+// "| Hack: cond AA_Success valid y gather AA_NoTargets 0 has n", or "" if the unit lacks it.
+static function string ProbeAbility(XComGameState_Unit Unit, XComGameState_InteractiveObject ObjectState, name AbilityName, name RequiredName)
+{
+	local StateObjectReference AbilityRef;
+	local XComGameState_Ability AbilityState;
+	local X2AbilityTarget_Single TargetStyle;
+	local X2Condition_HackingTarget HackCondition;
+	local array<AvailableTarget> Targets;
+	local name Code;
+	local bool bHas;
+	local int i;
+	local string Text;
+
+	AbilityRef = Unit.FindAbility(AbilityName);
+	AbilityState = AbilityRef.ObjectID > 0 ? XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(AbilityRef.ObjectID)) : none;
+	if (AbilityState == none)
+	{
+		return "";
+	}
+	HackCondition = new class'X2Condition_HackingTarget';
+	HackCondition.RequiredAbilityName = RequiredName;
+	HackCondition.bIntrusionProtocol = (InStr(string(AbilityName), "IntrusionProtocol") == 0);
+	Text = "|" @ AbilityName $ ": cond" @ HackCondition.CallMeetsConditionWithSource(ObjectState, Unit);
+	TargetStyle = AbilityState.GetMyTemplate() != none ? X2AbilityTarget_Single(AbilityState.GetMyTemplate().AbilityTargetStyle) : none;
+	Text @= "valid" @ (TargetStyle == none ? "?" : (TargetStyle.ValidatePrimaryTargetOption(AbilityState, Unit, ObjectState) ? "y" : "n"));
+	Code = AbilityState.GatherAbilityTargets(Targets);
+	for (i = 0; i < Targets.Length; i++)
+	{
+		if (Targets[i].PrimaryTarget.ObjectID == ObjectState.ObjectID)
+		{
+			bHas = true;
+			break;
+		}
+	}
+	Text @= "gather" @ Code @ Targets.Length @ "has" @ (bHas ? "y" : "n");
+	return Text;
 }

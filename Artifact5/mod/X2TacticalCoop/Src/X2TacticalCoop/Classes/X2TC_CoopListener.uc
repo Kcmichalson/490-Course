@@ -21,6 +21,13 @@
 //  (XComGameReplicationInfo.uc L159-166 spawns XComTutorialMgr there). 0.8.3: while a
 //  JOIN is connecting, the JOIN button reads CO-OP: CONNECTING (CANCEL), and a click
 //  cancels it (UIScreenStack.GetFirstInstanceOf L620, UIPanel.GetChildByName L856).
+//  0.8.4 (plans/m4-plan.md, C items 9, 11, 13; "1.0 plan" item 1): with RELEASE_UI, the
+//  main menu shows CO-OP: JOIN (STEAM) first and CO-OP: JOIN BY IP under it (the
+//  MULTIPLAYER button is gone: X2TC_MainMenuListener), and the tactical HUD's column of
+//  CO-OP buttons becomes one Co-op icon with a panel (X2TC_CoopMenu). Visible without the
+//  panel: the status line and, on the partner, END TURN (READY). Before hosting, the
+//  host's panel has HOST (STEAM), HOST BY IP and FIXES; SQUAD and END TURN appear once
+//  hosting. MOVE TO CURSOR is gone from the partner's HUD (M and right-click still work).
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -47,6 +54,9 @@ const ADDRESS_MAX_CHARS = 40;
 // 0.8.3 (Kc, after 0.8.2 Run 2: a mistyped address needed a restart): JOIN's label while
 // a JOIN is connecting; a click cancels it (X2TC_CoopSession.CancelGuestConnect).
 const CONNECTING_LABEL = "CO-OP: CONNECTING (CANCEL)";
+// 0.8.4: true: the release layout (Co-op icon and panel, "BY IP" names, no MULTIPLAYER);
+// false: the old test column.
+const RELEASE_UI = true;
 
 event OnInit(UIScreen Screen)
 {
@@ -54,7 +64,15 @@ event OnInit(UIScreen Screen)
 
 	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
 
-	if (UIShell(Screen) != none)
+	if (UIShell(Screen) != none && RELEASE_UI)
+	{
+		// 0.8.4: Steam first (the main path), then BY IP; the MULTIPLAYER button is gone.
+		AddButton(Screen, 'X2TC_CoopJoinSteamButton', "CO-OP: JOIN (STEAM)" @ VersionTag(), OnJoinSteamClicked, 40);
+		AddButton(Screen, 'X2TC_CoopJoinButton', JoinLabel(GuestSession != none && GuestSession.IsGuestConnecting()), OnJoinClicked, 90);
+		`log("Coop: JOIN (STEAM) and JOIN BY IP buttons added to" @ string(Screen.Class.Name), , 'X2TC');
+		class'X2TC_CoopSession'.static.LogNetDiagnostics("main menu");
+	}
+	else if (UIShell(Screen) != none)
 	{
 		AddButton(Screen, 'X2TC_CoopJoinButton', JoinLabel(GuestSession != none && GuestSession.IsGuestConnecting()), OnJoinClicked, 290);
 		// Stage 7: join over Steam (accept the host's Steam invite after clicking this).
@@ -66,6 +84,10 @@ event OnInit(UIScreen Screen)
 	{
 		// 0.8.1: is the engine's multiplayer flag off again back on the Avenger?
 		class'X2TC_CoopSession'.static.LogNetDiagnostics("Avenger");
+	}
+	else if (UITacticalHUD(Screen) != none && IsSinglePlayerTactical(Screen) && RELEASE_UI)
+	{
+		AddReleaseHUD(Screen, GuestSession);
 	}
 	else if (UITacticalHUD(Screen) != none && IsSinglePlayerTactical(Screen))
 	{
@@ -136,6 +158,62 @@ event OnInit(UIScreen Screen)
 	}
 }
 
+// 0.8.4: the release HUD (the Co-op icon and its panel, X2TC_CoopMenu).
+function AddReleaseHUD(UIScreen Screen, X2TC_CoopSession GuestSession)
+{
+	local X2TC_CoopMenu Menu;
+	local X2TC_CoopSession Session;
+	local bool bHosting;
+
+	Menu = Screen.Spawn(class'X2TC_CoopMenu', Screen);
+	Menu.InitCoopMenu();
+	AddStatusText(Screen, 60);
+	if (GuestSession != none)
+	{
+		GuestSession.OnGuestMissionScreen("tactical HUD");
+		// Kept outside the panel: pressed every turn.
+		AddButton(Screen, 'X2TC_CoopGuestEndTurn', "CO-OP: END TURN (READY)", OnGuestEndTurnClicked, 94);
+		Menu.AddItem('X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, "Who controls which soldier (the host changes it)");
+		Menu.AddItem('X2TC_CoopNextButton', "CO-OP: NEXT SOLDIER", OnNextSoldierClicked, "Select your next soldier that can act (Tab works too)");
+		Menu.AddItem('X2TC_CoopFixesButton', "CO-OP: FIXES", OnFixesClicked, "Co-op fixes on this PC; turn one off only if it misbehaves");
+		Menu.AddItem('X2TC_CoopLeaveButton', "CO-OP: LEAVE" @ VersionTag(), OnLeaveClicked, "Leave the mission; the host plays on alone");
+		`log("Coop: Co-op menu (SQUAD, NEXT SOLDIER, FIXES, LEAVE) and END TURN (READY) added to the guest's tactical HUD", , 'X2TC');
+		class'X2TC_CoopFixes'.static.LogState("guest's tactical HUD");
+		return;
+	}
+	Session = class'X2TC_CoopSession'.static.FindSession();
+	bHosting = Session != none && Session.IsHost() && Session.IsPollRunning();
+	Menu.AddItem('X2TC_CoopHostSteamButton', "CO-OP: HOST (STEAM)" @ VersionTag(), OnHostSteamClicked, "Host this mission and invite a Steam friend");
+	Menu.AddItem('X2TC_CoopHostButton', "CO-OP: HOST BY IP" @ VersionTag(), OnHostClicked, "Host on your network; the partner joins with your IP address");
+	Menu.AddItem('X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, "Give soldiers to the partner or take them back");
+	Menu.AddItem('X2TC_CoopHostEndTurn', "CO-OP: END TURN", OnHostEndTurnClicked, "End XCOM's turn (asks first while the partner's soldiers can act)");
+	Menu.AddItem('X2TC_CoopFixesButton', "CO-OP: FIXES", OnFixesClicked, "Co-op fixes on this PC; turn one off only if it misbehaves");
+	Menu.SetItemVisible('X2TC_CoopSquadButton', bHosting);
+	Menu.SetItemVisible('X2TC_CoopHostEndTurn', bHosting);
+	`log("Coop: Co-op menu (HOST (STEAM), HOST BY IP, FIXES) added to the tactical HUD (tutorial mission=" $ IsTutorialMission() $ ", hosting=" $ bHosting $ ")", , 'X2TC');
+	class'X2TC_CoopSession'.static.LogNetDiagnostics("tactical HUD, before HOST");
+}
+
+// 0.8.4: after HOST BY IP or HOST (STEAM) starts hosting: show SQUAD and END TURN, hide
+// the other way to host.
+function ShowHostingItems(UIButton Button, name OtherHostButton)
+{
+	local X2TC_CoopMenu Menu;
+
+	if (Button == none || Button.ParentPanel == none)
+	{
+		return;
+	}
+	Menu = X2TC_CoopMenu(Button.ParentPanel.ParentPanel);
+	if (Menu == none)
+	{
+		return;
+	}
+	Menu.SetItemVisible(OtherHostButton, false);
+	Menu.SetItemVisible('X2TC_CoopSquadButton', true);
+	Menu.SetItemVisible('X2TC_CoopHostEndTurn', true);
+}
+
 // "(v0.3.8)": the mod's version on the CO-OP buttons, so each machine's build can be
 // checked on screen (Kc, 2026-11-14).
 static function string VersionTag()
@@ -146,7 +224,7 @@ static function string VersionTag()
 // 0.8.3: the main-menu JOIN button's label.
 static function string JoinLabel(bool bConnecting)
 {
-	return bConnecting ? CONNECTING_LABEL : "CO-OP: JOIN" @ VersionTag();
+	return bConnecting ? CONNECTING_LABEL : (RELEASE_UI ? "CO-OP: JOIN BY IP" : "CO-OP: JOIN") @ VersionTag();
 }
 
 // 0.8.3: relabel the main menu's JOIN button, if the main menu is open.
@@ -214,6 +292,7 @@ function OnHostSteamClicked(UIButton Button)
 	local X2TC_CoopSession Session;
 
 	PlayClickSound(Button);
+	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
 	if (RefuseInTutorial("HOST (STEAM)"))
 	{
 		return;
@@ -229,6 +308,7 @@ function OnHostSteamClicked(UIButton Button)
 	if (Session.StartHostSteam())
 	{
 		Button.SetText("CO-OP: INVITE (STEAM)" @ VersionTag());
+		ShowHostingItems(Button, 'X2TC_CoopHostButton'); // 0.8.4
 	}
 }
 
@@ -249,6 +329,7 @@ function OnJoinSteamClicked(UIButton Button)
 function OnSquadClicked(UIButton Button)
 {
 	PlayClickSound(Button);
+	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
 	class'X2TC_CoopSquadScreen'.static.Open();
 }
 
@@ -273,6 +354,7 @@ function OnHostEndTurnClicked(UIButton Button)
 	local X2TC_CoopSession Session;
 
 	PlayClickSound(Button);
+	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
 	Session = class'X2TC_CoopSession'.static.FindSession();
 	if (Session == none || Session.RoleName() != "host")
 	{
@@ -294,6 +376,7 @@ function PlayClickSound(UIButton Button)
 function OnFixesClicked(UIButton Button)
 {
 	PlayClickSound(Button);
+	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
 	class'X2TC_CoopFixesScreen'.static.Open();
 }
 
@@ -321,6 +404,7 @@ function OnHostClicked(UIButton Button)
 {
 	`log("Coop: HOST clicked", , 'X2TC');
 	PlayClickSound(Button);
+	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
 	if (RefuseInTutorial("HOST"))
 	{
 		return;
@@ -329,6 +413,7 @@ function OnHostClicked(UIButton Button)
 	{
 		Button.SetText("CO-OP: HOSTING" @ VersionTag());
 		Button.DisableButton();
+		ShowHostingItems(Button, 'X2TC_CoopHostSteamButton'); // 0.8.4
 	}
 }
 
@@ -339,6 +424,7 @@ function OnNextSoldierClicked(UIButton Button)
 	local XComTacticalGRI TacticalGRI;
 
 	PlayClickSound(Button);
+	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
 	TacticalGRI = XComTacticalGRI(Button.WorldInfo.GRI);
 	if (TacticalGRI != none)
 	{
@@ -378,6 +464,7 @@ function OnLeaveClicked(UIButton Button)
 	local X2TC_CoopSession GuestSession;
 
 	PlayClickSound(Button);
+	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
 	Button.DisableButton();
 	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
 	if (GuestSession == none)

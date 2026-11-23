@@ -1,13 +1,13 @@
-# {{DECIDED_MOD_NAME}}: setup for the partner (draft)
+# {{DECIDED_MOD_NAME}}: setup (draft)
 
-You join the host's mission from your own PC. About 10 minutes the first
-time.
+Two players: the host plays their own campaign, and the partner joins the
+host's missions from their own PC. About 10 minutes the first time.
 
-## Before the session
+## Both players, before the session
 1. **Same game.** XCOM 2: War of the Chosen, updated by Steam. In Steam:
    right-click XCOM 2 > Properties > Betas: none selected.
-2. **Same DLC as the host.** The host will tell you which DLC they use.
-3. **Mods: exactly the same list as the host.**
+2. **Same DLC.** The host tells the partner which DLC they use.
+3. **Same mods, exactly the same list.**
    - Subscribe to {{DECIDED_MOD_NAME}} on the Workshop {{WORKSHOP_LINK}}.
    - Subscribe to [WOTC] Community Highlander (required).
    - **If you own Alien Hunters:** also subscribe to [WOTC] Alien Hunters
@@ -16,29 +16,49 @@ time.
    - Any other mod the host uses. Load order doesn't matter; the names do.
 4. **Clean setup.** No developer console (`-allowConsole` off in the
    launcher) and no hand-edited config files.
-5. **Steam friends.** Be friends with the host on Steam and online.
+5. **Steam friends,** both online.
 
-## Joining
-6. Start the game with the mods enabled. The main menu shows **CO-OP: JOIN
-   ({{VERSION}})** and **CO-OP: JOIN (STEAM)**. The version must match the
-   host's.
-7. Click **CO-OP: JOIN (STEAM)**, then accept the host's Steam invite.
-   Wait while the mission loads; your screen catches up with the host's.
-8. If a message names a **version** or **mod/DLC difference**, fix that
-   and join again.
+## Host
+6. Start your campaign and launch a mission as usual.
+7. In the mission, click the **Co-op icon** at the top right (left of the
+   game's icons), then **CO-OP: HOST (STEAM)**. Steam's invite window
+   opens: pick your partner.
+8. When the partner has joined, open the Co-op icon again and use
+   **CO-OP: SQUAD** to give them soldiers.
+9. **CO-OP: END TURN** (or the game's own End Turn) ends XCOM's turn; it
+   asks first while the partner's soldiers can still act.
 
-## Playing
-- Your soldiers are the ones the host gave you on **CO-OP: SQUAD**.
+## Partner
+10. Start the game. The main menu shows **CO-OP: JOIN (STEAM)
+    ({{VERSION}})**. The version must match the host's.
+11. Click **CO-OP: JOIN (STEAM)**, then accept the host's Steam invite. Wait
+    while the mission loads; your screen catches up with the host's.
+12. If a message names a **version** or **mod/DLC difference**, fix that and
+    join again.
+
+## Playing (partner)
+- Your soldiers are the ones the host gave you on CO-OP: SQUAD.
 - Move: click a tile, or press **M** / right-click to move to the cursor.
-  Tab / H cycle your soldiers; **CO-OP: NEXT SOLDIER** does the same.
+  Tab / H cycle your soldiers.
 - When the host's soldier acts, a **FRIENDLY ACTION** banner shows; wait
   until it's done.
-- **CO-OP: END TURN (READY)** tells the host you're done this turn.
-- **CO-OP: LEAVE** takes you back to the main menu at any time.
+- **CO-OP: END TURN (READY)** (under the top-right icons) tells the host
+  you're done this turn.
+- The **Co-op icon** opens SQUAD, NEXT SOLDIER, FIXES and **LEAVE** (back to
+  the main menu at any time; the host plays on).
 - If something looks broken, **CO-OP: FIXES** has switches and SAFE MODE;
   tell the host what you changed.
 
-## On the same network instead of Steam
-The host clicks **CO-OP: HOST** and tells you their PC's local IP address;
-you click **CO-OP: JOIN** and type it. (Over the internet this needs port
-forwarding on the host's router; use Steam instead.)
+## Bug reports
+On CO-OP: FIXES, tick **Verbose log** before playing (both players), then
+send the host the file
+`Documents\My Games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log` right
+after the game closes (the next start renames it to a `Launch-backup-...`
+file in the same folder), with roughly when it happened.
+
+## Advanced: by IP instead of Steam
+On the same network: the host uses **CO-OP: HOST BY IP** (Co-op icon) and
+tells the partner their PC's local IP address; the partner clicks
+**CO-OP: JOIN BY IP** and types it. While it connects, the button reads
+**CO-OP: CONNECTING (CANCEL)**; click it to stop. Over the internet this
+needs port forwarding on the host's router; use Steam instead.

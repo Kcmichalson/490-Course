@@ -83,7 +83,7 @@ static function ShowBanner(string Text)
 	}
 	Overlay.SetDisplayText(Overlay.m_sAlienTurn, Text, Overlay.m_sOtherTurn, Overlay.m_sTheLostTurn, Overlay.m_sReflexAction, Overlay.m_sSpecialTurn, Overlay.m_sChosenTurn);
 	Overlay.ShowXComTurn();
-	`log("Coop UI:" @ Text @ "banner shown", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop UI:" @ Text @ "banner shown", , 'X2TC');
 }
 
 // Hides the banner and restores the overlay's own texts.
@@ -98,7 +98,7 @@ static function HideBanner()
 	}
 	Overlay.HideXComTurn();
 	Overlay.SetDisplayText(Overlay.m_sAlienTurn, Overlay.m_sXComTurn, Overlay.m_sOtherTurn, Overlay.m_sTheLostTurn, Overlay.m_sReflexAction, Overlay.m_sSpecialTurn, Overlay.m_sChosenTurn);
-	`log("Coop UI: banner hidden", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop UI: banner hidden", , 'X2TC');
 }
 
 // The status line at the top right ("" hides it).
@@ -126,7 +126,7 @@ static function SetStatusText(string Text)
 		StatusText.SetText(Text);
 		StatusText.Show();
 	}
-	`log("Coop UI: status text:" @ (Text == "" ? "(hidden)" : Text), , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop UI: status text:" @ (Text == "" ? "(hidden)" : Text), , 'X2TC');
 }
 
 // Guest: its END TURN button's label for the "Partner may end the turn" setting.
@@ -183,6 +183,6 @@ static function bool SetEndTurnIconEnabled(bool bEnabled)
 		return false;
 	}
 	Controls.SetButtonState(Controls.m_optEndTurn, Wanted);
-	`log("Coop UI: host End Turn icon" @ (bEnabled ? "enabled" : "disabled (the partner's soldiers can still act)"), , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop UI: host End Turn icon" @ (bEnabled ? "enabled" : "disabled (the partner's soldiers can still act)"), , 'X2TC');
 	return true;
 }

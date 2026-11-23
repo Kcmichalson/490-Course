@@ -47,7 +47,7 @@ simulated state Executing
 		{
 			bResult = !bNewUnitSelected; // the single-player answer
 		}
-		`log("Coop camera: follow camera for unit" @ AbilityToFrame.InputContext.SourceObject.ObjectID
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop camera: follow camera for unit" @ AbilityToFrame.InputContext.SourceObject.ObjectID
 			@ "stock=" $ bStock @ "used=" $ bResult @ "(engine multiplayer=" $ (Engine != none && Engine.IsMultiPlayerGame())
 			@ "new unit selected=" $ bNewUnitSelected @ "fix=" $ class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_CAMERA) $ ")", , 'X2TC');
 		return bResult;

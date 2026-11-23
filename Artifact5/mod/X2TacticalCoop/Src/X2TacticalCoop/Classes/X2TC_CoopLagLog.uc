@@ -17,15 +17,33 @@
 //  partner's clock offset comes from small time pings (shortest round trip of the last
 //  10 wins). The session (X2TC_CoopSession) calls in; the visual watcher's tick
 //  (X2TC_CoopVisualWatcher) drives the partner's samples.
+//  0.8.4 (0.8.3 Run 1; plans/m4-plan.md "1.0 plan" item 4):
+//    - backlog/behind read 0 all run: GetNodesOfType(..., class'X2Action', ...) found no
+//      nodes (guess: it matches the exact class only). The sampler now walks the tree
+//      from VisualizationTree through ChildActions (X2Action.uc L32). Seconds print as
+//      "1.25s" (0.8.3 printed "0.0000s").
+//    - Host "net" part of each H line (the ~210 KB/s cap): the history goes out in bunches
+//      of about 600 bytes from the network manager's own tick (OutGameData, PendingState;
+//      XComGameStateNetworkManager.uc L33-58, L65). Each host frame counts the bunches
+//      still "not handled" (guess: not yet sent) and "sent" (guess: sent, not yet
+//      acknowledged): bunches per frame avg/max, the most in flight, the host's frame time,
+//      and how long the queue took to empty. Bunches per frame steady while frame time
+//      changes = a per-tick quota; bunches per second steady = a rate limit.
+//    - One "Coop net settings" line per session on each PC: the net drivers' rate settings
+//      in effect, read with the read-only "get" command, and this player's net speeds
+//      (Engine\Classes\Player.uc L15-16). Read only; nothing is set.
+//    - The per-update H and G lines are Verbose log lines; the summaries always log.
 //
 //  Relies on (paths in Development\SrcOrig):
 //    Core\Classes\Object.uc                          (GetSystemTime L2304)
 //    XComGame\Classes\XComGameStateNetworkManager.uc (SendRemoteCommand, command params)
-//    XComGame\Classes\XComGameStateVisualizationMgr.uc (VisualizationTree, GetNodesOfType L459)
-//    XComGame\Classes\X2Action.uc                    (CurrentHistoryIndex L34, bCompleted L55)
+//    XComGame\Classes\XComGameStateVisualizationMgr.uc (VisualizationTree L117)
+//    XComGame\Classes\X2Action.uc                    (ChildActions L32, CurrentHistoryIndex L34,
+//                                                     bCompleted L55)
+//    Engine\Classes\Actor.uc                         (ConsoleCommand L1699)
 //---------------------------------------------------------------------------------------
 
-class X2TC_CoopLagLog extends Object;
+class X2TC_CoopLagLog extends Object dependson(XComGameStateNetworkManager);
 
 const CMD_UPDATE_INFO = "X2TC_UpdateInfo"; // host: the timing of the update it just sent
 const CMD_TIME_PING = "X2TC_TimePing";     // partner: its clock (ms of the day)
@@ -39,6 +57,7 @@ const TIME_PING_SECONDS = 20;   // then every 20 s
 const SAMPLE_MS = 250;          // the partner's screen is sampled 4 times a second
 const OFFSET_LOG_CHANGE_MS = 20;
 const KEEP_UPDATES = 40;
+const MAX_TREE_NODES = 2000;    // 0.8.4: the tree walk stops here (guard)
 
 struct CoopClockSample
 {
@@ -92,6 +111,12 @@ var string LastOldestAction;
 var bool bSummaryDue;  // an XCOM update came after alien ones; log once the screen catches up
 var CoopStat GArrive, GLoad, GTransit, GBuild, GKB, GBacklog, GBehind;
 var string PeakBehindAction;
+
+// 0.8.4, host: the bunch queue while an update drains.
+var bool bDrainActive;
+var int DrainLastNotHandled;   // -1 = no sample yet
+var int DrainTicks, DrainBunches, DrainPeak, WindowPeak, DrainFrameMs, DrainDoneMs, DrainStartMs, LastHostTickMs;
+var bool bNetSettingsLogged;
 
 // ---- Clock ----
 
@@ -153,9 +178,13 @@ static function string StatText(CoopStat S)
 	return (S.Total / S.Count) $ "/" $ S.Peak;
 }
 
+// "1.25s" (0.8.4: 0.8.3 printed float text such as "0.0000s").
 static function string SecondsText(int Ms)
 {
-	return string(float(Ms) / 1000.0) $ "s";
+	local int Hundredths;
+
+	Hundredths = (Ms % 1000) / 10;
+	return (Ms / 1000) $ "." $ (Hundredths < 10 ? "0" : "") $ Hundredths $ "s";
 }
 
 // ---- Host ----
@@ -191,6 +220,17 @@ function HostSent(int Seq, int ToFrames, int Bytes, int StartMs, bool bAlien, ou
 	U.WaitMs = Max(DiffMs(StartMs, U.ReadyHostMs), 0);
 	U.SentHostMs = EndMs;
 	PendingSinceMs = -1;
+	// 0.8.4: count this update's bunches as they leave.
+	bDrainActive = true;
+	DrainLastNotHandled = -1;
+	DrainTicks = 0; DrainBunches = 0; DrainPeak = 0; WindowPeak = 0; DrainFrameMs = 0; DrainDoneMs = -1;
+	DrainStartMs = EndMs;
+	LastHostTickMs = EndMs;
+	if (!bNetSettingsLogged)
+	{
+		bNetSettingsLogged = true;
+		LogNetSettings("host");
+	}
 	HostUpdates.AddItem(U);
 	if (HostUpdates.Length > KEEP_UPDATES)
 	{
@@ -225,7 +265,7 @@ function HostAcked(int GuestFrames)
 	U = HostUpdates[i];
 	HostUpdates.Remove(0, i + 1);
 	RttMs = DiffMs(NowMs(), U.SentHostMs);
-	`log("Coop lag H #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB wait" @ U.WaitMs @ "build" @ U.BuildMs @ "rtt" @ RttMs, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop lag H #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB wait" @ U.WaitMs @ "build" @ U.BuildMs @ "rtt" @ RttMs @ "|" @ DrainText(), , 'X2TC');
 	if (U.bAlien)
 	{
 		AddStat(HWait, U.WaitMs);
@@ -242,6 +282,93 @@ function HostSummary()
 	HBuild.Count = 0; HBuild.Total = 0; HBuild.Peak = 0;
 	HRtt.Count = 0; HRtt.Total = 0; HRtt.Peak = 0;
 	HKB.Count = 0; HKB.Total = 0; HKB.Peak = 0;
+}
+
+// 0.8.4, host: from the visual watcher's tick. Counts the bunches that left since the last
+// frame while an update drains.
+function HostTick()
+{
+	local XComGameStateNetworkManager NetworkMgr;
+	local int i, NotHandled, InFlight, Now, Left;
+
+	if (!bDrainActive)
+	{
+		return;
+	}
+	NetworkMgr = `XCOMNETMANAGER;
+	if (NetworkMgr == none)
+	{
+		return;
+	}
+	for (i = 0; i < NetworkMgr.OutGameData.Length; i++)
+	{
+		if (NetworkMgr.OutGameData[i].PendingState == ePDS_NotHandled)
+		{
+			NotHandled++;
+		}
+		else if (NetworkMgr.OutGameData[i].PendingState == ePDS_Sent)
+		{
+			InFlight++;
+		}
+	}
+	Now = NowMs();
+	if (DrainLastNotHandled >= 0)
+	{
+		Left = Max(DrainLastNotHandled - NotHandled, 0);
+		DrainTicks++;
+		DrainBunches += Left;
+		DrainPeak = Max(DrainPeak, Left);
+		DrainFrameMs += Max(DiffMs(Now, LastHostTickMs), 0);
+	}
+	WindowPeak = Max(WindowPeak, InFlight);
+	DrainLastNotHandled = NotHandled;
+	LastHostTickMs = Now;
+	if (NotHandled == 0 && DrainTicks > 0)
+	{
+		// Queue empty: keep the numbers for the H line at the acknowledgment.
+		bDrainActive = false;
+		DrainDoneMs = DiffMs(Now, DrainStartMs);
+	}
+}
+
+// "net 96b/14f per frame 7/10 in flight 40 frame 16ms empty 520ms" (0.8.4).
+function string DrainText()
+{
+	if (DrainTicks == 0)
+	{
+		return "net -";
+	}
+	return "net" @ DrainBunches $ "b/" $ DrainTicks $ "f per frame" @ (DrainBunches / DrainTicks) $ "/" $ DrainPeak
+		@ "in flight" @ WindowPeak @ "frame" @ (DrainFrameMs / DrainTicks) $ "ms empty" @ (DrainDoneMs >= 0 ? string(DrainDoneMs) $ "ms" : "no");
+}
+
+// 0.8.4: the rate settings in effect on this PC, read only ("get" changes nothing), once
+// per session.
+function LogNetSettings(string Who)
+{
+	local PlayerController PC;
+	local string Text;
+
+	PC = class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController();
+	if (PC == none)
+	{
+		return;
+	}
+	Text = "tcp:" @ GetSetting(PC, "IpDrv.TcpNetDriver");
+	Text @= "| steam:" @ GetSetting(PC, "OnlineSubsystemSteamworks.IpNetDriverSteamworks");
+	if (PC.Player != none)
+	{
+		Text @= "| player: current" @ PC.Player.CurrentNetSpeed @ "lan" @ PC.Player.ConfiguredLanSpeed @ "internet" @ PC.Player.ConfiguredInternetSpeed;
+	}
+	`log("Coop net settings (" $ Who $ "):" @ Text, , 'X2TC');
+}
+
+static function string GetSetting(PlayerController PC, string DriverClass)
+{
+	return "max client" @ PC.ConsoleCommand("get" @ DriverClass @ "MaxClientRate", false)
+		@ "max internet" @ PC.ConsoleCommand("get" @ DriverClass @ "MaxInternetClientRate", false)
+		@ "tick" @ PC.ConsoleCommand("get" @ DriverClass @ "NetServerMaxTickRate", false)
+		@ "lan tick" @ PC.ConsoleCommand("get" @ DriverClass @ "LanServerMaxTickRate", false);
 }
 
 // The partner's time ping: answer with its clock and this PC's.
@@ -402,6 +529,11 @@ function TryLogUpdate(int i)
 		return;
 	}
 	GuestUpdates[i].bLogged = true;
+	if (!bNetSettingsLogged)
+	{
+		bNetSettingsLogged = true;
+		LogNetSettings("partner");
+	}
 	// A new alien turn closes the last one if its summary is still waiting.
 	if (U.bAlien && bSummaryDue)
 	{
@@ -421,7 +553,7 @@ function TryLogUpdate(int i)
 		}
 	}
 	BehindText = LastBehindMs >= 0 ? SecondsText(LastBehindMs) : "?";
-	`log("Coop lag G #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB build" @ U.BuildMs @ "arrive" @ ArriveText @ "load" @ U.LoadMs @ "transit" @ TransitText @ "backlog" @ LastBacklog @ "behind" @ BehindText, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop lag G #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB build" @ U.BuildMs @ "arrive" @ ArriveText @ "load" @ U.LoadMs @ "transit" @ TransitText @ "backlog" @ LastBacklog @ "behind" @ BehindText, , 'X2TC');
 	if (U.bAlien)
 	{
 		AddStat(GBuild, U.BuildMs);
@@ -446,11 +578,14 @@ function TryLogUpdate(int i)
 }
 
 // The oldest history frame still playing on this PC's screen, or -1 if nothing plays.
+// 0.8.4: walks the tree from its root through ChildActions (0.8.3's GetNodesOfType call
+// found no nodes).
 function int OldestPlayingFrame(out string ActionName)
 {
 	local XComGameStateVisualizationMgr VisMgr;
 	local array<X2Action> Nodes;
-	local int i, Oldest;
+	local X2Action Node;
+	local int i, j, Oldest;
 
 	ActionName = "";
 	VisMgr = `XCOMVISUALIZATIONMGR;
@@ -458,15 +593,26 @@ function int OldestPlayingFrame(out string ActionName)
 	{
 		return -1;
 	}
-	VisMgr.GetNodesOfType(VisMgr.VisualizationTree, class'X2Action', Nodes);
+	Nodes.AddItem(VisMgr.VisualizationTree);
 	Oldest = -1;
-	for (i = 0; i < Nodes.Length; i++)
+	for (i = 0; i < Nodes.Length && i < MAX_TREE_NODES; i++)
 	{
-		if (Nodes[i] != none && !Nodes[i].bCompleted && Nodes[i].CurrentHistoryIndex > 0
-			&& (Oldest < 0 || Nodes[i].CurrentHistoryIndex < Oldest))
+		Node = Nodes[i];
+		if (Node == none)
 		{
-			Oldest = Nodes[i].CurrentHistoryIndex;
-			ActionName = string(Nodes[i].Class.Name);
+			continue;
+		}
+		if (!Node.bCompleted && Node.CurrentHistoryIndex > 0 && (Oldest < 0 || Node.CurrentHistoryIndex < Oldest))
+		{
+			Oldest = Node.CurrentHistoryIndex;
+			ActionName = string(Node.Class.Name);
+		}
+		for (j = 0; j < Node.ChildActions.Length; j++)
+		{
+			if (Node.ChildActions[j] != none && Nodes.Find(Node.ChildActions[j]) == INDEX_NONE)
+			{
+				Nodes.AddItem(Node.ChildActions[j]);
+			}
 		}
 	}
 	return Oldest;

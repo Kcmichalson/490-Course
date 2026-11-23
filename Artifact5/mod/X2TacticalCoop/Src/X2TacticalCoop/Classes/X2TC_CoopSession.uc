@@ -305,6 +305,7 @@ var int NewFramesMisplaced;    // guest (8.1): of those, not found at their inde
 var X2TC_CoopLagLog Lag;       // both: per-update timing lines (logging only, Kc)
 var ETeam HostLastTurnTeam;    // host: the turn team at the last poll (objects check at XCOM's turn)
 var int HostObjectChecks;      // host: objects checks so far
+var string LastHackProbe;      // 0.8.4: the last hack probe text (logged only when it changes)
 var array<int> PendingOwnerUnitIDs; // host: owner changes waiting for an idle ruleset
 var array<int> PendingOwnerValues;
 var int LastOwnActionUnitID;   // guest: the unit of its last order
@@ -1078,7 +1079,7 @@ function KeepHostSelectionOwn()
 	else if (TacticalController.GetInputState() != 'Multiplayer_Inactive')
 	{
 		// The game set another input state (e.g. after selecting the next unit itself).
-		`log("Coop owners: host input state was" @ TacticalController.GetInputState() $ "; locked again", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop owners: host input state was" @ TacticalController.GetInputState() $ "; locked again", , 'X2TC');
 		TacticalController.SetInputState('Multiplayer_Inactive');
 	}
 }
@@ -1145,7 +1146,7 @@ function bool HostCycleOwnSoldier(int Direction)
 		Index = ((Start + i * Direction) % Own.Length + Own.Length) % Own.Length;
 		if (TacticalController.Visualizer_SelectUnit(Own[Index]))
 		{
-			`log("Coop owners: host cycled to its unit" @ Own[Index].ObjectID @ "(direction" @ Direction $ ")", , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop owners: host cycled to its unit" @ Own[Index].ObjectID @ "(direction" @ Direction $ ")", , 'X2TC');
 			return true;
 		}
 	}
@@ -1227,7 +1228,7 @@ function ShowBanner(string Why)
 	if (!bBannerShown)
 	{
 		bBannerShown = true;
-		`log("Coop UI: FRIENDLY ACTION (" $ Why $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop UI: FRIENDLY ACTION (" $ Why $ ")", , 'X2TC');
 	}
 	UpdateBanner();
 }
@@ -1761,7 +1762,7 @@ function Poll()
 				&& Seconds - LastAttemptSecond >= CONNECT_RETRY_SECONDS)
 			{
 				CancelGuestConnect("no answer after" @ ConnectAttempts @ "attempts");
-				ShowGuestMessage("CO-OP: COULDN'T CONNECT", "No answer from the host after" @ CONNECT_MAX_ATTEMPTS @ "tries. Check the address and that the host clicked CO-OP: HOST, then click CO-OP: JOIN again.");
+				ShowGuestMessage("CO-OP: COULDN'T CONNECT", "No answer from the host after" @ CONNECT_MAX_ATTEMPTS @ "tries. Check the address and that the host clicked CO-OP: HOST BY IP, then click CO-OP: JOIN BY IP again.");
 				return;
 			}
 		}
@@ -1785,6 +1786,12 @@ function Poll()
 		GetLag().GuestMaybeTimePing(Seconds);
 	}
 
+	// 0.8.4: the hack probe, once a second while a mission is shared.
+	if ((Role == eCoopRole_Host && bGuestFollowing) || (Role == eCoopRole_Guest && bFollowerInstalled))
+	{
+		ProbeHackNow();
+	}
+
 	Seconds++;
 }
 
@@ -1798,13 +1805,42 @@ function X2TC_CoopLagLog GetLag()
 	return Lag;
 }
 
-// 0.8.3: from the visual watcher's tick; the partner samples its screen.
+// 0.8.3: from the visual watcher's tick; the partner samples its screen. 0.8.4: the host
+// counts the bunches leaving its queue (X2TC_CoopLagLog.HostTick).
 function LagTick()
 {
 	if (Role == eCoopRole_Guest && bFollowerInstalled)
 	{
 		GetLag().GuestTick();
 	}
+	else if (Role == eCoopRole_Host && bGuestFollowing && Lag != none)
+	{
+		Lag.HostTick();
+	}
+}
+
+// 0.8.4 hack probe (X2TC_CoopObjectLink.ProbeHack): the selected XCOM unit against nearby
+// must-hack objects, on both PCs, from the poll. Only with Verbose log on.
+function ProbeHackNow()
+{
+	local XComTacticalController TacticalController;
+	local XComGameState_Unit UnitState;
+
+	if (!class'X2TC_CoopFixes'.static.Verbose())
+	{
+		return;
+	}
+	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (TacticalController == none)
+	{
+		return;
+	}
+	UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
+	if (UnitState == none || UnitState.GetTeam() != eTeam_XCom)
+	{
+		return;
+	}
+	class'X2TC_CoopObjectLink'.static.ProbeHack(UnitState, RoleName(), LastHackProbe);
 }
 
 // 0.8.3: the partner is still on the main menu with a JOIN started (connecting, or
@@ -1985,7 +2021,7 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		Params = RawParams;
 		Number = class'XComGameStateNetworkManager'.static.GetCommandParam_Int(Params);
 		Reason = class'XComGameStateNetworkManager'.static.GetCommandParam_String(Params);
-		`log("Coop" @ RoleName() $ ": action result from the host:" @ (Number == 1 ? "applied" : "refused") $ "," @ Reason @ "(frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop" @ RoleName() $ ": action result from the host:" @ (Number == 1 ? "applied" : "refused") $ "," @ Reason @ "(frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
 		if (Role == eCoopRole_Guest && Number != 1)
 		{
 			ShowRefusal(Reason);
@@ -2029,7 +2065,7 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 			{
 				return;
 			}
-			`log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "acknowledged after" @ (Seconds - PartialSentSecond) $ "s; guest frames=" $ Number @ "sent frames=" $ PartialSentFrames @ "match=" $ (Number == PartialSentFrames), , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "acknowledged after" @ (Seconds - PartialSentSecond) $ "s; guest frames=" $ Number @ "sent frames=" $ PartialSentFrames @ "match=" $ (Number == PartialSentFrames), , 'X2TC');
 			bPartialInFlight = false;
 			if (!bNewFramesSync)
 			{
@@ -2637,7 +2673,7 @@ function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager 
 	PreviousFrames = GuestExpectedFrames;
 	GuestExpectedFrames = Frames;
 	PartialsReceived++;
-	`log("Coop" @ RoleName() $ ": partial history" @ PartialsReceived @ "received, frames=" $ Frames, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop" @ RoleName() $ ": partial history" @ PartialsReceived @ "received, frames=" $ Frames, , 'X2TC');
 	if (Role != eCoopRole_Guest)
 	{
 		return;
@@ -2872,7 +2908,7 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 		GetLag().HostSent(PartialSends, Frames, Bytes - BytesBefore, StartMs, CurrentTurnTeam() != eTeam_XCom, InfoParams);
 		NetworkMgr.SendRemoteCommand(class'X2TC_CoopLagLog'.const.CMD_UPDATE_INFO, InfoParams);
 	}
-	`log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
 	LogInterruptFrames("host, as sent", LastSentFrames, Frames - 1, 0); // 0.8.1
 	LastSentFrames = Frames;
 }
@@ -2902,7 +2938,7 @@ static function LogInterruptFrames(string Who, int FromFrame, int ToFrame, int E
 		{
 			continue;
 		}
-		`log("Coop interrupts (" $ Who $ "): frame" @ Frame @ Context.InterruptionStatus @ "interrupted-from=" $ Context.InterruptionHistoryIndex @ "resumes-at=" $ Context.ResumeHistoryIndex @ "(" $ Context.SummaryString() $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop interrupts (" $ Who $ "): frame" @ Frame @ Context.InterruptionStatus @ "interrupted-from=" $ Context.InterruptionHistoryIndex @ "resumes-at=" $ Context.ResumeHistoryIndex @ "(" $ Context.SummaryString() $ ")", , 'X2TC');
 	}
 }
 
@@ -3118,11 +3154,11 @@ static function LogTurnBegins(string Who, int FromFrame, int ToFrame)
 		PlayerState = XComGameState_Player(History.GetGameStateForObjectID(RuleContext.PlayerRef.ObjectID, eReturnType_Reference, Frame));
 		if (PlayerState != none)
 		{
-			`log("Coop sync (" $ Who $ "): turn begin, team" @ int(PlayerState.TeamFlag) @ "turn count" @ PlayerState.PlayerTurnCount $ ", frame" @ Frame, , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop sync (" $ Who $ "): turn begin, team" @ int(PlayerState.TeamFlag) @ "turn count" @ PlayerState.PlayerTurnCount $ ", frame" @ Frame, , 'X2TC');
 		}
 		else
 		{
-			`log("Coop sync (" $ Who $ "): turn begin, player object" @ RuleContext.PlayerRef.ObjectID $ ", frame" @ Frame, , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop sync (" $ Who $ "): turn begin, player object" @ RuleContext.PlayerRef.ObjectID $ ", frame" @ Frame, , 'X2TC');
 		}
 	}
 }
@@ -3205,7 +3241,7 @@ function LogHitch()
 	Now = World.RealTimeSeconds;
 	if (LastPollRealTime > 0 && Now - LastPollRealTime > HITCH_SECONDS)
 	{
-		`log("Coop" @ RoleName() $ ": hitch, poll gap" @ (Now - LastPollRealTime) $ "s (frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop" @ RoleName() $ ": hitch, poll gap" @ (Now - LastPollRealTime) $ "s (frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
 	}
 	LastPollRealTime = Now;
 }
@@ -3230,7 +3266,7 @@ function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
 	LastOwnActionTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
 	MovesSent++;
 	LastGuestMoveUnitID = UnitID;
-	`log("Coop guest: captured move" @ MovesSent @ "(unit" @ UnitID $ "," @ Tiles.Length @ "tiles), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: captured move" @ MovesSent @ "(unit" @ UnitID $ "," @ Tiles.Length @ "tiles), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
 }
 
 // Guest (Stage 5 Run 3): the controller marks a unit as moving when it submits a path
@@ -3255,7 +3291,7 @@ function ClearGuestUnitMoving()
 	if (UnitVisualizer != none && UnitVisualizer.m_bIsMoving)
 	{
 		UnitVisualizer.m_bIsMoving = false;
-		`log("Coop guest: cleared the moving mark on unit" @ LastGuestMoveUnitID, , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: cleared the moving mark on unit" @ LastGuestMoveUnitID, , 'X2TC');
 	}
 }
 
@@ -3549,7 +3585,7 @@ function SendGuestAbility(XComGameStateContext_Ability AbilityContext, int Frame
 	LastOwnActionUnitID = AbilityContext.InputContext.SourceObject.ObjectID;
 	LastOwnActionTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
 	AbilitiesSent++;
-	`log("Coop guest: captured ability" @ AbilitiesSent @ AbilityContext.InputContext.AbilityTemplateName @ "(unit" @ AbilityContext.InputContext.SourceObject.ObjectID $ ", target" @ AbilityContext.InputContext.PrimaryTarget.ObjectID $ "," @ AbilityContext.InputContext.TargetLocations.Length @ "locations), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: captured ability" @ AbilitiesSent @ AbilityContext.InputContext.AbilityTemplateName @ "(unit" @ AbilityContext.InputContext.SourceObject.ObjectID $ ", target" @ AbilityContext.InputContext.PrimaryTarget.ObjectID $ "," @ AbilityContext.InputContext.TargetLocations.Length @ "locations), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
 }
 
 // Host (Stage 5b): a guest ability arrived; keep it and try to apply it.
@@ -3582,7 +3618,7 @@ function ReceiveGuestAbility(array<byte> RawParams)
 	AbilitiesReceived++;
 	bAbilityPending = true;
 	PendingAbilitySecond = Seconds;
-	`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "received (unit" @ PendingAbilitySourceID $ ", target" @ PendingAbilityTargetID $ "," @ Count @ "locations)", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "received (unit" @ PendingAbilitySourceID $ ", target" @ PendingAbilityTargetID $ "," @ Count @ "locations)", , 'X2TC');
 	ClearGuestReady("the partner acted again");
 	TryApplyGuestAbility();
 }
@@ -3723,7 +3759,7 @@ function TryApplyGuestAbility()
 	bAbilityPending = false;
 	if (class'XComGameStateContext_Ability'.static.ActivateAbility(Action, TargetIndex, PendingAbilityLocations))
 	{
-		`log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "applied (unit" @ PendingAbilitySourceID $ ", target index" @ TargetIndex $ ", waited" @ (Seconds - PendingAbilitySecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop host: guest ability" @ AbilitiesReceived @ PendingAbilityName @ "applied (unit" @ PendingAbilitySourceID $ ", target index" @ TargetIndex $ ", waited" @ (Seconds - PendingAbilitySecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
 		SendMoveResult(true, string(PendingAbilityName) @ "unit" @ PendingAbilitySourceID);
 		HostMaybeSendPartial(`XCOMNETMANAGER); // Run 6: don't wait for the next poll
 		ShowBanner("P2's" @ PendingAbilityName @ "unit" @ PendingAbilitySourceID);
@@ -3767,7 +3803,7 @@ function HostLookAtPartnerAbility(name AbilityName, int SourceUnitID)
 	LookAtCamera.ActorToFollow = UnitState.GetVisualizer();
 	LookAtCamera.LookAtDuration = 1.5;
 	`CAMERASTACK.AddCamera(LookAtCamera);
-	`log("Coop camera: host looks at the partner's unit" @ SourceUnitID @ "for" @ AbilityName, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop camera: host looks at the partner's unit" @ SourceUnitID @ "for" @ AbilityName, , 'X2TC');
 }
 
 function RefuseGuestAbility(string Reason)
@@ -3805,7 +3841,7 @@ function ReceiveGuestMove(array<byte> RawParams)
 	MovesReceived++;
 	bMovePending = true;
 	PendingMoveSecond = Seconds;
-	`log("Coop host: guest move" @ MovesReceived @ "received (unit" @ PendingMoveUnitID $ "," @ Count @ "tiles)", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop host: guest move" @ MovesReceived @ "received (unit" @ PendingMoveUnitID $ "," @ Count @ "tiles)", , 'X2TC');
 	ClearGuestReady("the partner acted again");
 	TryApplyGuestMove();
 }
@@ -3903,7 +3939,7 @@ function TryApplyGuestMove()
 	bMovePending = false;
 	if (TacticalController.GameStateMoveUnit(UnitVisualizer, Paths))
 	{
-		`log("Coop host: guest move" @ MovesReceived @ "applied (unit" @ PendingMoveUnitID $ ", waited" @ (Seconds - PendingMoveSecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop host: guest move" @ MovesReceived @ "applied (unit" @ PendingMoveUnitID $ ", waited" @ (Seconds - PendingMoveSecond) $ "s), frames" @ FramesBefore @ "->" @ `XCOMHISTORY.GetNumGameStates(), , 'X2TC');
 		SendMoveResult(true, "unit" @ PendingMoveUnitID);
 		HostMaybeSendPartial(`XCOMNETMANAGER); // Run 6: don't wait for the next poll
 		ShowBanner("P2's move, unit" @ PendingMoveUnitID);
@@ -3959,7 +3995,7 @@ function AddAttachedUnitPaths(XComGameState_Unit MovingUnit, array<TTile> MoverT
 		PathData.MovingUnitRef = AttachedUnits[i].GetReference();
 		PathData.MovementTiles = TilePath;
 		Paths.AddItem(PathData);
-		`log("Coop host: attached unit" @ AttachedUnits[i].ObjectID @ "follows unit" @ MovingUnit.ObjectID @ "(" $ TilePath.Length @ "tiles, from" @ class'X2TC_CoopReplayMgr'.static.TileText(AttachedUnits[i].TileLocation) $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop host: attached unit" @ AttachedUnits[i].ObjectID @ "follows unit" @ MovingUnit.ObjectID @ "(" $ TilePath.Length @ "tiles, from" @ class'X2TC_CoopReplayMgr'.static.TileText(AttachedUnits[i].TileLocation) $ ")", , 'X2TC');
 	}
 }
 
@@ -4090,6 +4126,7 @@ function ResetSession()
 	Lag = none;
 	HostLastTurnTeam = eTeam_None;
 	HostObjectChecks = 0;
+	LastHackProbe = "";
 }
 
 defaultproperties

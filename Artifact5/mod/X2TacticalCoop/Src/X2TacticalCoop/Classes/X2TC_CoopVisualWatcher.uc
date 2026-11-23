@@ -282,7 +282,7 @@ function WatchLog(string Text)
 	if (LogLines < MAX_LOG_LINES)
 	{
 		LogLines++;
-		`log("Coop watcher:" @ Text, , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop watcher:" @ Text, , 'X2TC');
 	}
 }
 

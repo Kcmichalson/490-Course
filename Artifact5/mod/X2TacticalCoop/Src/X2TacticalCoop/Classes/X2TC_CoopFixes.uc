@@ -19,6 +19,9 @@
 //  0.8.3: "re-link objects" and "Shadowbind copy acts" removed with their code (0.8.2
 //  Runs 1-3: the re-link caused a crash and fixed nothing; the Shadowbind effect never
 //  changed anything); the switches after them are renumbered, 23 in all.
+//  0.8.4 (plans/m4-plan.md, "1.0 plan" item 2): the "Verbose log" switch. It isn't a fix,
+//  so SAFE MODE doesn't touch it; VERBOSE_DEFAULT sets it at launch (true in playtest
+//  builds, false in 1.0). The per-frame and per-update X2TC lines run only while it's on.
 //  Also holds one camera diagnostic flag (CameraOverrideRan).
 //
 //  Relies on (paths in Development\SrcOrig): nothing beyond Core\Classes\Object.uc.
@@ -51,6 +54,9 @@ const FIX_FOG_REVEAL = 21;     // 0.8.2: shooters in the fog are revealed as in 
 const FIX_WATCHER_CAMERA = 22; // 0.8.2: follow camera by the watcher (no override)
 const FIX_COUNT = 23;
 
+// 0.8.4: the Verbose log switch at launch (true: playtest builds; false: 1.0).
+const VERBOSE_DEFAULT = true;
+
 // Config only so that run-time "default." assignments compile; never saved (see above).
 // Each stores OFF: false (the value at every launch) means the fix runs.
 var config bool bSafeMode;
@@ -78,6 +84,19 @@ var config bool bSkulljackOff;
 var config bool bFogRevealOff;
 var config bool bWatcherCameraOff;
 var config bool bCameraOverrideRan; // diagnostics: X2TC_Action_CameraFollowUnit has run this launch
+var config bool bVerboseFlipped;    // 0.8.4: true once the Verbose log switch differs from VERBOSE_DEFAULT
+
+// 0.8.4: true while the per-frame and per-update lines should be logged.
+static function bool Verbose()
+{
+	return VERBOSE_DEFAULT != default.bVerboseFlipped;
+}
+
+static function SetVerbose(bool bOn)
+{
+	default.bVerboseFlipped = (bOn != VERBOSE_DEFAULT);
+	`log("Coop fixes: Verbose log" @ (bOn ? "ON" : "OFF"), , 'X2TC');
+}
 
 // Diagnostics for the camera override (X2TC_Action_CameraFollowUnit sets it).
 static function MarkCameraOverrideRan()
@@ -175,29 +194,29 @@ static function string FixName(int Fix)
 {
 	switch (Fix)
 	{
-		case FIX_CRASH_CLEANUP:  return "Crash cleanup (leaving a map)";
-		case FIX_HACK_ROUTING:   return "Hacks: starter controls, partner watches";
-		case FIX_BOUND_SKIP:     return "Partner skips soldiers that can't act";
-		case FIX_VIP_HOST:       return "VIPs and civilians count as the host's";
-		case FIX_GUEST_BORDERS:  return "Partner's move range and cover icons";
-		case FIX_CAMERA:         return "Camera follows moves while connected";
-		case FIX_REPLAY_VISUALS: return "Partner skips visuals it can't build";
-		case FIX_CAN_ACT:        return "Can-act check uses the game's rule";
-		case FIX_PATH_HIDE:      return "Partner hides path preview while moving";
-		case FIX_BANNER_IDLE:    return "Banner waits for the last action";
-		case FIX_SP_RULES:       return "Single-player rules while connected";
-		case FIX_GLOW:           return "Partner: no glow on ability icons";
-		case FIX_WHEEL:          return "Partner: mouse wheel changes floors";
-		case FIX_PARTNER_LOOKAT: return "Host camera looks at partner's actions";
-		case FIX_ATTACHED_MOVES: return "BIT and Gremlin follow partner's moves";
-		case FIX_STEP_ALL:       return "Partner: faster enemy turns";
-		case FIX_PARTNER_PAUSE:  return "Partner: pause while waiting";
-		case FIX_HACK_NO_CLICK:  return "Hacks: watcher can't click";
-		case FIX_FLANK_CRIT:     return "Flanking crit as in single player";
-		case FIX_SUPPRESSION:    return "Suppression penalty as in single player";
-		case FIX_SKULLJACK:      return "Skulljack chance as in single player";
-		case FIX_FOG_REVEAL:     return "Reveal shooters in the fog";
-		case FIX_WATCHER_CAMERA: return "Camera: watcher (no override)";
+		case FIX_CRASH_CLEANUP:  return "Stability: clean up when leaving a map";
+		case FIX_HACK_ROUTING:   return "Hacks: the starter controls, the partner watches";
+		case FIX_BOUND_SKIP:     return "Partner: Tab skips soldiers that can't act";
+		case FIX_VIP_HOST:       return "Rules: VIPs and civilians are the host's";
+		case FIX_GUEST_BORDERS:  return "Partner screen: move range and cover icons";
+		case FIX_CAMERA:         return "Camera: follow moves (override)";
+		case FIX_REPLAY_VISUALS: return "Stability: partner skips visuals it can't build";
+		case FIX_CAN_ACT:        return "Partner: can-act check uses the game's rule";
+		case FIX_PATH_HIDE:      return "Partner screen: hide the path while moving";
+		case FIX_BANNER_IDLE:    return "Partner screen: banners wait for the last action";
+		case FIX_SP_RULES:       return "Rules: single-player rules while connected";
+		case FIX_GLOW:           return "Partner screen: no glow on ability icons";
+		case FIX_WHEEL:          return "Partner screen: mouse wheel changes floors";
+		case FIX_PARTNER_LOOKAT: return "Camera: host looks at the partner's actions";
+		case FIX_ATTACHED_MOVES: return "Partner: BIT and Gremlin follow moves";
+		case FIX_STEP_ALL:       return "Partner screen: faster enemy turns";
+		case FIX_PARTNER_PAUSE:  return "Partner screen: pause while waiting";
+		case FIX_HACK_NO_CLICK:  return "Hacks: the watcher can't click";
+		case FIX_FLANK_CRIT:     return "Rules: flanking crit as in single player";
+		case FIX_SUPPRESSION:    return "Rules: suppression penalty as in single player";
+		case FIX_SKULLJACK:      return "Rules: Skulljack chance as in single player";
+		case FIX_FOG_REVEAL:     return "Rules: reveal shooters in the fog";
+		case FIX_WATCHER_CAMERA: return "Camera: follow moves (watcher)";
 	}
 	return "unknown fix" @ Fix;
 }
@@ -208,7 +227,7 @@ static function string StateText()
 	local string Text;
 	local int i;
 
-	Text = "safe mode=" $ default.bSafeMode;
+	Text = "safe mode=" $ default.bSafeMode @ "verbose=" $ Verbose();
 	for (i = 0; i < FIX_COUNT; i++)
 	{
 		Text @= ShortName(i) $ "=" $ IsOn(i);

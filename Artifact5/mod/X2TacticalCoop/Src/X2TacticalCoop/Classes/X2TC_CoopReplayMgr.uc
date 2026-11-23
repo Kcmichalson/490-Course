@@ -209,7 +209,7 @@ state WaitForPlayerInput
 		{
 			bBehind = false;
 			LastSkipFromUnitID = 0;
-			`log("Coop guest: replayed to frame" @ CurrentHistoryFrame @ "(history frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: replayed to frame" @ CurrentHistoryFrame @ "(history frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
 		}
 
 		UpdateGuestInput();
@@ -263,7 +263,7 @@ function UpdateGuestInput()
 	{
 		bInputPhase = true;
 		bInTutorial = true;
-		`log("Coop follower: XCOM input phase begins (tutorial mode on, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: XCOM input phase begins (tutorial mode on, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 		TellSessionInputPhase(true);
 		// 0.8.2: map objects against the host's states (objective hacks); detail the first time.
 		ObjectChecks++;
@@ -275,7 +275,7 @@ function UpdateGuestInput()
 		bInputPhase = false;
 		bInTutorial = false;
 		HideAbilityShine(); // 0.8.1: RefreshShine does nothing once tutorial mode is off
-		`log("Coop follower: XCOM input phase ends (tutorial mode off, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: XCOM input phase ends (tutorial mode off, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 		TellSessionInputPhase(false);
 	}
 
@@ -292,7 +292,7 @@ function UpdateGuestInput()
 			// Fix B (Run 8 toggle): the replay keeps the history's "current index" on its
 			// frame (XComReplayMgr.StartReplay; StepReplayForward); a normal game runs at -1
 			// (the newest frame). Natives that read "current" state may behave differently.
-			`log("Coop follower: fix B: history current index" @ `XCOMHISTORY.GetCurrentHistoryIndex() @ "-> -1", , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: fix B: history current index" @ `XCOMHISTORY.GetCurrentHistoryIndex() @ "-> -1", , 'X2TC');
 			`XCOMHISTORY.SetCurrentHistoryIndex(-1);
 		}
 		LogMoveState(TacticalController);
@@ -346,7 +346,7 @@ function LogHackAvailability(XComTacticalController TacticalController)
 	if (Line != "" && Line != LastHackAvailability)
 	{
 		LastHackAvailability = Line;
-		`log("Coop follower: hack abilities of unit" @ TacticalController.GetActiveUnitStateRef().ObjectID $ ":" $ Line, , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: hack abilities of unit" @ TacticalController.GetActiveUnitStateRef().ObjectID $ ":" $ Line, , 'X2TC');
 	}
 }
 
@@ -398,7 +398,7 @@ function UpdateTutorialControls(XComTacticalController TacticalController)
 	if (bAllow != bIsTutorialAllowingControls)
 	{
 		bIsTutorialAllowingControls = bAllow;
-		`log("Coop follower: tutorial controls flag" @ (bAllow ? "ON" : "OFF") @ "(" $ Why $ "; input state" @ TacticalController.GetInputState()
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: tutorial controls flag" @ (bAllow ? "ON" : "OFF") @ "(" $ Why $ "; input state" @ TacticalController.GetInputState()
 			@ "pawn" @ (TacticalController.m_kPathingPawn != none ? string(TacticalController.m_kPathingPawn.Name) : "none")
 			@ "hidden=" $ (TacticalController.m_kPathingPawn != none && TacticalController.m_kPathingPawn.bHidden) $ ")", , 'X2TC');
 	}
@@ -476,12 +476,12 @@ function bool SelectUnitUnderCursor()
 		}
 		if (!GuestMayControl(UnitState))
 		{
-			`log("Coop follower: clicked unit" @ UnitState.ObjectID @ "is P1's; not selected", , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: clicked unit" @ UnitState.ObjectID @ "is P1's; not selected", , 'X2TC');
 			return false;
 		}
 		if (TacticalController.Visualizer_SelectUnit(UnitState))
 		{
-			`log("Coop follower: clicked unit" @ UnitState.ObjectID @ "selected (tile" @ TileText(CursorTile) $ ")", , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: clicked unit" @ UnitState.ObjectID @ "selected (tile" @ TileText(CursorTile) $ ")", , 'X2TC');
 			return true;
 		}
 	}
@@ -536,7 +536,7 @@ function LogMoveChecks(XComTacticalController TacticalController)
 	if (Checks != LastMoveChecks)
 	{
 		LastMoveChecks = Checks;
-		`log("Coop follower: move check:" @ Checks, , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: move check:" @ Checks, , 'X2TC');
 		if (`XCOMVISUALIZATIONMGR.VisualizerBlockingAbilityActivation())
 		{
 			// The game's own explanation of what blocks (its debug flag).
@@ -561,7 +561,7 @@ function bool ToggleFix(name Fix)
 		case 'C': bFixWorldSync = !bFixWorldSync; bNow = bFixWorldSync; break;
 	}
 	LastRefreshUnitID = -1;
-	`log("Coop follower: fix" @ Fix @ "now" @ (bNow ? "ON" : "OFF") @ "(A cache=" $ bFixCache @ "B history -1=" $ bFixHistoryIndex @ "C world sync=" $ bFixWorldSync $ ")", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: fix" @ Fix @ "now" @ (bNow ? "ON" : "OFF") @ "(A cache=" $ bFixCache @ "B history -1=" $ bFixHistoryIndex @ "C world sync=" $ bFixWorldSync $ ")", , 'X2TC');
 	return bNow;
 }
 
@@ -622,7 +622,7 @@ function LogMoveState(XComTacticalController TacticalController)
 		@ "tutorial state=" $ IsInState('WaitForPlayerInput')
 		@ "fixes A=" $ bFixCache @ "B=" $ bFixHistoryIndex @ "C=" $ bFixWorldSync
 		@ "tutorial controls=" $ bIsTutorialAllowingControls; // 0.8.0
-	`log("Coop follower: move state:" @ Line, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: move state:" @ Line, , 'X2TC');
 }
 
 // Run 7 (0.4.0): Run 6's diagnostics showed the pathing pawn hidden in every line, so
@@ -644,7 +644,7 @@ function KeepPathingVisible(XComTacticalController TacticalController)
 		ReplayScreen = TacticalController.Pres.ScreenStack.GetScreen(class'UIReplay');
 		if (ReplayScreen != none)
 		{
-			`log("Coop follower: the stock replay screen was still in the stack; closing it now", , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: the stock replay screen was still in the stack; closing it now", , 'X2TC');
 			ReplayScreen.CloseScreen();
 		}
 	}
@@ -664,7 +664,7 @@ function KeepPathingVisible(XComTacticalController TacticalController)
 	if (!bPawnForceLogged)
 	{
 		bPawnForceLogged = true;
-		`log("Coop follower: pathing pawn was hidden; shown on unit" @ ActiveUnitState.ObjectID @ "(hidden now=" $ PathingPawn.bHidden $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: pathing pawn was hidden; shown on unit" @ ActiveUnitState.ObjectID @ "(hidden now=" $ PathingPawn.bHidden $ ")", , 'X2TC');
 	}
 }
 
@@ -738,7 +738,7 @@ function RefreshPathing(XComTacticalController TacticalController, string Reason
 	UnitVisualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
 	UnitVisualizer.m_kReachableTilesCache.GetCacheOriginAndMaxCost(Origin, MaxCost);
 	TacticalController.m_kPathingPawn.SetActive(UnitVisualizer);
-	`log("Coop follower: pathing refreshed (" $ Reason $ "): unit" @ UnitState.ObjectID @ "action points=" $ UnitState.NumAllActionPoints() @ "cache origin=" $ TileText(Origin) @ "max cost=" $ MaxCost @ "frame" @ CurrentHistoryFrame, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: pathing refreshed (" $ Reason $ "): unit" @ UnitState.ObjectID @ "action points=" $ UnitState.NumAllActionPoints() @ "cache origin=" $ TileText(Origin) @ "max cost=" $ MaxCost @ "frame" @ CurrentHistoryFrame, , 'X2TC');
 }
 
 // Run 7: Kc saw the selection stay on a soldier with no actions left; the game's own
@@ -773,7 +773,7 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 		if (!bLoggedNoneCanAct)
 		{
 			bLoggedNoneCanAct = true;
-			`log("Coop follower: none of the guest's soldiers can act; selection left on unit" @ ActiveUnitState.ObjectID, , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: none of the guest's soldiers can act; selection left on unit" @ ActiveUnitState.ObjectID, , 'X2TC');
 		}
 		return;
 	}
@@ -788,7 +788,7 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 		UnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
 		if (UnitState != none && class'X2TC_CoopOwnership'.static.UnitCanAct(UnitState))
 		{
-			`log("Coop follower: unit" @ ActiveUnitState.ObjectID @ "is P1's or has no actions left; selected unit" @ UnitState.ObjectID, , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: unit" @ ActiveUnitState.ObjectID @ "is P1's or has no actions left; selected unit" @ UnitState.ObjectID, , 'X2TC');
 			return;
 		}
 		if (UnitState == ActiveUnitState)
@@ -861,7 +861,7 @@ function MoveActiveUnitToCursor()
 	Session = class'X2TC_CoopSession'.static.FindGuestSession();
 	if (TacticalController == none || Session == none || !bGuestInputOn)
 	{
-		`log("Coop follower: MOVE TO CURSOR ignored (input on=" $ bGuestInputOn $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: MOVE TO CURSOR ignored (input on=" $ bGuestInputOn $ ")", , 'X2TC');
 		return;
 	}
 	UnitID = TacticalController.GetActiveUnitStateRef().ObjectID;
@@ -871,7 +871,7 @@ function MoveActiveUnitToCursor()
 		CursorTile = `XWORLD.GetTileCoordinatesFromPosition(CursorLocation);
 	}
 	Tiles.AddItem(CursorTile);
-	`log("Coop follower: MOVE TO CURSOR: unit" @ UnitID @ "to tile" @ TileText(CursorTile), , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: MOVE TO CURSOR: unit" @ UnitID @ "to tile" @ TileText(CursorTile), , 'X2TC');
 	Session.SendGuestMove(UnitID, Tiles, `XCOMHISTORY.GetNumGameStates());
 }
 
@@ -887,12 +887,12 @@ function SetGuestInput(XComTacticalController TacticalController, bool bOn)
 			SelectGuestUnit(TacticalController, 1);
 		}
 		TacticalController.SetInputState(GUEST_INPUT_STATE);
-		`log("Coop follower: input on (state" @ TacticalController.GetInputState() $ ", active unit" @ TacticalController.GetActiveUnitStateRef().ObjectID $ ", ruleset state" @ `TACTICALRULES.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: input on (state" @ TacticalController.GetInputState() $ ", active unit" @ TacticalController.GetActiveUnitStateRef().ObjectID $ ", ruleset state" @ `TACTICALRULES.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 	}
 	else
 	{
 		TacticalController.SetInputState(REPLAY_INPUT_STATE);
-		`log("Coop follower: input off (state" @ TacticalController.GetInputState() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: input off (state" @ TacticalController.GetInputState() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 		HidePathingUI(TacticalController);
 	}
 }
@@ -998,7 +998,7 @@ function int SelectGuestUnit(XComTacticalController TacticalController, int Dire
 			if (!bLoggedNoneCanAct)
 			{
 				bLoggedNoneCanAct = true; // once until a soldier is selected again
-				`log("Coop follower: none of the guest's" @ Skipped @ "soldiers can act; selection unchanged", , 'X2TC');
+				if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: none of the guest's" @ Skipped @ "soldiers can act; selection unchanged", , 'X2TC');
 			}
 		}
 		else
@@ -1024,7 +1024,7 @@ function int SelectGuestUnit(XComTacticalController TacticalController, int Dire
 		if (TacticalController.Visualizer_SelectUnit(Units[Index]))
 		{
 			bLoggedNoneCanAct = false;
-			`log("Coop follower: selected unit" @ Units[Index].ObjectID, , 'X2TC');
+			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: selected unit" @ Units[Index].ObjectID, , 'X2TC');
 			return Units[Index].ObjectID;
 		}
 	}
@@ -1046,7 +1046,7 @@ function SelectGuestUnitStep(int Direction)
 	TacticalController = XComTacticalController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
 	if (TacticalController == none || !bInputPhase)
 	{
-		`log("Coop follower: soldier selection ignored (input phase=" $ bInputPhase $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: soldier selection ignored (input phase=" $ bInputPhase $ ")", , 'X2TC');
 		return;
 	}
 	SelectGuestUnit(TacticalController, Direction);
@@ -1083,7 +1083,7 @@ simulated function bool HandleSubmittedGameStateContext(XComGameStateContext Sub
 
 	if (AbilityContext == none)
 	{
-		`log("Coop follower: captured a non-ability context, not sent:" @ SubmittedContext.Class.Name @ "(frames=" $ FramesBefore $ ")", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: captured a non-ability context, not sent:" @ SubmittedContext.Class.Name @ "(frames=" $ FramesBefore $ ")", , 'X2TC');
 		return false;
 	}
 
@@ -1114,7 +1114,7 @@ simulated function bool HandleSubmittedGameStateContext(XComGameStateContext Sub
 	AbilityKey = AbilityContext.InputContext.AbilityTemplateName $ "/" $ AbilityContext.InputContext.SourceObject.ObjectID $ "/" $ AbilityContext.InputContext.PrimaryTarget.ObjectID;
 	if (AbilityKey == LastAbilityKey && WorldInfo.RealTimeSeconds - LastAbilityTime < 1.0)
 	{
-		`log("Coop follower: captured ability" @ AbilityContext.InputContext.AbilityTemplateName @ "again within 1 s; not sent twice", , 'X2TC');
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: captured ability" @ AbilityContext.InputContext.AbilityTemplateName @ "again within 1 s; not sent twice", , 'X2TC');
 		return false;
 	}
 	LastAbilityKey = AbilityKey;
@@ -1131,7 +1131,7 @@ simulated function bool HandleSubmittedGameStateContext(XComGameStateContext Sub
 		// (X2GameRuleset.uc L290-293).
 		return true;
 	}
-	`log("Coop follower: captured ability" @ AbilityContext.InputContext.AbilityTemplateName @ "but found no guest session", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: captured ability" @ AbilityContext.InputContext.AbilityTemplateName @ "but found no guest session", , 'X2TC');
 	return false;
 }
 
@@ -1183,7 +1183,7 @@ function LogTutorialCall(name FunctionName)
 		return;
 	}
 	LoggedTutorialCalls.AddItem(FunctionName);
-	`log("Coop follower: tutorial call intercepted:" @ FunctionName @ "(logged once)", , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: tutorial call intercepted:" @ FunctionName @ "(logged once)", , 'X2TC');
 }
 
 // The tutorial's "only the scripted next ability / target" filters: every ability and

@@ -207,7 +207,7 @@ static function LogSquadState(string Why)
 		{
 			Effects $= (j > 0 ? "," : "") $ UnitState.AffectedByEffectNames[j];
 		}
-		`log("Coop squad state (" $ Why $ "): unit" @ UnitState.ObjectID @ OwnerText(GetOwner(UnitState))
+		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop squad state (" $ Why $ "): unit" @ UnitState.ObjectID @ OwnerText(GetOwner(UnitState))
 			@ "AP=" $ UnitState.NumAllActionPoints() @ "can act=" $ UnitCanAct(UnitState)
 			@ "incapacitated=" $ UnitState.IsIncapacitated() @ "panicked=" $ UnitState.bPanicked
 			@ "effects=" $ (Effects == "" ? "none" : Effects), , 'X2TC');

@@ -1056,6 +1056,249 @@ this build leaves C out; it can follow as 0.8.4. The camera override stays
    - Switch numbers after them shift; 23 switches in all.
 6. Version 0.8.3. Checklist `checklists/m4-083.md` with one longer mission.
 
+### 0.8.3 results (Run 1, 2026-11-22, build 8270065, both PCs)
+Logs: `local/m4-logs/m4-083-pc-1.log`, `m4-083-laptop-1.log`. 113 updates,
+9 XCOM turns, 8 alien turns.
+
+**Lag, by stage (from the alien-turn summaries; avg/max in ms):**
+| Alien turn | KB per update | wait | build | transit | load | rtt |
+|---|---|---|---|---|---|---|
+| 1 (early) | 87/110 | 201/601 | 23/25 | 507/767 | 73/99 | 609/861 |
+| 4 (middle) | 207/259 | 219/1398 | 68/72 | 1179/1402 | 232/263 | 1433/1657 |
+| 7 (late) | 339/468 | 434/2605 | 126/129 | 1588/2122 | 409/451 | 2016/2529 |
+| 8 (late) | 594/681 | 1388/4166 | 153/161 | 2934/3477 | 448/456 | 3412/3937 |
+
+- **Transit dominates:** about 60% of each update's delay, early and late.
+  It grows with size at a steady rate of about 210 KB/s (for example 56 KB
+  in 0.5 s, 608 KB in 2.7 s).
+- **Wait is second** (about 25-30%). It's the next update waiting for the
+  previous one's transit, so transit drives it too.
+- **Build and load are small:** about 3% and 9%.
+- **The acknowledgment's return is tiny:** rtt − arrive is 20-35 ms.
+- **Updates carry a large fixed part:** an update with one new frame was
+  142 KB in the middle of the mission and 265-290 KB late.
+- **Rate cap:** the engine's rate settings (BaseEngine.ini, 15-20 KB/s)
+  don't match 210 KB/s, so they don't explain it. The cause of the
+  ceiling is unknown.
+- **Battery:** no outliers stand apart from the size trend.
+- **Not measured: backlog and behind.** They logged 0 all run, which is a
+  logging bug. Guess: `GetNodesOfType(..., class'X2Action', ...)` returns
+  nothing for the base class.
+
+**Objective hack:**
+- Both PCs log the same line every turn:
+  - BattleData tac 3 / strat 2;
+  - each object r0;
+  - `CanInteractHack` = yes for every soldier.
+- From turn 8, object 54 reads "no" on both PCs.
+- So 0 rewards was not the cause (that guess is refuted).
+- The partner's own line shows every hack ability at `AA_NoTargets` with 0
+  targets: target gathering finds nothing.
+- Gathering is `X2AbilityTarget_Single` (native, `bAllowInteractiveObjects`)
+  plus `X2Condition_HackingTarget` (SrcOrig
+  `XComGame\Classes\X2Condition_HackingTarget.uc` L44-L78). That needs:
+  - an interaction point next to the soldier (`GetUnitInteractionPoints`);
+  - for Intrusion Protocol, the visibility manager's `bVisibleGameplay`.
+- Which step drops the object isn't in the logs, and the logs don't show
+  whether a laptop soldier stood next to it.
+
+**Other items:**
+- 23 switches; no re-link or Shadowbind fix lines.
+- JOIN cancel: no lines in the laptop log, which has one JOIN that
+  succeeded.
+- NO SOLDIERS banner timing: shown once at turn 1 only.
+- Steps B and E aren't in these logs.
+
+## 1.0 plan (approved by Kc, 2026-11-22)
+**Kc:** "Approve the 1.0 plan, with one addition: Before committing to
+option 4, investigate the ~210 KB/s cap, read only [...] If the cap is a
+setting, propose raising it, ideally only while a co-op session runs, and
+say whether it would also affect stock multiplayer and what changes over a
+friend's internet connection versus my LAN. If it's a cheap config fix, it
+goes in 0.8.4 with the logging; option 4 stays the fallback in 0.8.5."
+Untested items: "if you need clarification for anything please add it for
+the 0.8.4 test log." "Then write 0.8.4."
+
+Priority order is Kc's. ✂ = cut first if time runs short (✂1 goes first).
+
+**0.8.4 (code Nov 23-24, test Nov 25): release UI and logging**
+1. Release UI (C items 9 and 13):
+   - the Co-op button in the top-right row, with its panel, and END TURN
+     (READY) kept visible;
+   - button cleanup: hide MOVE TO CURSOR, drop MULTIPLAYER, rename to
+     "BY IP";
+   - plain FIXES labels.
+   - ✂3: if the HUD button slips, ship the cleaned-up button column
+     instead.
+2. Verbose log (item 10): off in 1.0, on in playtest builds.
+3. Join flow (item 11), Steam invite as the main path, plus
+   `release/friend-setup.md`.
+4. Logging fixes (small; needed to judge 0.8.5):
+   - **Behind/backlog:** walk the visualization tree through
+     `ChildActions` instead of `GetNodesOfType`, and fix the seconds
+     format (it prints "0.0000s").
+   - **Hack probe:** on the partner, when a soldier is selected within 3
+     tiles of a must-hack object, log each step of the hack check:
+     - the distance;
+     - whether the object's actor is among the interaction points;
+     - `HackAbilityTemplateName`;
+     - Health;
+     - `CanInteractHack`;
+     - visibility (for Intrusion Protocol);
+     - the native `ValidatePrimaryTargetOption` result.
+   - The host logs the same for its own soldier, for comparison.
+
+**0.8.5 (code Nov 26-27, test Nov 28): fixes the probes point to**
+5. **Objective hack fix,** chosen by the probe:
+   - **(a)** If the check passes but the native gathering drops the
+     object: add it as a target in the partner's ability list. The host
+     still checks and runs the hack (it's authoritative), so a wrong add
+     is refused there, not desynced.
+   - **(b)** If the interaction points or visibility are missing on the
+     partner: refresh them (the exact call comes from the probe).
+   - ✂2 fallback: a known issue with the workaround "give the soldier to
+     the host for the hack" (works since 0.8.0).
+6. **Lag fix: "new frames, second try"** (option 4). It's the only option
+   that cuts the fixed part of each update, which is what drives transit.
+   - **How:** send the new frames instead of a partial history, behind a
+     switch, off by default. Any gap or acknowledgment timeout falls back
+     to a partial history.
+   - **Expected effect (estimate):** late updates drop from 200-680 KB to
+     the size of their new frames. Transit and wait fall from 2-5 s to
+     under 1 s and stay flat through the mission.
+   - **Risk: high.** In 8.1, frames arrived but weren't added to the
+     history, and acknowledgments timed out after 15 s. That cause has to
+     be found first.
+   - **Fit:** a one-day time box in 0.8.5, only if 0.8.4 landed on time;
+     on in 1.0 only if a long-mission run is clean. ✂1: otherwise after
+     1.0, with the lag as a known issue.
+   - **Not chosen:**
+     - Options 1-2 (no wait, combine sends) still send the same bytes
+       over the same link, so wait could fall but transit can't.
+     - Option 3 (zip) helps only if the screen is behind on animations,
+       and that's unmeasured until item 4.
+     - Option 5 (actions) is too large.
+7. **Camera override removal:** the watcher worked alone in 0.8.2 Run 3
+   (one run). Run one mission with the "camera (override)" switch off in
+   0.8.5; if the camera follows, delete `X2TC_Action_CameraFollowUnit` and
+   its switch.
+   - ✂4: keep the override for 1.0. It's tested, and the compatibility
+     notes name it.
+
+**Audit and release (fixed dates):**
+- Code audit Nov 30-Dec 1 ("Code audit before 1.0", above). Fixes from it
+  get their own short plan.
+- Release candidate and friend playtest Dec 1-3; name decided by ~Dec 3.
+  Then release-checklist.md: the save without the mod, a campaign mission,
+  the host's pause-menu save.
+- 1.0 on the Workshop by Dec 6.
+- Never cut: items 1-3 (basic form), the audit, the release-candidate
+  test.
+
+### The ~210 KB/s cap (read only, 2026-11-22; Kc's addition)
+**Found (source and config, not tested):**
+- The history goes out as "bunches" of about 607 bytes: 58,238 bytes in 96
+  bunches for update #1, 688,484 in 1,133 for #110, from the 0.8.3 log's
+  "queued bytes ... in N bunches".
+- The network manager queues them (`OutGameData`, each with a
+  `PendingState` of NotHandled / Sent / Processed and a `LastUpdateTick`).
+  Its native tick sends them over the engine's connection. Source:
+  `XComGameStateNetworkManager.uc` L1-5 (a tickable object), L33-58,
+  L65, L158-160.
+- 0.8.3 Run 1 moved about 350 bunches per second.
+- **The game's rate settings:**
+  - It uses `IpNetDriverSteamworks` (game `DefaultEngine.ini` L102).
+  - Its only setting is the connection class; the rest come from
+    `[IpDrv.TcpNetDriver]`.
+  - Those are MaxClientRate 15000, MaxInternetClientRate 10000,
+    NetServerMaxTickRate 30, LanServerMaxTickRate 35 (engine
+    `BaseEngine.ini` L422-445).
+  - `[Engine.Player]` has ConfiguredLanSpeed 20000 and
+    ConfiguredInternetSpeed 10000 (L412-414).
+  - The game's DefaultEngine.ini only sets timeouts for that driver
+    (L1361-1364).
+- **Engine rate settings are bytes per second, so they would cap at 10-20
+  KB/s.** The history moved at about 210 KB/s, 10-20 times faster. So no
+  rate setting caps it as configured.
+- **A numerical match only (guess):** 10 bunches × 35 ticks/s
+  (LanServerMaxTickRate) × 607 bytes = 212 KB/s. Another guess: the native
+  tick sends a fixed number of bunches per game frame (about 6 at 60 fps).
+  - The source can't settle it: the net driver has no script class in the
+    SDK, and the send loop is native.
+- **Changing a net-driver setting has only two routes,** both against this
+  project's rules:
+  - **(a) A `[IpDrv.TcpNetDriver]` section in the mod's own
+    `Config/XComEngine.ini`.** It would apply whenever the mod is enabled:
+    single player, stock multiplayer, and co-op alike, not only during a
+    session. That's the "edited configs break multiplayer" case Mr.Fear
+    warned about (CLAUDE.md).
+  - **(b) The "set" console command from script while a session runs.**
+    Guess, from older Unreal Engine versions: "set" also saves the value to
+    the player's own config file. That would be a config edit by another
+    route, and it would outlast the session.
+
+  Neither is a cheap fix within CLAUDE.md, so **no setting changes in
+  0.8.4.**
+- **Internet vs LAN (guess):**
+  - If the cap is per net tick, over the internet the engine may use
+    NetServerMaxTickRate 30 instead of the LAN's 35, about 180 KB/s.
+  - The host's upload speed adds a second limit. About 1.7 Mbit/s or less
+    would be slower than the cap.
+  - Latency adds to each round trip but not to the bunch rate (guess).
+- **0.8.4 measures it instead (logging only):**
+  - **The host's H line gains a "net" part:** bunches per host frame,
+    the most in flight, frame time, and the time to empty the queue.
+    - Bunches per frame steady while frame time changes = a per-frame
+      quota. Then a higher frame rate helps, and nothing else short of
+      option 4 does.
+    - Bunches per second steady = a rate (tick) limit.
+  - **One "Coop net settings" line per PC:** the settings in effect, read
+    with the read-only "get" command, including any player config the
+    game wrote.
+- **Option 4 stays the 0.8.5 fallback,** as Kc approved.
+
+### 0.8.4 as built (2026-11-22; not built or tested)
+1. **Release UI** (`X2TC_CoopListener.RELEASE_UI = true`):
+   - **Main menu:** CO-OP: JOIN (STEAM) then CO-OP: JOIN BY IP; no
+     MULTIPLAYER (`X2TC_MainMenuListener` returns early).
+   - **Tactical HUD:** the new `X2TC_CoopMenu`, a Co-op icon (the game's
+     bond "teamwork" perk icon, by path) left of the stock icon row.
+     - Its x comes from the stock rule for the active icon count
+       (`UITacticalHUD_MouseControls.uc` L136-150). The icon size and
+       spacing are guesses, logged, and set from Kc's screenshot.
+     - Its panel holds the role's actions, each with a tooltip.
+     - The status line stays visible, and so does the partner's END TURN
+       (READY).
+   - **Hosting:** before hosting, the panel has HOST (STEAM), HOST BY IP
+     and FIXES. SQUAD and END TURN appear once hosting, and the other
+     HOST hides.
+   - MOVE TO CURSOR is gone.
+   - **Differences from the plan:**
+     - Escape or a click outside doesn't close the panel (the icon
+       toggles it).
+     - The partner's END TURN is a normal button under the status line,
+       not a second icon.
+2. **Verbose log:**
+   - `X2TC_CoopFixes.Verbose()`, a FIXES row that SAFE MODE doesn't touch.
+   - `VERBOSE_DEFAULT = true` for playtest builds; 1.0 flips it.
+   - 75 per-frame and per-update log statements are wrapped, by a
+     dry-run-checked script that refuses braceless if/else parents. The
+     MP trace listeners' lines are all wrapped.
+3. **FIXES:** plain labels grouped by their first word, a shorter header,
+   SAFE MODE explained.
+4. **friend-setup.md:** Host and Partner sections, Steam as the main path,
+   "by IP" as advanced, and "tick Verbose log and send Launch.log" for bug
+   reports.
+5. **Logging:**
+   - the behind/backlog sampler walks the visualization tree;
+   - seconds print as "1.25s";
+   - the host's "net" part and the net settings line;
+   - `X2TC_CoopObjectLink.ProbeHack` on both PCs once a second (Verbose
+     log only, and only when its text changes).
+6. **Messages:** COULDN'T CONNECT and the SQUAD screen name the new
+   buttons.
+7. **Version 0.8.4;** `checklists/m4-084.md`.
+
 ## Code audit before 1.0 (plan only; Kc: "that will wait for the end")
 
 Kc (2026-11-21): find "every single file you've written, it's purpose,

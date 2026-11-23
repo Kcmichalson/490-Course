@@ -1,8 +1,9 @@
 # {{DECIDED_MOD_NAME}}: known issues (draft)
 
-Status as of 0.8.1 Run 1 (2026-11-21); 0.8.2 built 2026-11-22, not yet
-tested (checklists/m4-082.md). Each line names where it's
-tracked; update after every test (checklists/, LOG.md).
+Status as of 0.8.2 Runs 1-3 (2026-11-22, build 8270065;
+checklists/m4-082.md); 0.8.3 written 2026-11-22, not built or tested
+(checklists/m4-083.md). Each line names where it's tracked; update after
+every test (checklists/, LOG.md).
 
 ## Limits by design
 - Two players only.
@@ -17,12 +18,18 @@ tracked; update after every test (checklists/, LOG.md).
 ## Open issues
 | Issue | Status |
 |---|---|
-| Long missions get slower for the partner: every update the host sends grows with the mission (up to about 400 KB in M3 tests) | Known; optimization planned after 1.0 |
+| Long missions get slower for the partner: every update the host sends grows with the mission (up to about 450 KB), so late alien turns play several seconds behind on the partner's screen (about 10 s at worst in 0.8.2 Run 3) | Known; tested (each update's round trip grew from about 0.5 s to 3-4 s). 0.8.3 logs each stage (no fix yet, Kc); the fix is chosen from that run |
+| Partner: can't select another soldier while one is still moving (the host can, as in single-player: Tab during a move); the camera snaps back to the moving soldier | Open (0.8.2 Run 2). The partner's move is played on the host and replayed back; while replaying, the partner's input is off |
+| Partner: the NO SOLDIERS ASSIGNED banner can show while the alien turn is still playing on its screen (its soldiers died in that turn) | Fix in 0.8.3 (the banner waits for the animations); untested |
+| Partner: NO SOLDIERS ASSIGNED doesn't show once one of its soldiers is bleeding out, even with every soldier taken away | Open (0.8.2). Not matched in the logs yet (they show the banner set in the bleeding-out turns); needs Kc's detail |
+| Partner: a mistyped address on JOIN needs a game restart (JOIN does nothing while the failed attempt is still open) | Fix in 0.8.3 (JOIN reads "CONNECTING (CANCEL)"; a click or 5 s after the last failed attempt frees it); untested |
+| Host's hack: the "take control of a random enemy" reward did nothing visible | Open (0.8.2 Run 2). Not yet known whether co-op causes it; needs the same reward in single-player for comparison |
 | On the partner's own hack, its screen may show a result its game didn't roll; the host's game decides the real result | Open (not in 0.8.1) |
 | Partner: the mouse wheel doesn't change floors (F and C work) | 0.8.1: no wheel input reached the game on a laptop touchpad; retest with a USB mouse in 0.8.2 |
-| Partner: can't pause while none of its soldiers can act | Fix in 0.8.2 (Escape opens the pause menu); untested |
-| Partner: can't hack objectives (no hack icon); the same soldier can when given to the host | 0.8.2 logs the cause (guess: map objects linked to the wrong states) and has a repair switch; untested |
-| Host's hack: the partner can still click its copy and see its own result (the host's game ignores it) | Fix in 0.8.2 (the watcher's copy takes no clicks); untested |
+| Partner: can't pause while none of its soldiers can act | Fixed in 0.8.2 (tested, Run 1 step 6) |
+| 0.8.2: the partner's game crashed when the host gave it soldiers back (native crash, right after its input turned on) | No crash with the re-link switch off (Run 2) or with it on and nothing to re-link (Run 3). Cause: the object re-link linking a tower to another tower's state. The re-link is removed in 0.8.3 |
+| Partner: can't hack objectives (no hack icon, also from range with a Gremlin or BIT); the same soldier can when given to the host | Open. 0.8.2 ruled out wrong object links (every object matched, Runs 2-3). The partner's copy of each objective reports 0 hack rewards, and the game needs more than 0. 0.8.3 logs the same check on both PCs (reward flags, BattleData's reward lists, can-hack per soldier); untested |
+| Host's hack: the partner can still click its copy and see its own result (the host's game ignores it) | Fixed in 0.8.2 (tested, Runs 2-3) |
 | Host: the camera doesn't pan to the partner's non-move actions | Fix in 0.8.1 (a short look-at); logged, not yet confirmed on screen |
 | Partner: all ability icons glow | Fixed in 0.8.1 (tested) |
 | Partner: soldiers sometimes stop short, then catch up at their next move | Not seen in 0.8.1 (tested) |
@@ -32,15 +39,15 @@ tracked; update after every test (checklists/, LOG.md).
 | Partner: a soldier bound by a Viper can still be selected (can't act) | Fixed in 0.8.1 (tested) |
 | Partner: a path preview follows the cursor while a soldier moves | Fixed in 0.8.1 (tested) |
 | The partner banner shows during a player's own last action | Fixed in 0.8.1 (tested) |
-| While connected, the game runs some multiplayer rules: flanking crits are 30% for everyone, the suppression penalty and Skulljack chance change, Shadowbind copies can't act on their first turn, enemies throwing from the fog aren't revealed | Fixes in 0.8.2, no class overrides (the shot breakdown shows extra "Flanking (co-op)" lines); untested |
+| While connected, the game runs some multiplayer rules: flanking crits are 30% for everyone, the suppression penalty and Skulljack chance change, Shadowbind copies can't act on their first turn, enemies throwing from the fog aren't revealed | Fixes in 0.8.2, no class overrides. Flanking: the fix runs (log). Shadowbind: the copy acted in its own turn (Run 2) without our fix's help, so 0.8.3 removes that fix. Fog reveal: runs (log), not confirmed on screen. Suppression, Skulljack: not yet tested |
 | While connected, quicksave and quickload are off (autosave works; the host can probably still save from the pause menu) | By design for co-op (quickload would drop the partner) |
 | While connected, a few enemy visuals that the game rebuilds after a load can be missing (an Archon's Blazing Pinions in the air, Codex and Avatar warning effects, a Chryssalid cocoon); the live warnings are unaffected | Known; no fix planned |
 | While connected, the pause menu doesn't pause | Fixed in 0.8.1 (tested) |
-| While connected, units created mid-mission lose some abilities | Fix in 0.8.1; untested (no reinforcements in the Skirmish runs) |
+| While connected, units created mid-mission lose some abilities | Fix in 0.8.1; tested once (0.8.2 Run 3: a reinforcement drop played on both screens and the new units worked) |
 | Partner: no detection warning tiles | Deferred (needs the Highlander's source in the build) |
 | Partner: crash when a civilian flees (noise alert) | Fixed in 0.8.0b (tested) |
 | Partner: no move range or cover icons | Fixed in 0.8.0 (tested) |
-| Partner: the camera doesn't follow moving soldiers | Fixed in 0.8.0 (class override, tested) |
+| Partner: the camera doesn't follow moving soldiers | Fixed in 0.8.0 (class override, tested). 0.8.2's watcher does the same with the override off (tested, Run 3), so the override could go |
 | Host: the partner banner shows while the host still controls a VIP | Fixed in 0.8.0 (tested) |
 | Host: crash when leaving a map after the partner left | Fixed in 0.8.0 (4 missions, no crash) |
 | After the partner leaves, the host controls every soldier | By design |

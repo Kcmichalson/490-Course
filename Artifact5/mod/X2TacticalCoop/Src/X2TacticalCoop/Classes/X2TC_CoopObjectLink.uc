@@ -1,9 +1,16 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopObjectLink
 //
-//  What it changes: on the co-op guest only, it checks (and, behind its switch, repairs)
-//  the link between the map's interactive objects (doors, workstations, objective
-//  computers) and their states in the history (plans/m4-plan.md, 0.8.2 item 3).
+//  What it changes: nothing (0.8.3: read-only). It checks the link between the map's
+//  interactive objects (doors, workstations, objective computers) and their states in the
+//  history (plans/m4-plan.md, 0.8.2 item 3), on the guest and (0.8.3) on the host.
+//  0.8.3 (0.8.2 Runs 2-3: every object matched, yet the partner still couldn't hack the
+//  objective, and its copy reported 0 hack rewards): the re-link repair and its switch are
+//  gone (in 0.8.2 Run 1 it re-linked a stacked tower to another tower's state and the
+//  partner crashed). Each must-hack object now also logs its reward flags, BattleData's
+//  reward lists, whether the tactical hack is done, and CanInteractHack for each squad
+//  soldier (XComGameState_InteractiveObject.uc L507-520, L861-886;
+//  XComGameState_BattleData.uc L175-178, L969), to compare the two PCs.
 //  0.8.1 Run 1: the guest's Specialist got no hack icon at an objective computer; the same
 //  soldier given to the host could hack it. A hack target counts only if the unit's
 //  interaction points include the object (X2Condition_Interactive.uc L28-34), and a point
@@ -16,11 +23,8 @@
 //    - Diagnostic (always, while a guest session runs): each actor's ObjectID against the
 //      history object whose ActorId matches it: MATCH or MISMATCH, with the matching
 //      object's IsEnabled / MustBeHacked / HasBeenHacked / hack reward count. One summary.
-//    - Repair (switch "Partner: re-link objects to the host's states"): for a mismatched
-//      actor, the actor's own public SetObjectIDFromState (L461-467; ObjectID is
-//      protectedwrite, L146) and History.SetVisualizer. SetObjectIDFromState asserts the
-//      old ID was 0 or equal; a guess that asserts don't stop the shipped game (they log).
-//  Called by X2TC_CoopReplayMgr at the start of each XCOM turn on the guest.
+//  Called at the start of each XCOM turn by X2TC_CoopReplayMgr on the guest and by
+//  X2TC_CoopSession's poll on the host.
 //
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\XComDestructibleActor.uc       (ObjectID L146, FindExistingState
@@ -29,7 +33,9 @@
 //    XComGame\Classes\XComGameState_Destructible.uc  (ActorId L17)
 //    XComGame\Classes\XComGameState_InteractiveObject.uc (IsEnabled L39, MustBeHacked L526,
 //                                                     HasBeenHacked L851, GetHackRewards L861)
-//    XComGame\Classes\XComGameStateHistory.uc        (SetVisualizer L454)
+//    XComGame\Classes\XComGameState_BattleData.uc    (TacticalHackRewards L175,
+//                                                     StrategyHackRewards L178,
+//                                                     TacticalHackCompleted L969)
 //    Engine\Classes\Actor.uc                         (GetActorId L2524)
 //---------------------------------------------------------------------------------------
 
@@ -37,8 +43,39 @@ class X2TC_CoopObjectLink extends Object;
 
 const MAX_DETAIL_LINES = 40;
 
+// 0.8.3: "840:r0 tac strat can 24n 27y": rewards, the object's reward flags, and
+// CanInteractHack for each living squad soldier.
+static function string HackText(XComGameState_InteractiveObject ObjectState, array<XComGameState_Unit> Squad)
+{
+	local string Text;
+	local int i;
+
+	Text = ObjectState.ObjectID $ ":r" $ ObjectState.GetHackRewards('').Length;
+	if (ObjectState.bOffersTacticalHackRewards)
+	{
+		Text @= "tac";
+	}
+	if (ObjectState.bOffersStrategyHackRewards)
+	{
+		Text @= "strat";
+	}
+	if (ObjectState.HasBeenHacked())
+	{
+		Text @= "hacked";
+	}
+	Text @= "can";
+	for (i = 0; i < Squad.Length; i++)
+	{
+		if (Squad[i] != none && Squad[i].IsAlive())
+		{
+			Text @= Squad[i].ObjectID $ (ObjectState.CanInteractHack(Squad[i]) ? "y" : "n");
+		}
+	}
+	return Text;
+}
+
 // bDetail: log one line per mismatched or hackable object (the first check); otherwise
-// only the summary and repairs.
+// only the summary.
 static function CheckObjects(string Why, bool bDetail)
 {
 	local WorldInfo World;
@@ -46,11 +83,13 @@ static function CheckObjects(string Why, bool bDetail)
 	local XComInteractiveLevelActor LevelActor;
 	local XComGameState_InteractiveObject ObjectState, MatchState;
 	local XComGameState_BaseObject ByIDState;
+	local XComGameState_BattleData BattleData;
 	local array<XComGameState_InteractiveObject> States;
+	local array<XComGameState_Unit> Squad;
 	local ActorIdentifier ActorIdent;
-	local bool bRepair, bMismatch;
-	local int i, Total, Mismatched, NoState, Hackable, Repaired, Lines;
-	local string Text;
+	local bool bMismatch;
+	local int i, Total, Mismatched, NoState, Hackable, Lines;
+	local string Text, HackList;
 
 	World = class'WorldInfo'.static.GetWorldInfo();
 	History = `XCOMHISTORY;
@@ -58,7 +97,7 @@ static function CheckObjects(string Why, bool bDetail)
 	{
 		return;
 	}
-	bRepair = class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_RELINK_OBJECTS);
+	class'X2TC_CoopOwnership'.static.GetSquad(Squad);
 	foreach History.IterateByClassType(class'XComGameState_InteractiveObject', ObjectState)
 	{
 		States.AddItem(ObjectState);
@@ -102,6 +141,7 @@ static function CheckObjects(string Why, bool bDetail)
 		if (MatchState.MustBeHacked())
 		{
 			Hackable++;
+			HackList $= (HackList != "" ? "; " : "") $ HackText(MatchState, Squad);
 		}
 		if (bDetail && (bMismatch || MatchState.MustBeHacked()) && Lines < MAX_DETAIL_LINES)
 		{
@@ -118,17 +158,13 @@ static function CheckObjects(string Why, bool bDetail)
 				@ "rewards=" $ MatchState.GetHackRewards('').Length;
 			`log("Coop objects:" @ Text, , 'X2TC');
 		}
-		if (bMismatch && bRepair)
-		{
-			LevelActor.SetObjectIDFromState(MatchState);
-			History.SetVisualizer(MatchState.ObjectID, LevelActor);
-			Repaired++;
-			if (Repaired <= MAX_DETAIL_LINES)
-			{
-				`log("Coop objects: re-linked" @ LevelActor.Name @ "to state" @ MatchState.ObjectID @ "(now" @ LevelActor.ObjectID $ ")", , 'X2TC');
-			}
-		}
 	}
 	`log("Coop objects (" $ Why $ "):" @ Total @ "interactive actors," @ Mismatched @ "mismatched," @ NoState @ "with no state,"
-		@ Hackable @ "must be hacked;" @ Repaired @ "re-linked (repair switch" @ (bRepair ? "on" : "off") $ ")", , 'X2TC');
+		@ Hackable @ "must be hacked", , 'X2TC');
+	// 0.8.3: the hack check for the must-hack objects, the same on both PCs.
+	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
+	`log("Coop objects hack (" $ Why $ "): BattleData rewards tac" @ (BattleData != none ? string(BattleData.TacticalHackRewards.Length) : "?")
+		@ "strat" @ (BattleData != none ? string(BattleData.StrategyHackRewards.Length) : "?")
+		@ "tactical hack done=" $ class'XComGameState_BattleData'.static.TacticalHackCompleted()
+		$ "; objects:" @ (HackList != "" ? HackList : "none"), , 'X2TC');
 }

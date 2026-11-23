@@ -66,6 +66,12 @@
 //  co-op session once the guest has the end frame. A host that loses the guest mid-
 //  mission plays on; a guest that loses the host is told and returns to the main menu.
 //
+//  0.8.3 (plans/m4-plan.md, "0.8.3"): per-update lag lines through X2TC_CoopLagLog
+//  (logging only: an info command after each partial history, the partner's time pings);
+//  the objects check on the host too; NO SOLDIERS ASSIGNED waits for the animations; a
+//  JOIN that never connects closes itself 5 s after the last attempt, and CONNECTING
+//  (CANCEL) on the main menu cancels it (CancelGuestConnect).
+//
 //  One session per game: GetSession() looks it up by a fixed name in the transient
 //  package and creates it there the first time, the pattern the Highlander uses for its
 //  dependency objects (X2WOTCCH_ModDependencies.uc L102-110). A runtime default value
@@ -295,6 +301,10 @@ var bool bPartnerMayEdit;      // the guest may change owners and settings (defa
 var bool bNewFramesSync;       // Stage 8.1: frames go one by one (SendGameState), not as partial histories
 var int NewFramesReceived;     // guest (8.1): frames received with OnReceiveGameState
 var int NewFramesMisplaced;    // guest (8.1): of those, not found at their index in the history
+// 0.8.3.
+var X2TC_CoopLagLog Lag;       // both: per-update timing lines (logging only, Kc)
+var ETeam HostLastTurnTeam;    // host: the turn team at the last poll (objects check at XCOM's turn)
+var int HostObjectChecks;      // host: objects checks so far
 var array<int> PendingOwnerUnitIDs; // host: owner changes waiting for an idle ruleset
 var array<int> PendingOwnerValues;
 var int LastOwnActionUnitID;   // guest: the unit of its last order
@@ -1267,7 +1277,12 @@ function UpdateBanner()
 		{
 			if (!Follower.HasControllableSoldier())
 			{
-				Wanted = class'X2TC_CoopTurnUI'.const.NO_SOLDIERS_TEXT;
+				// 0.8.3 (0.8.2 Run 2: shown while the alien turn still played on this
+				// screen): only once the animations have finished.
+				if (!LastActionStillPlaying())
+				{
+					Wanted = class'X2TC_CoopTurnUI'.const.NO_SOLDIERS_TEXT;
+				}
 			}
 			else if (OwnershipOn() && !class'X2TC_CoopOwnership'.static.PlayerHasActions(class'X2TC_CoopOwnership'.const.OWNER_GUEST)
 				&& !LastActionStillPlaying())
@@ -1685,6 +1700,17 @@ function Poll()
 	if (Role == eCoopRole_Host && bGuestFollowing)
 	{
 		HostScanTurns();
+		// 0.8.3: the objects check on the host too, at each XCOM turn (objective hacks:
+		// compare with the partner's lines).
+		if (CurrentTurnTeam() != HostLastTurnTeam)
+		{
+			HostLastTurnTeam = CurrentTurnTeam();
+			if (HostLastTurnTeam == eTeam_XCom)
+			{
+				HostObjectChecks++;
+				class'X2TC_CoopObjectLink'.static.CheckObjects("host, XCOM turn" @ HostObjectChecks, HostObjectChecks == 1);
+			}
+		}
 		if (bMovePending)
 		{
 			TryApplyGuestMove();
@@ -1729,6 +1755,15 @@ function Poll()
 					`log("Coop guest: last connection attempt sent; no more retries", , 'X2TC');
 				}
 			}
+			// 0.8.3 (0.8.2 Run 2: a mistyped address needed a restart): give up a while
+			// after the last attempt, so JOIN works again.
+			else if (ConnectAttempts >= CONNECT_MAX_ATTEMPTS && !bConnectedLogged
+				&& Seconds - LastAttemptSecond >= CONNECT_RETRY_SECONDS)
+			{
+				CancelGuestConnect("no answer after" @ ConnectAttempts @ "attempts");
+				ShowGuestMessage("CO-OP: COULDN'T CONNECT", "No answer from the host after" @ CONNECT_MAX_ATTEMPTS @ "tries. Check the address and that the host clicked CO-OP: HOST, then click CO-OP: JOIN again.");
+				return;
+			}
 		}
 		else
 		{
@@ -1744,7 +1779,52 @@ function Poll()
 		}
 	}
 
+	// 0.8.3: the partner's time pings (clock offset for the lag lines).
+	if (Role == eCoopRole_Guest && bFollowerInstalled && NumConnections > 0)
+	{
+		GetLag().GuestMaybeTimePing(Seconds);
+	}
+
 	Seconds++;
+}
+
+// 0.8.3: the lag lines' object (X2TC_CoopLagLog), made on first use.
+function X2TC_CoopLagLog GetLag()
+{
+	if (Lag == none)
+	{
+		Lag = new class'X2TC_CoopLagLog';
+	}
+	return Lag;
+}
+
+// 0.8.3: from the visual watcher's tick; the partner samples its screen.
+function LagTick()
+{
+	if (Role == eCoopRole_Guest && bFollowerInstalled)
+	{
+		GetLag().GuestTick();
+	}
+}
+
+// 0.8.3: the partner is still on the main menu with a JOIN started (connecting, or
+// connected but not yet loading the mission).
+function bool IsGuestConnecting()
+{
+	return Role == eCoopRole_Guest && !bLoadingMission && !bFollowerInstalled;
+}
+
+// 0.8.3 (Kc: "CONNECTING (CANCEL)"): drop a JOIN that hasn't reached the mission, so
+// JOIN works again without a restart.
+function CancelGuestConnect(string Why)
+{
+	`log("Coop guest: connecting cancelled (" $ Why $ "); attempts" @ ConnectAttempts $ ", connected=" $ bConnectedLogged, , 'X2TC');
+	`XCOMNETMANAGER.Disconnect();
+	ReleaseNetworkData("connect cancelled", false);
+	DestroySteamGame("connect cancelled");
+	ResetSession();
+	ConnectAttempts = 0;
+	class'X2TC_CoopListener'.static.SetJoinLabel(false);
 }
 
 function SendPing(XComGameStateNetworkManager NetworkMgr)
@@ -1768,6 +1848,32 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 	local array<byte> Params, Reply;
 	local int Number;
 	local string OtherVersion, OtherContent, Reason;
+
+	// 0.8.3: the lag lines' commands (X2TC_CoopLagLog).
+	if (Command == class'X2TC_CoopLagLog'.const.CMD_TIME_PING)
+	{
+		if (Role == eCoopRole_Host)
+		{
+			GetLag().HostAnswerTimePing(RawParams);
+		}
+		return;
+	}
+	if (Command == class'X2TC_CoopLagLog'.const.CMD_TIME_PONG)
+	{
+		if (Role == eCoopRole_Guest)
+		{
+			GetLag().GuestOnTimePong(RawParams);
+		}
+		return;
+	}
+	if (Command == class'X2TC_CoopLagLog'.const.CMD_UPDATE_INFO)
+	{
+		if (Role == eCoopRole_Guest)
+		{
+			GetLag().GuestUpdateInfo(RawParams);
+		}
+		return;
+	}
 
 	if (Command == CMD_GUEST_MOVE)
 	{
@@ -1925,6 +2031,10 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 			}
 			`log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "acknowledged after" @ (Seconds - PartialSentSecond) $ "s; guest frames=" $ Number @ "sent frames=" $ PartialSentFrames @ "match=" $ (Number == PartialSentFrames), , 'X2TC');
 			bPartialInFlight = false;
+			if (!bNewFramesSync)
+			{
+				GetLag().HostAcked(Number); // 0.8.3
+			}
 		}
 		return;
 	}
@@ -2532,6 +2642,7 @@ function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager 
 	{
 		return;
 	}
+	GetLag().GuestHistoryArrived(Frames); // 0.8.3: first, so the time is the arrival's
 	// 0.8.0b: before the follower replays these frames.
 	ScrubReplayVisuals(Max(PreviousFrames, 0), Frames - 1);
 	LogInterruptFrames("guest, as received", Max(PreviousFrames, 0), Frames - 1, 0); // 0.8.1
@@ -2707,8 +2818,11 @@ function OnReceiveGameState(XComGameState GameState)
 function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 {
 	local X2TacticalGameRuleset Rules;
-	local int Frames, BytesBefore, BunchesBefore, Bytes, Bunches, i;
+	local int Frames, BytesBefore, BunchesBefore, Bytes, Bunches, i, StartMs;
+	local array<byte> InfoParams;
 
+	// 0.8.3: when new frames first wait to be sent (the lag line's "wait").
+	GetLag().HostNotePending(`XCOMHISTORY.GetNumGameStates() > LastSentFrames);
 	if (bPartialInFlight)
 	{
 		if (Seconds - PartialSentSecond >= PARTIAL_ACK_TIMEOUT_SECONDS)
@@ -2743,6 +2857,7 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 	}
 	else
 	{
+		StartMs = GetLag().NowMs(); // 0.8.3: the send call is timed ("build")
 		NetworkMgr.SendPartialHistory(`XCOMHISTORY, `XEVENTMGR);
 	}
 	CountOutData(NetworkMgr, Bytes, Bunches);
@@ -2751,6 +2866,12 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 	bPartialInFlight = true;
 	PartialSentSecond = Seconds;
 	PartialSentFrames = Frames;
+	if (!bNewFramesSync)
+	{
+		// 0.8.3: the update's timing, right behind it (logging only).
+		GetLag().HostSent(PartialSends, Frames, Bytes - BytesBefore, StartMs, CurrentTurnTeam() != eTeam_XCom, InfoParams);
+		NetworkMgr.SendRemoteCommand(class'X2TC_CoopLagLog'.const.CMD_UPDATE_INFO, InfoParams);
+	}
 	`log("Coop host:" @ (bNewFramesSync ? "new frames" : "partial history") @ PartialSends @ "sent, frames" @ LastSentFrames @ "->" @ Frames @ "(+" $ (Frames - LastSentFrames) $ "), during" @ CurrentTurnText() $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
 	LogInterruptFrames("host, as sent", LastSentFrames, Frames - 1, 0); // 0.8.1
 	LastSentFrames = Frames;
@@ -3965,6 +4086,10 @@ function ResetSession()
 	ClearHeldHack();
 	class'X2TC_CoopSPRules'.static.EndSession();
 	LastEngineMultiplayer = -1;
+	// 0.8.3.
+	Lag = none;
+	HostLastTurnTeam = eTeam_None;
+	HostObjectChecks = 0;
 }
 
 defaultproperties

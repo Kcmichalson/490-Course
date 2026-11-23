@@ -973,6 +973,89 @@ overlap icons other mods add.
    - Covert Infiltration in the release-candidate tests?
    - LWOTC out of 1.0?
 
+## 0.8.3 (Kc, 2026-11-22, after 0.8.2 Runs 2-3)
+**Kc:** "Change of plan for the lag: no lag changes in 0.8.3, logging
+only. Don't add zip catch-up or any other lag fix yet." Log per update:
+- the host's build time and size;
+- sent-to-received time;
+- the partner's load time;
+- the animation backlog;
+- the acknowledgment round trip;
+- how far behind the partner's screen is in seconds (using the clock
+  offset from the pings).
+
+Also a summary line at the end of each alien turn, with the lines kept
+compact. "The other 0.8.3 items stay as planned (objective hack,
+CONNECTING (CANCEL), the NO SOLDIERS banner timing, removing the re-link
+and Shadowbind code)." The checklist has one longer mission; after the
+run, say which stage dominates and which lag option it points to.
+
+**Scope note (my reading; Kc to confirm):** Kc's list doesn't name C
+(items 9-13: release UI, verbose log, join flow, the Co-op HUD button), so
+this build leaves C out; it can follow as 0.8.4. The camera override stays
+(not on Kc's list).
+
+### Design
+1. **Lag logging** (new class `X2TC_CoopLagLog`, one purpose: timing lines).
+   - Clock: the system clock in ms of the day (`Object.GetSystemTime`,
+     Core `Object.uc` L2304), so the host can time its own native send
+     call; it wraps at midnight (handled).
+   - Offset: the partner sends a small time ping (its clock), and the
+     host answers with its own. The offset comes from the sample with the
+     shortest round trip among the last 10. Pings go once a second for
+     the first 5, then every 20 s.
+   - **Host line per update**, logged at its acknowledgment:
+     - `wait`: from new frames appearing to the send (the time spent
+       waiting for the previous acknowledgment);
+     - `build`: the native `SendPartialHistory` call;
+     - size and frames;
+     - `rtt`: from the end of the send to the acknowledgment.
+   - The host follows each update with a small info command: number, frame
+     count, frames-ready time, send-end time, build time, size, alien turn
+     or not.
+   - **Partner line per update:**
+     - `arrive`: host send end to the partner's history handler, in host
+       time;
+     - `load`: the handler time minus the partner's last tick start (the
+       native load runs in that tick; ±1 frame);
+     - `transit` = arrive − load;
+     - `backlog`: frames received but not yet shown;
+     - `behind`: how old, in host time, the oldest frame still playing on
+       the partner's screen is.
+   - "Still playing" = the lowest history index among unfinished actions
+     in the visualization tree (`X2Action.CurrentHistoryIndex` L34,
+     `bCompleted` L55; `GetNodesOfType` L459). Sampled 4 times a second
+     from the visual watcher's tick.
+   - **Summary per alien turn** on both PCs:
+     - counts; size total;
+     - average and maximum of each stage;
+     - the maximum backlog and behind.
+   - Logged on the first XCOM update after alien ones (on the partner,
+     once its screen has caught up, or at the next alien turn).
+   - The existing per-update lines stay; the new ones are one line per
+     update on each PC.
+2. **Objective hack diagnostic** (`X2TC_CoopObjectLink`).
+   - The host runs the same check at each XCOM turn.
+   - Each must-hack object adds:
+     - its tactical and strategy reward flags;
+     - BattleData's tactical and strategy reward counts;
+     - whether the tactical hack is done;
+     - `CanInteractHack` for each squad soldier.
+3. **CONNECTING (CANCEL)** (`X2TC_CoopListener`, `X2TC_CoopSession`).
+   - While a JOIN BY IP is connecting, the main-menu button reads
+     "CO-OP: CONNECTING (CANCEL)"; a click cancels it.
+   - 5 s after the 6th failed attempt the session closes by itself with a
+     message ("Couldn't reach the host...").
+   - Both reset the session so JOIN works again.
+4. **NO SOLDIERS banner timing** (`X2TC_CoopSession.UpdateBanner`): shown
+   only once the partner's animations have finished. Same switch as the
+   out-of-moves banner ("Banner waits for the last action").
+5. **Removals.**
+   - The re-link repair and its switch (the read-only check stays).
+   - `X2TC_CoopShadowbindActions`, its switch and its template hook.
+   - Switch numbers after them shift; 23 switches in all.
+6. Version 0.8.3. Checklist `checklists/m4-083.md` with one longer mission.
+
 ## Code audit before 1.0 (plan only; Kc: "that will wait for the end")
 
 Kc (2026-11-21): find "every single file you've written, it's purpose,

@@ -85,7 +85,10 @@ CLAUDE.md describes.
   Gatecrasher campaign mission returned the right results.** Open: the
   host's hack hangs the laptop, the bound soldier is still selectable,
   path preview during moves, rockets in co-op. 0.8.1 next. Release drafts
-  in release/. 1.0 by Dec 6
+  in release/. 1.0 by Dec 6. **2026-11-22:** 0.8.2 tested (Runs 1-3; the
+  re-link crash found and avoided); 0.8.3 written, not built (lag logging,
+  objective-hack logging, JOIN cancel, banner timing, re-link and Shadowbind
+  code removed); checklists/m4-083.md
 - [ ] M5: Campaign hookup
 - [ ] M6: Playtest, fixes, release
 
@@ -5155,3 +5158,324 @@ followed until the partner joined.
       `X2TacticalGameRuleset`.
     - Each edit checked by the tool's success result.
     - Nothing built or run.
+  - **Prompt:** "Give me the test steps"
+  - **Provided:** checklists/m4-082.md's steps in chat, with the
+    release checklist's "Save without the mod" test as an optional last
+    section (same 0.8.2 build). No other file changed.
+  - **Misreads / rule breaks:** I read "the test steps" as the 0.8.2 run
+    plus the save test; Kc may have meant only one of them.
+  - **How It Was Verified:** the steps were copied from
+    checklists/m4-082.md and release/release-checklist.md as written this
+    session.
+
+### 2026-11-22 — Session 8 (continued): 0.8.2 Run 1 read (crash; no code)
+- **Build:** PC buildid 8270065 (appmanifest_268500.acf). The laptop's
+  isn't in its log; Kc said earlier to assume it's the same. v0.8.2 on
+  both. Logs: `local\m4-logs\m4-082-pc-crash.log`,
+  `m4-082-laptop-crash.log`.
+- **Passed: step 6, pause with no soldiers** (Kc: "True").
+  - Laptop log L357: `Escape while the partner's input is off (input
+    state InReplayPlayback player state XGPlayer game blocks pause=False
+    input blocked=False fix=True)`, then the pause menu opened and paused
+    the laptop.
+  - So the game's pause block was *not* the cause (the guess was wrong).
+    The stock Escape just isn't reached in that input state; our handler
+    opens the menu either way.
+- **Failure: the laptop crashed** when the PC gave it soldiers back (end
+  of step 6, before step 7).
+  - It was a native crash ("Crash Detected ... Minidump", laptop L369),
+    with no script error before it.
+  - It came 20 ms after the laptop's first input-on, and after the line
+    `hack abilities of unit 21: IntrusionProtocol=AA_NoTargets ...`
+    (L368), which builds the unit's ability cache.
+  - The PC was quit afterwards (`appRequestExit`, PC L413); it didn't
+    crash.
+- **Main suspect (guess): the new object re-link.**
+  - The re-link switch was on at JOIN (`relink=True`, laptop L317).
+    Checklist step 4 had it off for this part.
+  - At the first XCOM turn it found 1 "mismatch" and re-linked actor 819
+    to state 827 (L350-351). The very next line shows *another* actor
+    already holding 827 (L352). So two actors now claim state 827, and
+    state 819 has none.
+  - The laptop's map load has three Advent towers at the same tiles. 16
+    redscreens: `AdventTower_1x1_192`, `_193` and `_194`, all with an
+    actor named `XComInteractiveLevelActor_0`. The PC's log has none of
+    them.
+  - My search falls back to "same name and location" when the exact
+    ActorId doesn't match. With stacked identical towers, that picks the
+    wrong one. The stock search avoids this by skipping states that
+    already have another visualizer; mine didn't.
+  - Native code that walks interaction points for the hack abilities is
+    a likely place to trip over that (guess).
+- **Also seen:**
+  - 10 of the 11 interactive actors were MATCH. So on this map the "IDs
+    don't match" guess for the objective hack doesn't hold; the one
+    "mismatch" was a false one.
+  - Every must-hack object showed `rewards=0` (my diagnostic asks for the
+    rewards with an empty ability name). It's not yet known whether that
+    matters (`CanInteractHack` needs rewards > 0, L520).
+- **Next (proposed; Kc decides):**
+  1. Rerun from step 4 with the re-link switch **off** on the laptop (no
+     rebuild). If there's no crash, the re-link is the cause.
+  2. A 0.8.2b fix in `X2TC_CoopObjectLink` only:
+     - treat the actor's current state as a match when its name and
+       location fit;
+     - skip any state another actor already holds;
+     - skip ambiguous matches (two candidates) and log them;
+     - log the towers that sit on the same tile.
+- **Session 8 prompt log:**
+  - **Prompt:** "6. True / 7. After giving the laptop soldiers, the game
+    crashed. Logs attached."
+  - **Provided:** the log reading above, the suspect, a retest without a
+    rebuild, and a proposed 0.8.2b fix; known-issues updated (pause
+    fixed, crash open).
+  - **Misreads / rule breaks:**
+    - My 0.8.2 code caused (probably) a crash. The re-link trusted a
+      name-and-location fallback that the stock search guards against.
+    - My pause-cause guess was wrong; the log shows that.
+  - **How It Was Verified:**
+    - Both logs read: X2TC lines, crash lines, redscreens.
+    - The build ID read from appmanifest_268500.acf.
+    - The suspect is a guess until the rerun with the switch off.
+
+### 2026-11-22 — Session 8 (continued): 0.8.2 Runs 2-3 read (no code)
+- **Build:** PC buildid 8270065 (appmanifest_268500.acf); laptop assumed
+  the same. v0.8.2 on both. Logs: `local\m4-logs\m4-082-pc-2.log`,
+  `m4-082-laptop-2.log` (13:10-13:35, Skirmish
+  `Plot_SLM_Guerilla_MdObj_RetainWall`), `m4-082-pc-3.log`,
+  `m4-082-laptop-3.log` (18:43-19:09, `Plot_TWN_Guerilla_LgObj_Ravine`,
+  hosted at turn 2). The game's Logs folder holds nothing newer.
+- **Crash: gone.** Run 2 had the laptop's re-link switch off (laptop L328)
+  and didn't crash. Run 3 had it on, with 0 mismatches on every turn, so
+  it re-linked nothing, and didn't crash. This fits the Run 1 cause (the
+  re-link of a stacked tower).
+- **Passed (tested):**
+  - Pause on the laptop: works; Save and Load are hidden (Kc: works great).
+  - Host's hack: the laptop couldn't interrupt it (Run 2 L2032; Run 3
+    L980-984: copy locked, 3 clicks caught by the blocker).
+  - Reinforcements (Run 3): the drop's cutscene played on both, and Kc:
+    "The new soldiers work as expected."
+  - Camera, step 19 (override off, watcher on): both screens followed
+    moves. Run 3 logs `follow camera added` 18 times on the PC and 17 on
+    the laptop, with the override's `used=False`. That's the result we
+    wanted: the watcher can replace the class override.
+  - Camera, step 20 (both off): the laptop didn't follow; the PC didn't
+    follow and snapped to its soldier at the end of its own moves (the
+    0.8.0 problem, as expected).
+  - Shadowbind, step 17: Kc saw the copy act in the alien turn right after
+    it was made. But our effect logged `its group acting now=False; action
+    points now 0` for all three copies (PC-2 L3409, L7754; PC-3 L4696), so
+    it changed nothing. Guess: the game itself gives the copy's new group
+    its actions when that group's turn comes, and B6 isn't needed.
+  - Flanking: `Flanking (co-op) 20 crit` lines in both runs (the fix
+    runs). No on-screen check reported.
+- **Not tested:** suppression (no `Suppression (co-op)` line), fog reveal
+  on screen (the watcher logged 22 + 12 reveals), SAFE MODE (step 21), the
+  campaign and USB-mouse section F, the wheel.
+- **Skulljack (step 15): not a co-op problem.** Kc tried it on a Spectre
+  from the PC. From source, `X2Condition_StasisLanceTarget.uc` L36-88 lets
+  Skulljack itself through only for an ADVENT Captain or Codex during the
+  story objectives. Other targets need hack rewards and use Skullmine
+  (the same item, `X2Item_DefaultUtilityItems.uc` L486-487). Guess: a
+  Spectre has no hack rewards. My checklist sent Kc to Spectres for this
+  step; corrected.
+- **Objective hack: still fails; re-link ruled out.**
+  - Kc: the laptop can't hack the objective, standing next to it or from
+    range (Specialist, SPARK). Only the PC can, and the laptop can't
+    interfere.
+  - Every interactive object matched in both runs (11 in Run 2, 21 in
+    Run 3, repair on in Run 3), so wrong links aren't the cause.
+  - Each must-hack object's state on the laptop reports `rewards=0`
+    (laptop-2 L706-707, laptop-3 at L627). The game's
+    `CanInteractHack` (`XComGameState_InteractiveObject.uc` L507-520)
+    needs more than 0, and the rewards come from a private list set at
+    mission start (L48, `XComTacticalMissionManager.uc` L900, L1445) or
+    from BattleData when the object offers tactical or strategy rewards
+    (L861-886).
+  - The host hacked the same object (840, Run 2; 77, Run 3), so its count
+    must be above 0. The host's count isn't logged. Next: log the same
+    line on the host and the two reward flags and BattleData lists on
+    both.
+- **Mind-control reward (host's hack, Run 2 at PC 745.35):** Kc chose
+  "take control of a random enemy" and nothing happened. The log only
+  shows the stock hack-reward call stack; the squad lines list soldiers
+  only, so a controlled enemy wouldn't show. Not known whether co-op
+  causes it. Next: the same reward in single-player.
+- **Partner falls behind on late alien turns (Kc: about 10 s).** Each
+  update's acknowledgment took 0.5-1 s early and 2-4 s late (Run 3 max
+  4 s), with updates at 390-450 KB (the last updates in PC-2 and PC-3).
+  Turn starts reached the laptop 2-5 s after the PC (clock offset from
+  turn times; a guess within about 1 s). Several updates queue up during
+  an alien turn, so 10 s mid-turn fits (guess). This is the known
+  "updates grow" issue, now visible.
+- **Partner can't Tab to another soldier during its own move.** The log
+  shows `input off (state InReplayPlayback ...)` while its move replays
+  from the host; the camera belongs to the replay. Stock single-player
+  (and the host) let you Tab mid-move. Not a quick fix.
+- **NO SOLDIERS ASSIGNED banner:**
+  - Mid-alien-turn: in the logs it's always set after `XCOM input phase
+    begins`. Guess: the history reaches XCOM's turn while the alien
+    turn's visuals still play (the lag above), so it shows over them.
+    Fix idea: wait until the visuals are idle, as the out-of-moves banner
+    already does.
+  - Bleeding out: in Run 2 the laptop's last soldier (24) was bleeding
+    out from turn 6, and the banner was set at each XCOM turn start
+    (laptop-2 L2541-2610, L2748). Run 3's laptop always kept unit 54. So I
+    can't match Kc's report yet; need which mission and turn.
+- **Wrong IP needs a restart.** Run 2 near the end: JOIN, attempts 1 and
+  2, then JOIN clicks (L3229, L3324) did nothing. From code: JOIN is
+  ignored while a session exists (`X2TC_CoopListener.uc` L371-375), and a
+  failed guest session never closes after its 6th attempt
+  (`X2TC_CoopSession.uc` L1719-1731). Kc's fix idea: "CONNECTING
+  (CANCEL)".
+- **Proposed for 0.8.3 (Kc decides; nothing written):**
+  1. Remove the object re-link repair and its switch (fixed nothing, caused
+     the Run 1 crash); keep the read-only summary line.
+  2. Objective hack: log rewards, flags and BattleData lists on both PCs.
+  3. NO SOLDIERS banner waits for the visuals to finish.
+  4. JOIN: "CONNECTING (CANCEL)", and the session closes after the last
+     failed attempt.
+  5. Camera: drop the class override and keep the watcher (after one more
+     run with the override off). The Workshop page's Compatibility note
+     would go.
+  6. Shadowbind: remove B6 (it never acted).
+  7. Kc's call: pull part of the update-size work forward (lag), and
+     whether to try mid-move Tab for the partner before 1.0.
+- **Session 8 prompt log:**
+  - **Prompt:** [Kc's Runs 2-3 report: crash gone with the fix off; pause
+    good; partner can't Tab mid-move; late alien turns ~10 s behind; host
+    hack can't be interrupted; mind-control reward did nothing; NO
+    SOLDIERS banner mid-alien-turn and not with a bleeding-out soldier;
+    Shadowbind copy acts right after it's made; Skulljack unusable on a
+    Spectre; mistyped IP needs a restart; objective still unhackable;
+    reinforcements fine; camera results with each switch off; screenshot
+    of the hosting HUD; "tell me if anything is inconsistent".]
+  - **Provided:** the reading above; known-issues updated (crash, objective,
+    hack clicks, rules, camera, reinforcements, six new rows); checklist
+    step 4 corrected.
+  - **Misreads / rule breaks:**
+    - Checklist step 4 pointed Skulljack at Spectres, which the game
+      never allows. Corrected.
+    - My guess that wrong object links blocked the objective hack was
+      wrong (refuted by Runs 2-3).
+    - B6 (Shadowbind) did nothing in practice.
+    - I tried to read a saved tool output in a folder outside Artifact5/;
+      it was denied. I read the log itself in smaller pieces instead (the
+      log is in local/, which I may read).
+  - **How It Was Verified:**
+    - All four logs read (X2TC lines, turn times, ack delays, banner and
+      object lines); build ID from appmanifest_268500.acf.
+    - Skulljack, hack-reward and JOIN statements from source with line
+      numbers; the lag and banner explanations are labelled guesses.
+    - Files: release/known-issues.md, checklists/m4-082.md, LOG.md (Edit
+      tool).
+  - **Prompt:** "Outline the current issues, and a list of all resolved
+    issues so far that I found through testing. I will then decide where to
+    go from here"
+  - **Provided:** in chat, the open issues as of 0.8.2 (gameplay, untested,
+    by design, cleanup candidates) and every issue found in testing and
+    resolved, M2 through 0.8.2, with the version that fixed it. No files
+    changed except this entry.
+  - **Misreads / rule breaks:** none known.
+  - **How It Was Verified:** compiled from release/known-issues.md and
+    LOG.md (Milestone status, the Stage 6 and 7 run entries, the 0.8.x run
+    entries); nothing new tested.
+  - **Prompt:** "2. Lag: before coding, propose 4-6 possible solutions,
+    briefly. [...] Include at least one cheap option [...] and say why the
+    first "new frames" attempt failed and whether any option avoids that.
+    Recommend one for 0.8.3 and one for after 1.0. [...] then wait for my
+    choice"
+  - **Provided:** in chat, a five-option table (send without waiting for
+    the acknowledgment; combine sends; zip mode on the partner while it's
+    behind; new frames, second try; send actions instead of states), why
+    8.1 failed, and recommendations (0.8.3: zip catch-up plus timing lines;
+    after 1.0: new frames, second try). No code; waiting for Kc's choice.
+  - **Misreads / rule breaks:** none known.
+  - **How It Was Verified:** read `HostMaybeSendPartial` and
+    `OnReceiveGameState` (X2TC_CoopSession.uc L2659-2757), the 8.1 run
+    result (plans/m3-plan.md L1366-1370), research/history-sync.md and the
+    Stage 4 size note (LOG.md, 2026-11-14); zip mode from SDK
+    `X2Action.uc` L1175-1178, `XComOnlineProfileSettingsDataBlob.uc` L141,
+    `X2TacticalGameRuleset.uc` L79-82. Effects in the table are estimates.
+
+### 2026-11-22 — Session 8 (continued): 0.8.3 written (not built or tested)
+- **Planned:** Kc's message (plans/m4-plan.md, "0.8.3"):
+  - lag logging only, with no lag fix;
+  - the objective-hack logging;
+  - CONNECTING (CANCEL);
+  - the NO SOLDIERS banner timing;
+  - removing the re-link and Shadowbind code;
+  - a checklist with one longer mission.
+- **Scope, my reading (Kc to confirm):** C (items 9-13: release UI, verbose
+  log, join flow, the Co-op HUD button) isn't in Kc's list, so it isn't in
+  this build; the camera override stays.
+- **Changed:**
+  - New `X2TC_CoopLagLog`: one compact line per update on each PC and a
+    summary per alien turn.
+    - Host: wait, build, size, rtt.
+    - Partner: build, arrive, load, transit, backlog, behind.
+    - The clock offset comes from time pings.
+    - Three new remote commands: update info, time ping, time pong.
+  - `X2TC_CoopSession`:
+    - lag hooks in the send, acknowledgment, receive, poll and remote
+      commands;
+    - the host's objects check at each XCOM turn;
+    - NO SOLDIERS waits for the animations (`LastActionStillPlaying`);
+    - `IsGuestConnecting` and `CancelGuestConnect`; the poll gives up 5 s
+      after the 6th attempt and shows "CO-OP: COULDN'T CONNECT".
+  - `X2TC_CoopListener`: the JOIN label (`JoinLabel`, `SetJoinLabel`), and
+    a click while connecting cancels.
+  - `X2TC_CoopVisualWatcher`: its tick calls `LagTick`.
+  - `X2TC_CoopObjectLink`:
+    - the repair is removed (read-only now);
+    - a per-turn `Coop objects hack` line: BattleData's reward counts,
+      whether the tactical hack is done, and per object its rewards,
+      flags and `CanInteractHack` for each living squad soldier.
+  - `X2TC_CoopFixes`: re-link and Shadowbind switches removed, the rest
+    renumbered (23).
+  - `X2DownloadableContentInfo`: version 0.8.3, no Shadowbind hook.
+  - Deleted `X2TC_CoopShadowbindActions.uc`, which I wrote earlier in this
+    session for 0.8.2.
+  - checklists/m4-083.md; plans/m4-plan.md "0.8.3";
+    release/known-issues.md.
+- **Problems:** none at build time yet (not built).
+- **Checks:** `python tools\check_unrealscript.py`: 26 files, 0 problems.
+  SDK signatures checked:
+  - `GetSystemTime` (Core `Object.uc` L2304);
+  - `AddCommandParam_Int` / `GetCommandParam_Int` (L236/L240);
+  - `X2Action.CurrentHistoryIndex` (L34) and `bCompleted` (L55);
+  - `VisualizationTree` (protectedwrite, L117);
+  - `ScreenStack` (`XComPresentationLayerBase.uc` L30) and
+    `GetFirstInstanceOf` (L620);
+  - `GetChildByName` (`UIPanel.uc` L856);
+  - BattleData's reward lists (L175-178);
+  - `IsAlive` (L7662).
+- **Guesses to watch in the run:**
+  - the native load runs in the tick before our handler (so `load` is ±1
+    frame);
+  - unfinished actions in the visualization tree mean "still on screen"
+    (the summary logs the oldest action's class at the maximum, to catch
+    a stuck one);
+  - the info command arrives after its update (handled either way).
+- **Session 8 prompt log:**
+  - **Prompt:** [pasted] "Change of plan for the lag: no lag changes in
+    0.8.3, logging only. [...] Log per update: the host's build time and
+    size, sent-to-received time, the partner's load time, the animation
+    backlog, the acknowledgment round trip, and how far behind the
+    partner's screen is in seconds (using the clock offset from the
+    pings). Add a summary line at the end of each alien turn. [...] The
+    other 0.8.3 items stay as planned (objective hack, CONNECTING
+    (CANCEL), the NO SOLDIERS banner timing, removing the re-link and
+    Shadowbind code). In the checklist, have me play one longer mission
+    [...]. After the run, tell me which stage dominates and which option
+    that points to."
+  - **Provided:** the plan section, 0.8.3 code, the checklist, and updates
+    to known-issues and this log.
+  - **Misreads / rule breaks:**
+    - I didn't ask before leaving out C; I treated Kc's list as the whole
+      0.8.3 scope and flagged it for confirmation.
+    - The pings Kc mentioned were the connect-time version pings. The
+      offset needs timestamps, so I added separate time pings (small,
+      every 20 s).
+  - **How It Was Verified:** syntax check (26 files, 0 problems); the SDK
+    lines above read; no build or game run (Kc builds and tests).

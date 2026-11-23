@@ -18,7 +18,9 @@
 //  opens X2TC_CoopSquadScreen. Stage 7 (0.6.0): CO-OP: HOST (STEAM) on the host's HUD
 //  (then INVITE (STEAM)) and CO-OP: JOIN (STEAM) on the main menu. 0.8.0: CO-OP: FIXES on
 //  both HUDs (X2TC_CoopFixesScreen), and HOST refused in the campaign's tutorial mission
-//  (XComGameReplicationInfo.uc L159-166 spawns XComTutorialMgr there).
+//  (XComGameReplicationInfo.uc L159-166 spawns XComTutorialMgr there). 0.8.3: while a
+//  JOIN is connecting, the JOIN button reads CO-OP: CONNECTING (CANCEL), and a click
+//  cancels it (UIScreenStack.GetFirstInstanceOf L620, UIPanel.GetChildByName L856).
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -42,6 +44,9 @@ class X2TC_CoopListener extends UIScreenListener dependson(UIInputDialogue);
 
 // Long enough for an IP address or its one-number form, with room for a mistake.
 const ADDRESS_MAX_CHARS = 40;
+// 0.8.3 (Kc, after 0.8.2 Run 2: a mistyped address needed a restart): JOIN's label while
+// a JOIN is connecting; a click cancels it (X2TC_CoopSession.CancelGuestConnect).
+const CONNECTING_LABEL = "CO-OP: CONNECTING (CANCEL)";
 
 event OnInit(UIScreen Screen)
 {
@@ -51,7 +56,7 @@ event OnInit(UIScreen Screen)
 
 	if (UIShell(Screen) != none)
 	{
-		AddButton(Screen, 'X2TC_CoopJoinButton', "CO-OP: JOIN" @ VersionTag(), OnJoinClicked, 290);
+		AddButton(Screen, 'X2TC_CoopJoinButton', JoinLabel(GuestSession != none && GuestSession.IsGuestConnecting()), OnJoinClicked, 290);
 		// Stage 7: join over Steam (accept the host's Steam invite after clicking this).
 		AddButton(Screen, 'X2TC_CoopJoinSteamButton', "CO-OP: JOIN (STEAM)", OnJoinSteamClicked, 340);
 		`log("Coop: JOIN button added to" @ string(Screen.Class.Name), , 'X2TC');
@@ -136,6 +141,36 @@ event OnInit(UIScreen Screen)
 static function string VersionTag()
 {
 	return "(v" $ class'X2TC_CoopSession'.static.ModVersion() $ ")";
+}
+
+// 0.8.3: the main-menu JOIN button's label.
+static function string JoinLabel(bool bConnecting)
+{
+	return bConnecting ? CONNECTING_LABEL : "CO-OP: JOIN" @ VersionTag();
+}
+
+// 0.8.3: relabel the main menu's JOIN button, if the main menu is open.
+static function SetJoinLabel(bool bConnecting)
+{
+	local XComPlayerController PC;
+	local UIScreen ShellScreen;
+	local UIButton JoinButton;
+
+	PC = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
+	if (PC == none || PC.Pres == none || PC.Pres.ScreenStack == none)
+	{
+		return;
+	}
+	ShellScreen = PC.Pres.ScreenStack.GetFirstInstanceOf(class'UIShell');
+	if (ShellScreen == none)
+	{
+		return;
+	}
+	JoinButton = UIButton(ShellScreen.GetChildByName('X2TC_CoopJoinButton', false));
+	if (JoinButton != none)
+	{
+		JoinButton.SetText(JoinLabel(bConnecting));
+	}
 }
 
 // A single-player tactical game (XComTacticalGame but not the multiplayer subclass).
@@ -358,8 +393,18 @@ function OnJoinClicked(UIButton Button)
 {
 	local UIShell ShellScreen;
 	local TInputDialogData DialogData;
+	local X2TC_CoopSession GuestSession;
 
 	`log("Coop: JOIN clicked", , 'X2TC');
+
+	// 0.8.3: while a JOIN is connecting, the button reads CONNECTING (CANCEL).
+	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
+	if (GuestSession != none && GuestSession.IsGuestConnecting())
+	{
+		PlayClickSound(Button);
+		GuestSession.CancelGuestConnect("CANCEL clicked");
+		return;
+	}
 
 	ShellScreen = UIShell(Button.Screen);
 	if (ShellScreen != none && ShellScreen.m_bDisableActions)
@@ -396,7 +441,10 @@ function OnAddressAccepted(string Text)
 	// Spaces typed by mistake would break the address.
 	Address = Repl(Text, " ", "");
 	`log("Coop: address entered (form:" @ class'X2TC_CoopSession'.static.AddressForm(Address) $ ")", , 'X2TC');
-	class'X2TC_CoopSession'.static.GetSession().StartGuest(Address);
+	if (class'X2TC_CoopSession'.static.GetSession().StartGuest(Address))
+	{
+		SetJoinLabel(true); // 0.8.3
+	}
 }
 
 function OnAddressCancelled(string Text)

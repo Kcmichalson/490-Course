@@ -16,6 +16,9 @@
 //  0.8.1: fix D (the fresh pathing pawn) is gone (Kc: it only changed a highlight's
 //  colour in 0.8.0b Run 2); nine new switches.
 //  0.8.2: nine more (plans/m4-plan.md, 0.8.2 items 1-3 and 5-8), 25 in all.
+//  0.8.3: "re-link objects" and "Shadowbind copy acts" removed with their code (0.8.2
+//  Runs 1-3: the re-link caused a crash and fixed nothing; the Shadowbind effect never
+//  changed anything); the switches after them are renumbered, 23 in all.
 //  Also holds one camera diagnostic flag (CameraOverrideRan).
 //
 //  Relies on (paths in Development\SrcOrig): nothing beyond Core\Classes\Object.uc.
@@ -41,14 +44,12 @@ const FIX_ATTACHED_MOVES = 14; // 0.8.1: the guest's SPARK BIT / Gremlin follow 
 const FIX_STEP_ALL = 15;       // 0.8.1: the guest replays all pending frames at once outside XCOM's turn
 const FIX_PARTNER_PAUSE = 16;  // 0.8.2: the guest opens the pause menu while none of its soldiers can act
 const FIX_HACK_NO_CLICK = 17;  // 0.8.2: the watcher's copy of a hack screen takes no clicks; guest sends only its own
-const FIX_RELINK_OBJECTS = 18; // 0.8.2: the guest re-links map objects to the host's states (objective hacks)
-const FIX_FLANK_CRIT = 19;     // 0.8.2: flanking crit as in single player (co-op passive)
-const FIX_SUPPRESSION = 20;    // 0.8.2: suppression aim penalty as in single player (co-op passive)
-const FIX_SKULLJACK = 21;      // 0.8.2: Skulljack / Skullmine chance as in single player
-const FIX_SHADOWBIND = 22;     // 0.8.2: a Shadowbind copy acts on its first turn as in single player
-const FIX_FOG_REVEAL = 23;     // 0.8.2: shooters in the fog are revealed as in single player (watcher)
-const FIX_WATCHER_CAMERA = 24; // 0.8.2: follow camera by the watcher (no override)
-const FIX_COUNT = 25;
+const FIX_FLANK_CRIT = 18;     // 0.8.2: flanking crit as in single player (co-op passive)
+const FIX_SUPPRESSION = 19;    // 0.8.2: suppression aim penalty as in single player (co-op passive)
+const FIX_SKULLJACK = 20;      // 0.8.2: Skulljack / Skullmine chance as in single player
+const FIX_FOG_REVEAL = 21;     // 0.8.2: shooters in the fog are revealed as in single player (watcher)
+const FIX_WATCHER_CAMERA = 22; // 0.8.2: follow camera by the watcher (no override)
+const FIX_COUNT = 23;
 
 // Config only so that run-time "default." assignments compile; never saved (see above).
 // Each stores OFF: false (the value at every launch) means the fix runs.
@@ -71,11 +72,9 @@ var config bool bAttachedMovesOff;
 var config bool bStepAllOff;
 var config bool bPartnerPauseOff;
 var config bool bHackNoClickOff;
-var config bool bRelinkObjectsOff;
 var config bool bFlankCritOff;
 var config bool bSuppressionOff;
 var config bool bSkulljackOff;
-var config bool bShadowbindOff;
 var config bool bFogRevealOff;
 var config bool bWatcherCameraOff;
 var config bool bCameraOverrideRan; // diagnostics: X2TC_Action_CameraFollowUnit has run this launch
@@ -124,11 +123,9 @@ static function bool GetSwitch(int Fix)
 		case FIX_STEP_ALL:       return !default.bStepAllOff;
 		case FIX_PARTNER_PAUSE:  return !default.bPartnerPauseOff;
 		case FIX_HACK_NO_CLICK:  return !default.bHackNoClickOff;
-		case FIX_RELINK_OBJECTS: return !default.bRelinkObjectsOff;
 		case FIX_FLANK_CRIT:     return !default.bFlankCritOff;
 		case FIX_SUPPRESSION:    return !default.bSuppressionOff;
 		case FIX_SKULLJACK:      return !default.bSkulljackOff;
-		case FIX_SHADOWBIND:     return !default.bShadowbindOff;
 		case FIX_FOG_REVEAL:     return !default.bFogRevealOff;
 		case FIX_WATCHER_CAMERA: return !default.bWatcherCameraOff;
 	}
@@ -157,11 +154,9 @@ static function SetSwitch(int Fix, bool bOn)
 		case FIX_STEP_ALL:       default.bStepAllOff = !bOn; break;
 		case FIX_PARTNER_PAUSE:  default.bPartnerPauseOff = !bOn; break;
 		case FIX_HACK_NO_CLICK:  default.bHackNoClickOff = !bOn; break;
-		case FIX_RELINK_OBJECTS: default.bRelinkObjectsOff = !bOn; break;
 		case FIX_FLANK_CRIT:     default.bFlankCritOff = !bOn; break;
 		case FIX_SUPPRESSION:    default.bSuppressionOff = !bOn; break;
 		case FIX_SKULLJACK:      default.bSkulljackOff = !bOn; break;
-		case FIX_SHADOWBIND:     default.bShadowbindOff = !bOn; break;
 		case FIX_FOG_REVEAL:     default.bFogRevealOff = !bOn; break;
 		case FIX_WATCHER_CAMERA: default.bWatcherCameraOff = !bOn; break;
 		default: return;
@@ -198,11 +193,9 @@ static function string FixName(int Fix)
 		case FIX_STEP_ALL:       return "Partner: faster enemy turns";
 		case FIX_PARTNER_PAUSE:  return "Partner: pause while waiting";
 		case FIX_HACK_NO_CLICK:  return "Hacks: watcher can't click";
-		case FIX_RELINK_OBJECTS: return "Partner: re-link objects to the host's states";
 		case FIX_FLANK_CRIT:     return "Flanking crit as in single player";
 		case FIX_SUPPRESSION:    return "Suppression penalty as in single player";
 		case FIX_SKULLJACK:      return "Skulljack chance as in single player";
-		case FIX_SHADOWBIND:     return "Shadowbind copy acts as in single player";
 		case FIX_FOG_REVEAL:     return "Reveal shooters in the fog";
 		case FIX_WATCHER_CAMERA: return "Camera: watcher (no override)";
 	}
@@ -245,11 +238,9 @@ static function string ShortName(int Fix)
 		case FIX_STEP_ALL:       return "step all";
 		case FIX_PARTNER_PAUSE:  return "pause wait";
 		case FIX_HACK_NO_CLICK:  return "hack no click";
-		case FIX_RELINK_OBJECTS: return "relink";
 		case FIX_FLANK_CRIT:     return "flank";
 		case FIX_SUPPRESSION:    return "suppression";
 		case FIX_SKULLJACK:      return "skulljack";
-		case FIX_SHADOWBIND:     return "shadowbind";
 		case FIX_FOG_REVEAL:     return "fog";
 		case FIX_WATCHER_CAMERA: return "watcher camera";
 	}

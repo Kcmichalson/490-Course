@@ -23,6 +23,8 @@
 //      Differences from stock: the stock action waits for its camera to arrive before the
 //      move goes on (L77-80); the watcher can't hold the action. A unit newly selected by
 //      the player is skipped, as in the stock action.
+//  0.8.3: its tick also drives the partner's lag samples (X2TC_CoopSession.LagTick,
+//  X2TC_CoopLagLog); logging only.
 //  One log line per handled action (capped per map). Spawned once per co-op map by
 //  X2TC_CoopSession (with the map cleanup actor); does nothing outside a session.
 //
@@ -99,6 +101,8 @@ event Tick(float DeltaTime)
 		RemoveAllReveals();
 		return;
 	}
+	// 0.8.3: the lag lines sample the partner's screen from here (logging only).
+	class'X2TC_CoopSession'.static.FindSession().LagTick();
 	VisMgr = `XCOMVISUALIZATIONMGR;
 	Tree = VisMgr != none ? VisMgr.VisualizationTree : none;
 	UpdateReveals(VisMgr, Tree);

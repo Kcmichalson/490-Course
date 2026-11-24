@@ -48,13 +48,13 @@ var bool bOpen;
 var int LastActiveIcons;
 
 // The HUD's menu, or none.
-static function X2TC_CoopMenu FindMenu(UIScreen Screen)
+static function X2TC_CoopMenu FindMenu(UIScreen HUDScreen)
 {
-	if (Screen == none)
+	if (HUDScreen == none)
 	{
 		return none;
 	}
-	return X2TC_CoopMenu(Screen.GetChild(MENU_NAME, false));
+	return X2TC_CoopMenu(HUDScreen.GetChild(MENU_NAME, false));
 }
 
 function X2TC_CoopMenu InitCoopMenu()
@@ -122,17 +122,17 @@ function SetItemVisible(name ButtonName, bool bVisible)
 // Stacks the visible items and sizes the background.
 function Relayout()
 {
-	local int i, Y;
+	local int i, NextY;
 
 	for (i = 0; i < Items.Length; i++)
 	{
 		if (Items[i].bIsVisible)
 		{
-			Items[i].SetPosition(0, Y);
-			Y += ITEM_STEP;
+			Items[i].SetPosition(0, NextY);
+			NextY += ITEM_STEP;
 		}
 	}
-	DrawerBG.SetSize(-DRAWER_X - 10, Max(Y, ITEM_STEP) + 10);
+	DrawerBG.SetSize(-DRAWER_X - 10, Max(NextY, ITEM_STEP) + 10);
 }
 
 function SetOpen(bool bNowOpen)
@@ -206,7 +206,8 @@ function UpdatePosition()
 	}
 	LastActiveIcons = Count;
 	CoopIcon.SetPosition(-(ROW_MARGIN + Count * ICON_STEP + ICON_SIZE), ROW_Y);
-	`log("Coop UI: Co-op button placed left of" @ Count @ "HUD icons (x" @ -(ROW_MARGIN + Count * ICON_STEP + ICON_SIZE) $ ")", , 'X2TC');
+	// 0.8.4c: Verbose only (0.8.4b Part 1: the placement looked right at 1, 5 and 6 icons).
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop UI: Co-op button placed left of" @ Count @ "HUD icons (x" @ -(ROW_MARGIN + Count * ICON_STEP + ICON_SIZE) $ ")", , 'X2TC');
 }
 
 defaultproperties

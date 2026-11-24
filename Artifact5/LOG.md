@@ -5596,3 +5596,193 @@ followed until the partner joined.
     - The cap figures, from the 0.8.3 logs' "queued bytes ... in N
       bunches" lines and the game's and engine's config files, read only.
     - No build or game run; Kc builds and tests.
+  - **Prompt (2026-11-23):** "So what needs testing, now? Get as much done
+    in one run as we can to save on credits."
+  - **Provided:** checklists/m4-084.md expanded into one session.
+    - It covers the 0.8.4 checks and 0.8.3's missing JOIN-cancel and
+      banner checks.
+    - Moved forward: the camera override off (0.8.5 item 7).
+    - Questions turned into active checks: suppression (log line), the
+      host's camera, and the host's pause-menu save.
+    - Added: SAFE MODE near the end, and the release checklist's "Save
+      without the mod" on the PC afterwards, using the run's own saves.
+    - Q1, Q2, Q4, Q5 and Q7 stay as questions.
+    - The Steam path (last tested in 0.6.2, Stage 7 Run 2, with a friend)
+      needs a second Steam account, so it's left for the
+      release-candidate playtest.
+  - **Misreads / rule breaks:** none known.
+  - **How It Was Verified:**
+    - The suppression line exists (`X2TC_CoopRulesEffect.uc` L100).
+    - The release checklist's save steps were read
+      (release/release-checklist.md L18-29).
+    - The Steam test history is in LOG.md L69 and L4231.
+    - Only the checklist changed.
+
+### 2026-11-23 — Session 8 (continued): 0.8.4 main menu seen; 0.8.4b written (not built or tested)
+- **Check (Kc's screenshot, 0.8.4, PC):**
+  - CO-OP: JOIN (STEAM) (v0.8.4) and CO-OP: JOIN BY IP (v0.8.4) show at the
+    top right.
+  - The mod's MULTIPLAYER button is gone; the bottom-row MULTIPLAYER is the
+    game's own.
+  - Checklist step 3 passes. Build ID not given with it.
+- **Changed (0.8.4b):**
+  - New `X2TC_CoopMenuBar`: CO-OP in the main menu's bottom row, left of
+    MULTIPLAYER, with a JOIN (STEAM) / JOIN BY IP box and CO-OP: CANCEL
+    while connecting.
+  - `X2TC_CoopListener`: uses it on the retail menu; `SetJoinLabel`
+    relabels it.
+  - Version 0.8.4b.
+  - checklists/m4-084.md rewritten as one session (LAN warm-up, friend
+    over Steam, PC alone); new checklists/m4-084-friend.md; plan
+    "0.8.4b".
+- **Checks:** `python tools\check_unrealscript.py`: 28 files, 0 problems.
+  SDK read:
+  - UIShell.uc L35-36, L248-289, L312-338;
+  - UIFinalShell.uc L127-149, L205;
+  - UIX2MenuButton.uc L20;
+  - UIButton.uc L45;
+  - UIDialogueBox.uc L17-41, L69;
+  - XComPresentationLayerBase.uc L1443, L1609.
+
+  The packager takes any version string (VERSION_RE, tools/package_mod.py
+  L43).
+- **Guesses to watch:**
+  - re-adding after a row rebuild;
+  - the button's width in the layout;
+  - Esc in the box.
+- **Session 8 prompt log:**
+  - **Prompt:** "[screenshot of the 0.8.4 main menu] Can we move the co-op
+    button to be an additional button to the left of multiplayer on the
+    main bar? Or replace the multiplayer button if that's not possible.
+    Let's combine the campaign tests with the live multiplayer test so I
+    can play it with someone. Let's do as many other tests as possible."
+  - **Provided:** the row button (possible without replacing MULTIPLAYER),
+    the one-session checklist and the friend's sheet.
+  - **Misreads / rule breaks:**
+    - I wrote the row button directly, with no separate plan to approve,
+      because Kc asked for that change and it's within the approved release
+      UI item. It's recorded in plans/m4-plan.md "0.8.4b".
+    - The friend's sheet asks for the DLC and mod lists from Kc. I named
+      no friend.
+  - **How It Was Verified:** the syntax check and SDK lines above; no
+    build or game run.
+
+### 2026-11-23 — Session 8 (continued): 0.8.4b build error fixed; the syntax check now covers inherited names
+- **Build (Kc):** failed with 1 error.
+  - `X2TC_CoopMenuBar.uc(40)`: "Redefinition of 'function Attach' differs
+    from original: return value mismatch". Actor already declares `event
+    Attach(Actor Other)` (SDK `Engine\Classes\Actor.uc` L1960).
+  - Also 2 warnings in `X2TC_CoopMenu.uc`: the parameter `Screen` (L51)
+    and the local `Y` (L125) have the names of UIPanel fields.
+- **Changed:**
+  - `X2TC_CoopMenuBar.Attach` is now `AddToMainMenu` (and its caller in
+    `X2TC_CoopListener`); its local `PC` is now `LocalPC` (UIPanel has a
+    `PC` field).
+  - In `X2TC_CoopMenu`, `Screen` is now `HUDScreen` and `Y` is `NextY`.
+  - `tools/check_unrealscript.py`: a new check against each class's
+    parents (mod classes and the SDK's SrcOrig, read only):
+    - locals and parameters named after a field;
+    - functions that redefine a parent's with another return type,
+      parameter count or static-ness.
+
+    It skips struct members and C++ type tags (`struct {QWORD} qword` in
+    Object.uc gave a false `A`/`B` at first).
+- **Checks:**
+  - `python tools\check_unrealscript.py`: 28 files, 0 problems.
+  - Regression: on scratch copies with the original names put back, it
+    reports exactly the compiler's three (MenuBar L41 Attach,
+    CoopMenu L51 `screen`, L125 `Y`).
+  - Not rebuilt yet (Kc builds).
+- **Session 8 prompt log:**
+  - **Prompt:** "The build broke. [build output: 1 error, Attach
+    redefinition in X2TC_CoopMenuBar; warnings for Screen and Y in
+    X2TC_CoopMenu]"
+  - **Provided:** the three renames, the fourth clash (`PC`) found by the
+    new check, and the checker extension.
+  - **Misreads / rule breaks:**
+    - **The rule I broke:** CLAUDE.md says never to name a local after an
+      inherited field and to run the syntax check, "which checks for
+      both". The script didn't check inherited names (its header said so);
+      I reported "0 problems" as if it covered them. That's how `Y`,
+      `Screen` and `PC` got through.
+    - **The error was mine:** I named a function `Attach` without checking
+      Actor's functions.
+  - **How It Was Verified:** the regression run above, and the clean
+    check over all 28 classes; the build itself is Kc's.
+
+### 2026-11-23 — Session 8 (continued): 0.8.4b Part 1 (LAN) read; 0.8.4c
+- **Run:** 0.8.4b, Part 1 of checklists/m4-084.md, PC + laptop on the LAN,
+  a Skirmish.
+  - **Read:** the PC's `Launch.log` from the game's Logs folder.
+  - **Not read:** the laptop's log.
+  - **Build ID:** not given with this run. The PC was 8270065 on
+    2026-11-22.
+  - Two of Kc's three screenshots were attached (both of the PC).
+- **Results (Kc's notes and the PC log):**
+  - **Main-menu CO-OP:**
+    - It was added at row index 2 of 9 and re-added twice within a second
+      as the game rebuilt the row; then it stayed.
+    - Esc in its box picks JOIN BY IP and opens the address box, and Esc
+      there closes it (fine, Kc).
+  - **Co-op icon (fine, Kc; screenshots):**
+    - left of the row at 5 and 6 icons (x -306 and -356);
+    - next to the aim icon while firing (1 icon, x -106), moving a moment
+      later.
+  - **The rest of the flow:** HOST BY IP, giving soldiers, and the
+    partner's LEAVE all worked ("the guest is gone" at 723 s).
+  - **Verbose log off:** 14 X2TC lines in 60 s, against 84 in the 60 s
+    before with it on.
+  - **SAFE MODE (laptop, Kc):** with every fix off:
+    - the path preview and move range disappear;
+    - the move preview comes back offset;
+    - the abilities glow;
+    - used-up soldiers can be selected;
+    - selection is off and the camera doesn't follow.
+
+    Each matches what a fix cures (path hide, borders, glow, can act /
+    bound skip, camera), so the fixes are doing their jobs.
+  - **Net cap:**
+    - Every update leaves the game's own queue in one frame, with 0 in
+      flight (for example "net 293b/1f"). The time goes after the hand-off,
+      inside the engine's connection.
+    - The settings in effect are stock: MaxClientRate 15000,
+      MaxInternetClientRate 10000, NetServerMaxTickRate 30, on both
+      drivers.
+    - This build has no `LanServerMaxTickRate` ("Unrecognized property"),
+      so the "10 bunches × 35 ticks" guess is out.
+    - The cause is still a guess (the engine connection's own pacing), and
+      no setting we're allowed to change is involved. Option 4 stays the
+      answer.
+  - **Hack probe:** no must-hack object in this Skirmish ("no must-hack
+    object within 3 tiles or in view"); Part 2 covers it.
+  - **Not covered:** JOIN cancel and the NO SOLDIERS timing are in the
+    laptop's log.
+- **Changed (0.8.4c):**
+  - The icon's placement line is now Verbose-only.
+  - The net settings line is on one line, without LanServerMaxTickRate.
+  - Version 0.8.4c.
+  - checklists/m4-084.md: Part 1 results, and Part 2 covers a few
+    missions.
+  - checklists/m4-084-friend.md: 0.8.4c, and rejoin after each mission.
+- **Checks:** `python tools\check_unrealscript.py`: 28 files, 0 problems.
+  The partner returns to the main menu at mission end
+  (`X2TC_CoopSession.uc` L2348).
+- **Session 8 prompt log:**
+  - **Prompt:** "[2 screenshots: the PC's Co-op icon with its tooltip;
+    the icon next to the aim icon while firing] [Launch.log path] pressing
+    escape opens the address box [...] This is fine. When firing, the coop
+    button moves [...] Looks fine. Safe mode enabled: path preview and max
+    range disappears [...] camera doesn't follow. Third screenshot is of
+    laptop [...] Make any changes before I send to friend for multiplayer
+    campaign test. We will do a few missions."
+  - **Provided:** the log reading above, 0.8.4c (log-only changes), and
+    the checklists for several missions.
+  - **Misreads / rule breaks:**
+    - Only two screenshots arrived; the laptop one is missing.
+    - SAFE MODE's effects are read as the fixes working. That's a reading
+      of Kc's notes, not a separate test.
+  - **How It Was Verified:**
+    - grep counts and line reads of the PC log (lines 123-525, 1373-2751,
+      3452);
+    - the syntax check;
+    - no build or game run since.

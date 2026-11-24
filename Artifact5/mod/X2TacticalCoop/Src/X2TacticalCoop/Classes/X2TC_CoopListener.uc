@@ -28,6 +28,8 @@
 //  panel: the status line and, on the partner, END TURN (READY). Before hosting, the
 //  host's panel has HOST (STEAM), HOST BY IP and FIXES; SQUAD and END TURN appear once
 //  hosting. MOVE TO CURSOR is gone from the partner's HUD (M and right-click still work).
+//  0.8.4b (Kc): on the retail main menu, one CO-OP button in the bottom row instead of the
+//  two top-right JOIN buttons (X2TC_CoopMenuBar); SetJoinLabel relabels it too.
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -64,9 +66,16 @@ event OnInit(UIScreen Screen)
 
 	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
 
-	if (UIShell(Screen) != none && RELEASE_UI)
+	if (UIShell(Screen) != none && RELEASE_UI && class'X2TC_CoopMenuBar'.static.AddToMainMenu(Screen))
+	{
+		// 0.8.4b (Kc): one CO-OP button in the main menu's own row, left of MULTIPLAYER.
+		`log("Coop: CO-OP button attached to the main menu row of" @ string(Screen.Class.Name), , 'X2TC');
+		class'X2TC_CoopSession'.static.LogNetDiagnostics("main menu");
+	}
+	else if (UIShell(Screen) != none && RELEASE_UI)
 	{
 		// 0.8.4: Steam first (the main path), then BY IP; the MULTIPLAYER button is gone.
+		// 0.8.4b: only where the row button can't be added (not the retail menu).
 		AddButton(Screen, 'X2TC_CoopJoinSteamButton', "CO-OP: JOIN (STEAM)" @ VersionTag(), OnJoinSteamClicked, 40);
 		AddButton(Screen, 'X2TC_CoopJoinButton', JoinLabel(GuestSession != none && GuestSession.IsGuestConnecting()), OnJoinClicked, 90);
 		`log("Coop: JOIN (STEAM) and JOIN BY IP buttons added to" @ string(Screen.Class.Name), , 'X2TC');
@@ -234,6 +243,12 @@ static function SetJoinLabel(bool bConnecting)
 	local UIScreen ShellScreen;
 	local UIButton JoinButton;
 
+	// 0.8.4b: the main menu row's CO-OP button, if it's there.
+	JoinButton = class'X2TC_CoopMenuBar'.static.FindBarButton();
+	if (JoinButton != none)
+	{
+		JoinButton.SetText(class'X2TC_CoopMenuBar'.static.BarLabel(bConnecting));
+	}
 	PC = XComPlayerController(class'WorldInfo'.static.GetWorldInfo().GetALocalPlayerController());
 	if (PC == none || PC.Pres == none || PC.Pres.ScreenStack == none)
 	{

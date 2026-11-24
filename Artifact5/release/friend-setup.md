@@ -29,10 +29,11 @@ host's missions from their own PC. About 10 minutes the first time.
    asks first while the partner's soldiers can still act.
 
 ## Partner
-10. Start the game. The main menu shows **CO-OP: JOIN (STEAM)
-    ({{VERSION}})**. The version must match the host's.
-11. Click **CO-OP: JOIN (STEAM)**, then accept the host's Steam invite. Wait
-    while the mission loads; your screen catches up with the host's.
+10. Start the game. The main menu's bottom row shows **CO-OP
+    ({{VERSION}})** left of MULTIPLAYER. The version must match the host's.
+11. Click **CO-OP**, then **JOIN (STEAM)**, then accept the host's Steam
+    invite. Wait while the mission loads; your screen catches up with the
+    host's.
 12. If a message names a **version** or **mod/DLC difference**, fix that and
     join again.
 
@@ -59,6 +60,6 @@ file in the same folder), with roughly when it happened.
 ## Advanced: by IP instead of Steam
 On the same network: the host uses **CO-OP: HOST BY IP** (Co-op icon) and
 tells the partner their PC's local IP address; the partner clicks
-**CO-OP: JOIN BY IP** and types it. While it connects, the button reads
-**CO-OP: CONNECTING (CANCEL)**; click it to stop. Over the internet this
+**CO-OP**, then **JOIN BY IP**, and types it. While it connects, the button
+reads **CO-OP: CANCEL**; click it to stop. Over the internet this
 needs port forwarding on the host's router; use Steam instead.

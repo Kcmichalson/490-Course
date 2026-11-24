@@ -1299,6 +1299,35 @@ Priority order is Kc's. ✂ = cut first if time runs short (✂1 goes first).
    buttons.
 7. **Version 0.8.4;** `checklists/m4-084.md`.
 
+### 0.8.4b (Kc, 2026-11-23; not built or tested)
+**Kc:** "Can we move the co-op button to be an additional button to the
+left of multiplayer on the main bar? Or replace the multiplayer button if
+that's not possible. Let's combine the campaign tests with the live
+multiplayer test so I can play it with someone. Let's do as many other
+tests as possible."
+
+**The button:**
+- New `X2TC_CoopMenuBar` (a hidden helper panel on the retail main menu).
+  It inserts a stock-style CO-OP button into the shell's own row, left of
+  'MP'.
+- It joins the row the way the shell's `CreateItem` does (UIShell.uc
+  L275-289). It uses the shell's layout callback and mouse handler, and
+  checks twice a second to re-add the button after the shell rebuilds the
+  row (UIFinalShell.uc L127-149).
+- Not an override; MULTIPLAYER stays.
+- **The click:** a two-choice box, JOIN (STEAM) or JOIN BY IP (a stock
+  dialog has only two buttons, so Esc probably acts as JOIN BY IP and
+  opens the address box, which can be cancelled).
+- While connecting, the button reads CO-OP: CANCEL.
+- The top-right JOIN buttons remain only where the row button can't be
+  added (not the retail menu).
+
+**Tests:** `checklists/m4-084.md` is now one session:
+- Part 1, PC + laptop on the LAN: the risky checks.
+- Part 2, PC + friend over Steam: a campaign mission.
+- Part 3, PC alone: the saves without the mod.
+- The friend's sheet is `checklists/m4-084-friend.md`.
+
 ## Code audit before 1.0 (plan only; Kc: "that will wait for the end")
 
 Kc (2026-11-21): find "every single file you've written, it's purpose,

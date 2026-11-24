@@ -363,12 +363,18 @@ function LogNetSettings(string Who)
 	`log("Coop net settings (" $ Who $ "):" @ Text, , 'X2TC');
 }
 
-static function string GetSetting(PlayerController PC, string DriverClass)
+// 0.8.4c: one line (the answers end in line breaks), and no LanServerMaxTickRate (0.8.4b
+// Part 1: "Unrecognized property" in this build).
+static function string GetSetting(PlayerController LocalPC, string DriverClass)
 {
-	return "max client" @ PC.ConsoleCommand("get" @ DriverClass @ "MaxClientRate", false)
-		@ "max internet" @ PC.ConsoleCommand("get" @ DriverClass @ "MaxInternetClientRate", false)
-		@ "tick" @ PC.ConsoleCommand("get" @ DriverClass @ "NetServerMaxTickRate", false)
-		@ "lan tick" @ PC.ConsoleCommand("get" @ DriverClass @ "LanServerMaxTickRate", false);
+	return "max client" @ OneLine(LocalPC.ConsoleCommand("get" @ DriverClass @ "MaxClientRate", false))
+		@ "max internet" @ OneLine(LocalPC.ConsoleCommand("get" @ DriverClass @ "MaxInternetClientRate", false))
+		@ "tick" @ OneLine(LocalPC.ConsoleCommand("get" @ DriverClass @ "NetServerMaxTickRate", false));
+}
+
+static function string OneLine(string Text)
+{
+	return Repl(Repl(Text, Chr(13), ""), Chr(10), "");
 }
 
 // The partner's time ping: answer with its clock and this PC's.

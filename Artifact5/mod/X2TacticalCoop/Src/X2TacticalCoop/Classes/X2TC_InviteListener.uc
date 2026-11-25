@@ -16,6 +16,24 @@
 //  ArmSteamInvite), the next accepted invite goes to X2TC_CoopSession.OnSteamInviteAccepted
 //  instead, and the multiplayer-menu travel is skipped while a co-op join is under way.
 //
+//  0.8.5 (plans/m4-plan.md, "0.8.5" item 2; 0.8.4c Part 2: a friend accepted the host's
+//  invite without CO-OP, JOIN (STEAM) first and landed in the stock lobby, through the
+//  travel above):
+//    - The multiplayer-menu travel is gone; any invite that isn't co-op is left to the
+//      game (MULTIPLAYER is Mr.Fear's area).
+//    - The host's co-op session carries a marker (COOP_INVITE_MARKER as its max squad
+//      cost, advertised like the hashes the game's own invite check reads,
+//      XComOnlineGameSettings.uc L380, L455). A marked invite accepted on the main menu
+//      joins the co-op session directly (X2TC_CoopSession.JoinFromInvite).
+//    - On the main menu only, the game's own invite handler is taken off, so it can't
+//      refuse a co-op invite over the mods' load order (0.6.2) or start its own invite
+//      flow; this listener passes every other invite on to it unchanged. It's put back
+//      as soon as a screen opens on any other map.
+//    Fix switch: "Steam: a co-op invite joins directly". Guess until tested: Steam
+//    carries the marker into the invite's settings (the log says).
+//    Not covered: an invite accepted while the game isn't running starts the game with
+//    the invite (XComShellPresentationLayer.uc L119-164) before this listener exists.
+//
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\UIScreenListener.uc      (OnInit)
 //    XComGame\Classes\XComOnlineEventMgr.uc    (OnGameInviteAccepted L3502-3591)
@@ -26,24 +44,93 @@
 //    Engine\Classes\OnlineGameSearch.uc        (OnlineGameSearchResult L28)
 //    Engine\Classes\Actor.uc                   (SetTimer with an object L2164,
 //                                               GetALocalPlayerController L2463)
-//    Engine\Classes\PlayerController.uc        (ClientTravel L504)
+//    XComGame\Classes\XComOnlineGameSettings.uc (GetMaxSquadCost L94-99)
 //
 //  The listener keeps no reference to a screen or another actor, so it can't hold a
 //  level in memory across a map change.
 //---------------------------------------------------------------------------------------
 
-class X2TC_InviteListener extends UIScreenListener;
+class X2TC_InviteListener extends UIScreenListener config(X2TacticalCoopFixes);
+
+// 0.8.5: the host's co-op session's max squad cost. Stock matches pick theirs from fixed
+// lists (thousands of points), never this.
+const COOP_INVITE_MARKER = 271828;
+
+// 0.8.5: the game's own invite handler is off because of this listener (memory only; a
+// config variable so it can be changed at run time and survives map loads; never saved).
+var config bool bStockHandlerOff;
+var config float LastInviteTime; // the last invite this listener handled (callbacks repeat)
 
 // Registers when a main menu or the multiplayer main menu opens. Registering again
-// replaces this object's earlier registration.
+// replaces this object's earlier registration. 0.8.5: on the main menu the game's own
+// invite handler is taken off; on any screen of another map it's put back.
 event OnInit(UIScreen Screen)
 {
+	if (!IsOnMainMenu())
+	{
+		SetStockHandler(true, "left the main menu");
+	}
 	if (UIShell(Screen) == none && UIMPShell_MainMenu(Screen) == none)
 	{
 		return;
 	}
 
 	RegisterForInvites();
+	if (UIShell(Screen) != none && class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_INVITE_DIRECT))
+	{
+		SetStockHandler(false, "main menu");
+	}
+}
+
+// 0.8.5: true on the main menu's map (XComShell; the multiplayer menu's XComMPShell
+// extends it, so the exact class name is compared).
+static function bool IsOnMainMenu()
+{
+	local WorldInfo World;
+
+	World = class'WorldInfo'.static.GetWorldInfo();
+	return World != none && World.Game != none && World.Game.Class.Name == 'XComShell';
+}
+
+// 0.8.5: the game's own invite handler on or off (it registers for user 0,
+// Engine\Classes\OnlineEventMgr.uc L133). Cleared before adding, so it's never there twice.
+static function SetStockHandler(bool bOn, string Why)
+{
+	local OnlineSubsystem OnlineSub;
+	local XComOnlineEventMgr OnlineMgr;
+
+	if (bOn != default.bStockHandlerOff)
+	{
+		return; // already as wanted (by this listener)
+	}
+	OnlineSub = class'GameEngine'.static.GetOnlineSubsystem();
+	OnlineMgr = `ONLINEEVENTMGR;
+	if (OnlineSub == none || OnlineSub.GameInterface == none || OnlineMgr == none)
+	{
+		return;
+	}
+	OnlineSub.GameInterface.ClearGameInviteAcceptedDelegate(0, OnlineMgr.OnGameInviteAccepted);
+	if (bOn)
+	{
+		OnlineSub.GameInterface.AddGameInviteAcceptedDelegate(0, OnlineMgr.OnGameInviteAccepted);
+	}
+	default.bStockHandlerOff = !bOn;
+	`log("Invite listener: the game's own invite handler" @ (bOn ? "back on" : "off; this listener passes non-co-op invites to it") @ "(" $ Why $ ")", , 'X2TC');
+}
+
+// 0.8.5: the invite's session carries the co-op marker.
+static function bool IsCoopInvite(const out OnlineGameSearchResult InviteResult, out int SquadCost)
+{
+	local XComOnlineGameSettings Settings;
+
+	SquadCost = -1;
+	Settings = XComOnlineGameSettings(InviteResult.GameSettings);
+	if (Settings == none)
+	{
+		return false;
+	}
+	SquadCost = Settings.GetMaxSquadCost();
+	return SquadCost == COOP_INVITE_MARKER;
 }
 
 function RegisterForInvites()
@@ -76,13 +163,16 @@ function RegisterForInvites()
 // whatever the order of the two callbacks.
 function OnInviteAccepted(const out OnlineGameSearchResult InviteResult, bool bWasSuccessful)
 {
-	local PlayerController LocalPC;
 	local X2TC_CoopSession Session;
+	local XComOnlineEventMgr OnlineMgr;
+	local WorldInfo World;
+	local bool bCoop;
+	local int SquadCost;
 
 	`log("Invite accepted callback: success=" $ bWasSuccessful @ "has game settings=" $ (InviteResult.GameSettings != none), , 'X2TC');
 
 	// Stage 7: after CO-OP: JOIN (STEAM), the invite is a co-op invite; the session joins
-	// it, and the multiplayer-menu travel below is skipped.
+	// it.
 	Session = class'X2TC_CoopSession'.static.FindSession();
 	if (Session != none && Session.bSteamInviteArmed)
 	{
@@ -91,79 +181,39 @@ function OnInviteAccepted(const out OnlineGameSearchResult InviteResult, bool bW
 		return;
 	}
 
-	LocalPC = GetLocalPC();
-	if (LocalPC == none)
-	{
-		`log("Invite: no local player controller, can't check the invite", , 'X2TC');
-		return;
-	}
-
-	LocalPC.SetTimer(0.5, false, nameof(CheckInvite), self);
-}
-
-// Timer function: runs half a second after an invite callback.
-function CheckInvite()
-{
-	local XComOnlineEventMgr OnlineMgr;
-	local PlayerController LocalPC;
-	local bool bKept;
-	local name GameClassName;
-	local X2TC_CoopSession Session;
-
-	// Stage 7: a co-op Steam join is under way; leave the menu alone.
-	Session = class'X2TC_CoopSession'.static.FindSession();
-	if (Session != none && (Session.bSteamJoinStarted || Session.IsActive()))
-	{
-		`log("Invite check: co-op session joining or active; no multiplayer-menu travel", , 'X2TC');
-		return;
-	}
-
-	OnlineMgr = `ONLINEEVENTMGR;
-	LocalPC = GetLocalPC();
-	if (OnlineMgr == none || LocalPC == none)
-	{
-		`log("Invite check: no online event manager or no local player controller", , 'X2TC');
-		return;
-	}
-
-	GameClassName = 'none';
-	if (LocalPC.WorldInfo.Game != none)
-	{
-		GameClassName = LocalPC.WorldInfo.Game.Class.Name;
-	}
-
-	bKept = OnlineMgr.HasAcceptedInvites();
-	`log("Invite check: kept by the game=" $ bKept @ "shuttle to invite loadout=" $ OnlineMgr.GetShuttleToMPInviteLoadout() @ "game" @ string(GameClassName), , 'X2TC');
-
-	if (!bKept)
-	{
-		`log("Invite not kept: the game rejected it or already used it. If no join followed, compare both players' MP criteria lines", , 'X2TC');
-		return;
-	}
-
-	// Only the main menu needs help. XComMPShell (the multiplayer menu) extends XComShell,
-	// so compare the exact class name.
-	if (GameClassName != 'XComShell')
-	{
-		`log("Invite: not on the main menu, leaving it to the game", , 'X2TC');
-		return;
-	}
-
-	`log("Invite: on the main menu, ClientTravel to" @ class'X2TC_MainMenuListener'.const.MPShellURL, , 'X2TC');
-	LocalPC.ClientTravel(class'X2TC_MainMenuListener'.const.MPShellURL, TRAVEL_Absolute);
-}
-
-function PlayerController GetLocalPC()
-{
-	local WorldInfo World;
-
+	// 0.8.5: the same invite comes more than once (one callback per registered listener
+	// object, and the game's own note at XComOnlineEventMgr.uc L3499); handle it once.
 	World = class'WorldInfo'.static.GetWorldInfo();
-	if (World == none)
+	if (World != none)
 	{
-		return none;
+		if (default.LastInviteTime > 0 && World.RealTimeSeconds >= default.LastInviteTime
+			&& World.RealTimeSeconds - default.LastInviteTime < 1.0)
+		{
+			return;
+		}
+		default.LastInviteTime = World.RealTimeSeconds;
 	}
 
-	return World.GetALocalPlayerController();
+	bCoop = IsCoopInvite(InviteResult, SquadCost);
+	`log("Invite: co-op marker=" $ bCoop @ "(squad cost" @ SquadCost $ ") on the main menu=" $ IsOnMainMenu() @ "game's handler off=" $ default.bStockHandlerOff, , 'X2TC');
+
+	// 0.8.5: a co-op invite on the main menu joins directly.
+	if (bCoop && IsOnMainMenu() && class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_INVITE_DIRECT))
+	{
+		class'X2TC_CoopSession'.static.GetSession().JoinFromInvite(InviteResult, bWasSuccessful);
+		return;
+	}
+
+	// Anything else goes to the game's own handler, if this listener took it off.
+	if (default.bStockHandlerOff)
+	{
+		OnlineMgr = `ONLINEEVENTMGR;
+		if (OnlineMgr != none)
+		{
+			`log("Invite: not a co-op invite; passed to the game's own handler", , 'X2TC');
+			OnlineMgr.OnGameInviteAccepted(InviteResult, bWasSuccessful);
+		}
+	}
 }
 
 defaultproperties

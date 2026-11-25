@@ -78,6 +78,7 @@ var float LastAbilityTime; // its WorldInfo.RealTimeSeconds
 var array<name> LoggedTutorialCalls; // tutorial functions already logged once
 var int LastSkipFromUnitID; // Stage 6: the P1 soldier the selection last moved off (retried after new frames)
 var int MissionEndFrameSeen;     // 0.5.3: the end-of-battle frame the replay passed (-1 = none)
+var int TargetRefreshes;         // 0.8.5: RefreshTargets calls this mission
 var float MissionEndSeenTime;    // its WorldInfo.RealTimeSeconds
 var bool bMissionOver;           // "mission over" handed to the session; no more input
 var bool bLoggedNoneCanAct;      // 0.8.0: "none of the guest's soldiers can act" logged once
@@ -210,6 +211,7 @@ state WaitForPlayerInput
 			bBehind = false;
 			LastSkipFromUnitID = 0;
 			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: replayed to frame" @ CurrentHistoryFrame @ "(history frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
+			RefreshTargets("caught up"); // 0.8.5
 		}
 
 		UpdateGuestInput();
@@ -887,6 +889,7 @@ function SetGuestInput(XComTacticalController TacticalController, bool bOn)
 			SelectGuestUnit(TacticalController, 1);
 		}
 		TacticalController.SetInputState(GUEST_INPUT_STATE);
+		RefreshTargets("input on"); // 0.8.5
 		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: input on (state" @ TacticalController.GetInputState() $ ", active unit" @ TacticalController.GetActiveUnitStateRef().ObjectID $ ", ruleset state" @ `TACTICALRULES.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 	}
 	else
@@ -895,6 +898,48 @@ function SetGuestInput(XComTacticalController TacticalController, bool bOn)
 		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: input off (state" @ TacticalController.GetInputState() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 		HidePathingUI(TacticalController);
 	}
+}
+
+// 0.8.5 (0.8.4c Part 2: the partner's soldier saw an enemy but couldn't target it until the
+// host took the soldier and gave it back). The ruleset caches each unit's actions and
+// their targets by history index and rebuilds the cache only when the index changes
+// (X2TacticalGameRuleset.GetGameRulesCache_Unit L545-642). While the replay steps, the
+// index moves to each frame before the visibility manager is updated for it
+// (XComReplayMgr.StepReplayForward L158-168), so a cache built in between keeps the old
+// visibility and still counts as current for the newest frame; a new frame (the host's
+// owner change) rebuilds it. A guess from source; X2TC_CoopShotProbe logs the evidence.
+// Once caught up, mark the caches outdated the ruleset's own way (OnObliterateGameState
+// L408-418 marks every entry newer than the current index), by lowering the index by one
+// for that call only, then refresh the enemy bar. Nothing is added to the history. Fix
+// switch: "Partner: refresh targets once caught up".
+function RefreshTargets(string Why)
+{
+	local XComGameStateHistory History;
+	local X2TacticalGameRuleset Rules;
+	local XComPresentationLayer Pres;
+	local int Index;
+
+	if (!class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_TARGET_REFRESH))
+	{
+		return;
+	}
+	History = `XCOMHISTORY;
+	Rules = `TACTICALRULES;
+	Index = History.GetCurrentHistoryIndex();
+	if (Rules == none || Index <= 0)
+	{
+		return;
+	}
+	History.SetCurrentHistoryIndex(Index - 1);
+	Rules.OnObliterateGameState(none);
+	History.SetCurrentHistoryIndex(Index);
+	TargetRefreshes++;
+	Pres = `PRES;
+	if (bInputPhase && Pres != none && Pres.GetTacticalHUD() != none && Pres.GetTacticalHUD().m_kEnemyTargets != none)
+	{
+		Pres.GetTacticalHUD().m_kEnemyTargets.RealizeTargets(-1);
+	}
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: targets refreshed (" $ Why $ ", index" @ Index $ ", refresh" @ TargetRefreshes $ ")", , 'X2TC');
 }
 
 // 0.8.1 (0.8.0b Run 2: a path to the cursor showed while a soldier moved): leaving the move

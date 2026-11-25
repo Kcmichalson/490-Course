@@ -128,6 +128,7 @@ function BuildOrder()
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_REPLAY_VISUALS);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_BOUND_SKIP);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CAN_ACT);
+	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_TARGET_REFRESH); // 0.8.5
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_ATTACHED_MOVES);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_GUEST_BORDERS);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_PATH_HIDE);
@@ -135,6 +136,7 @@ function BuildOrder()
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_GLOW);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_WHEEL);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_STEP_ALL);
+	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CATCH_UP); // 0.8.5
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_PARTNER_PAUSE);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CAMERA);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_WATCHER_CAMERA);
@@ -147,6 +149,7 @@ function BuildOrder()
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_SKULLJACK);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_FOG_REVEAL);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_VIP_HOST);
+	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_INVITE_DIRECT); // 0.8.5
 	if (Order.Length != class'X2TC_CoopFixes'.const.FIX_COUNT)
 	{
 		`log("Coop fixes: display order lists" @ Order.Length @ "of" @ class'X2TC_CoopFixes'.const.FIX_COUNT @ "fixes", , 'X2TC');

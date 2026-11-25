@@ -169,6 +169,7 @@ const CMD_HACK_CHOICE = "X2TC_HackChoice";
 const HACK_CHOICE_WAIT_SECONDS = 15.0;  // host: longest wait for its hack screen to open
 const HACK_RESULT_WAIT_SECONDS = 20.0;  // host: longest wait for the hidden screen's result
 const HACK_HOLD_MAX_SECONDS = 180.0;    // guest (0.8.1): longest hold before releasing anyway
+const HACK_NUDGE_MAX_SECONDS = 30.0;    // guest (0.8.5): longest the release is repeated
 const MISSION_END_DISCONNECT_SECONDS = 2;
 const MISSION_END_MAX_SECONDS = 60;
 const MOVE_RETRY_SECONDS = 10;             // host: how long a move may wait for an idle ruleset
@@ -293,6 +294,13 @@ var bool bHeldHackMine;        // the guest started it (its screen is the intera
 var bool bHeldHackScreenDone;  // the screen finished (its owner pressed a key, or cancelled)
 var bool bHeldHackResultSeen;  // the replay passed the result frame
 var float HeldHackTime;        // WorldInfo.RealTimeSeconds when the hold began
+// 0.8.5 (0.8.4c Part 2 soft lock): after a release, the hack action whose "UI done" is
+// repeated until it completes (TickHackNudge). Cleared by ResetSession.
+var X2Action_Hack NudgeHackAction;
+var float NudgeStartTime;
+var float NudgeLastTime;
+var int NudgeCount;
+var string LastShotProbe;      // 0.8.5: the last shot probe key (X2TC_CoopShotProbe)
 
 // Co-op squad screen settings (host's; the guest keeps a copy from CMD_SETTINGS).
 var bool bOwnershipOn;         // owners enforced (default on)
@@ -585,6 +593,10 @@ function bool StartHostSteam()
 	Settings.SetInstalledModsHash(class'Helpers'.static.NetGetInstalledModsHash());
 	Settings.SetINIHash(class'Helpers'.static.NetGetMPINIHash());
 	Settings.SetIsDevConsoleEnabled(class'Helpers'.static.IsDevConsoleEnabled());
+	// 0.8.5: the co-op marker, so the partner's game knows this invite is a co-op one
+	// without CO-OP, JOIN (STEAM) first (X2TC_InviteListener.IsCoopInvite). Stock matches
+	// set the squad cost from their own lists, never this value.
+	Settings.SetMaxSquadCost(class'X2TC_InviteListener'.const.COOP_INVITE_MARKER);
 
 	OnlineSub.GameInterface.AddCreateOnlineGameCompleteDelegate(OnSteamGameCreated);
 	if (!OnlineSub.GameInterface.CreateOnlineGame(LocalUserNum(), 'Game', Settings))
@@ -717,6 +729,7 @@ function RestoreStockInviteHandler(string Why)
 	{
 		return;
 	}
+	OnlineSub.GameInterface.ClearGameInviteAcceptedDelegate(0, OnlineMgr.OnGameInviteAccepted); // 0.8.5: never twice
 	OnlineSub.GameInterface.AddGameInviteAcceptedDelegate(0, OnlineMgr.OnGameInviteAccepted);
 	`log("Coop steam guest: the game's own invite handler is back (" $ Why $ ")", , 'X2TC');
 }
@@ -741,6 +754,27 @@ function RestoreStockInviteHandlerLater()
 function RestoreStockInviteHandlerNow()
 {
 	RestoreStockInviteHandler("after the co-op invite");
+}
+
+// Guest (0.8.5): a co-op invite (with the co-op marker) accepted on the main menu without
+// CO-OP, JOIN (STEAM) first (X2TC_InviteListener). Joins as the armed path does. Returns
+// false if a session is already joining or running (the invite callback comes more than
+// once).
+function bool JoinFromInvite(const out OnlineGameSearchResult InviteResult, bool bWasSuccessful)
+{
+	if (IsActive() || bSteamJoinStarted)
+	{
+		`log("Coop steam guest: co-op invite again while joining or connected; ignored", , 'X2TC');
+		return false;
+	}
+	// As ArmSteamInvite (0.6.1): the network manager's delegates keep this object alive.
+	if (`XCOMNETMANAGER != none)
+	{
+		AddDelegates(`XCOMNETMANAGER);
+	}
+	`log("Coop steam guest: co-op invite accepted without JOIN (STEAM); joining directly", , 'X2TC');
+	OnSteamInviteAccepted(InviteResult, bWasSuccessful);
+	return true;
 }
 
 // Guest (Stage 7): called by X2TC_InviteListener when an invite is accepted while armed.
@@ -1178,6 +1212,7 @@ function UnlockHost(string Why)
 function GuestTurnUI()
 {
 	MaybeReleaseHeldHack(); // 0.8.1: the hold's time limit
+	TickHackNudge(); // 0.8.5
 	MaybeHideBanner();
 	UpdateBanner();
 	// 0.5.3: the refusal message goes after REFUSAL_SECONDS.
@@ -1841,6 +1876,7 @@ function ProbeHackNow()
 		return;
 	}
 	class'X2TC_CoopObjectLink'.static.ProbeHack(UnitState, RoleName(), LastHackProbe);
+	class'X2TC_CoopShotProbe'.static.Probe(RoleName(), LastShotProbe); // 0.8.5
 }
 
 // 0.8.3: the partner is still on the main menu with a JOIN started (connecting, or
@@ -2568,6 +2604,7 @@ function OnMapCleanup()
 	}
 	ReleaseNetworkData("map closing", true);
 	DestroySteamGame("map closing");
+	class'X2TC_CoopCatchUp'.static.Restore("map closing"); // 0.8.5
 	ResetSession();
 }
 
@@ -3438,7 +3475,59 @@ function ReleaseHeldHack(string Why)
 	Screen.OnHackingComplete = HeldHackComplete;
 	ClearHeldHack();
 	`log("Coop hack (guest): hack screen released (" $ Why $ ")", , 'X2TC');
+	// 0.8.5: the screen's owner is its hack action (X2Action_Hack.SetupHackingScreen spawns
+	// it with the action as owner). If the release lands while the soldier's begin
+	// animation still plays, the action resets its "UI done" flag afterwards and waits
+	// forever (X2Action_Hack.uc L466-480): 0.8.4c Part 2's soft lock. TickHackNudge repeats
+	// the action's own callback until it completes.
+	if (class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_HACK_ROUTING))
+	{
+		NudgeHackAction = X2Action_Hack(Screen.Owner);
+		NudgeStartTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+		NudgeLastTime = NudgeStartTime;
+		NudgeCount = 0;
+	}
 	Screen.HackEnded(); // calls the hack action's own callback, then clears the UI busy flag
+}
+
+// Guest (0.8.5), five times a second: once a second after a release, call the hack
+// action's public OnHackingUIComplete (X2Action_Hack.uc L197) again while the action
+// hasn't completed; harmless once it waits (it only sets the flag). Stops when the action
+// completes, or after HACK_NUDGE_MAX_SECONDS.
+function TickHackNudge()
+{
+	local float Now;
+
+	if (NudgeHackAction == none)
+	{
+		return;
+	}
+	Now = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	if (NudgeHackAction.bDeleteMe || NudgeHackAction.bCompleted)
+	{
+		if (NudgeCount > 0)
+		{
+			`log("Coop hack (guest): the hack action finished after" @ NudgeCount @ "repeated release(s)", , 'X2TC');
+		}
+		NudgeHackAction = none;
+		return;
+	}
+	if (Now - NudgeStartTime > HACK_NUDGE_MAX_SECONDS)
+	{
+		`log("Coop hack (guest): the hack action still hadn't finished after" @ int(HACK_NUDGE_MAX_SECONDS) $ "s of repeated releases; stopped", , 'X2TC');
+		NudgeHackAction = none;
+		return;
+	}
+	if (Now - NudgeLastTime >= 1.0)
+	{
+		NudgeLastTime = Now;
+		NudgeCount++;
+		if (NudgeCount == 1)
+		{
+			`log("Coop hack (guest): the hack action is still waiting after its release; repeating the release once a second", , 'X2TC');
+		}
+		NudgeHackAction.OnHackingUIComplete();
+	}
 }
 
 // Forget the held screen without ending it (session reset, map cleanup).
@@ -4127,6 +4216,11 @@ function ResetSession()
 	HostLastTurnTeam = eTeam_None;
 	HostObjectChecks = 0;
 	LastHackProbe = "";
+	// 0.8.5.
+	NudgeHackAction = none;
+	NudgeCount = 0;
+	LastShotProbe = "";
+	class'X2TC_CoopCatchUp'.static.Restore("session reset");
 }
 
 defaultproperties

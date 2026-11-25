@@ -3,7 +3,10 @@
 Status as of 0.8.3 Run 1 (2026-11-22, build 8270065;
 checklists/m4-083.md; plans/m4-plan.md "0.8.3 results"). 0.8.4 written
 2026-11-22 (release UI, Verbose log, logging only for the lag cap and the
-hack), not built or tested (checklists/m4-084.md). Each line names where it's tracked; update after
+hack), not built or tested (checklists/m4-084.md). 0.8.4c Part 2 (PC +
+friend over Steam, 2026-11-23/24): two campaign missions; results in
+plans/m4-plan.md "0.8.4c Part 2 results". 0.8.5 written 2026-11-24 (not
+built or tested; checklists/m4-085.md). Each line names where it's tracked; update after
 every test (checklists/, LOG.md).
 
 ## Limits by design
@@ -19,7 +22,11 @@ every test (checklists/, LOG.md).
 ## Open issues
 | Issue | Status |
 |---|---|
+| Over the internet (0.8.4c Part 2), transfers took under 1 s, but the partner's screen was 6-9 s behind on average in alien turns and up to 21 s; it catches up between turns | Measured. 0.8.5 (untested): the game's fast mode on the partner while it's more than 3 s behind |
 | Long missions get slower for the partner: every update the host sends grows with the mission (up to about 450 KB), so late alien turns play several seconds behind on the partner's screen (about 10 s at worst in 0.8.2 Run 3) | Known; tested. 0.8.3 Run 1: the transfer between the PCs takes about 60% of each update's delay (about 210 KB/s; 0.5 s early, 3 s late), and waiting for the previous update about 25-30%; even a one-frame update is 260-290 KB late. The engine's rate settings (10-20 KB/s) don't explain the ~210 KB/s cap; 0.8.4 measures it. Fix: "new frames, second try" in 0.8.5 (approved plan; first to cut) |
+| Partner: soft lock after the host's hack (the hack screen stays, nothing clickable, the partner's screen falls further and further behind) | Found in 0.8.4c Part 2 (an objective console). Cause from source: the partner released its copy of the screen during the soldier's begin animation, and the game's hack action then waited forever (X2Action_Hack L466-480). 0.8.5 (untested): the partner repeats the release until the hack action finishes |
+| Partner: accepting the host's Steam invite without clicking CO-OP, JOIN (STEAM) first opens the stock multiplayer lobby | Found in 0.8.4c Part 2. Workaround: back to the main menu, CO-OP, JOIN (STEAM), accept again. 0.8.5 (untested): a co-op invite accepted on the main menu joins directly, with no click. Accepting while the game is closed isn't covered |
+| Partner: some enemies in the target bar are greyed out and can't be selected | Reported in 0.8.4c Part 2 (friend). Co-op, not stock: the host could shoot with the same soldier, and after the host gave it back, so could the partner (Kc, 2026-11-24). Cause from source: the partner's action cache built before its visibility updated. 0.8.5 (untested): the partner refreshes its targets once caught up; a probe logs it. Workaround: the host takes the soldier and gives it back |
 | Partner: can't select another soldier while one is still moving (the host can, as in single-player: Tab during a move); the camera snaps back to the moving soldier | Open (0.8.2 Run 2). The partner's move is played on the host and replayed back; while replaying, the partner's input is off |
 | Partner: the NO SOLDIERS ASSIGNED banner can show while the alien turn is still playing on its screen (its soldiers died in that turn) | Fix in 0.8.3 (the banner waits for the animations); not in the 0.8.3 Run 1 logs |
 | Partner: NO SOLDIERS ASSIGNED doesn't show once one of its soldiers is bleeding out, even with every soldier taken away | Open (0.8.2). Not matched in the logs yet (they show the banner set in the bleeding-out turns); needs Kc's detail |

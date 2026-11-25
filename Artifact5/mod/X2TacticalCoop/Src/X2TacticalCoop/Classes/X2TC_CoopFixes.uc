@@ -22,6 +22,9 @@
 //  0.8.4 (plans/m4-plan.md, "1.0 plan" item 2): the "Verbose log" switch. It isn't a fix,
 //  so SAFE MODE doesn't touch it; VERBOSE_DEFAULT sets it at launch (true in playtest
 //  builds, false in 1.0). The per-frame and per-update X2TC lines run only while it's on.
+//  0.8.5 (plans/m4-plan.md, "0.8.5"): three switches: a co-op invite joins directly, the
+//  partner's target refresh, and fast mode while the partner is behind. (The auto-invite
+//  was written and removed before any build, Kc 2026-11-24.)
 //  Also holds one camera diagnostic flag (CameraOverrideRan).
 //
 //  Relies on (paths in Development\SrcOrig): nothing beyond Core\Classes\Object.uc.
@@ -52,7 +55,10 @@ const FIX_SUPPRESSION = 19;    // 0.8.2: suppression aim penalty as in single pl
 const FIX_SKULLJACK = 20;      // 0.8.2: Skulljack / Skullmine chance as in single player
 const FIX_FOG_REVEAL = 21;     // 0.8.2: shooters in the fog are revealed as in single player (watcher)
 const FIX_WATCHER_CAMERA = 22; // 0.8.2: follow camera by the watcher (no override)
-const FIX_COUNT = 23;
+const FIX_INVITE_DIRECT = 23; // 0.8.5: a co-op Steam invite joins without CO-OP, JOIN (STEAM) first
+const FIX_TARGET_REFRESH = 24; // 0.8.5: the partner rebuilds its targets once caught up
+const FIX_CATCH_UP = 25;      // 0.8.5: the game's fast mode on the partner while it's behind
+const FIX_COUNT = 26;
 
 // 0.8.4: the Verbose log switch at launch (true: playtest builds; false: 1.0).
 const VERBOSE_DEFAULT = true;
@@ -83,6 +89,9 @@ var config bool bSuppressionOff;
 var config bool bSkulljackOff;
 var config bool bFogRevealOff;
 var config bool bWatcherCameraOff;
+var config bool bInviteDirectOff;   // 0.8.5
+var config bool bTargetRefreshOff;
+var config bool bCatchUpOff;
 var config bool bCameraOverrideRan; // diagnostics: X2TC_Action_CameraFollowUnit has run this launch
 var config bool bVerboseFlipped;    // 0.8.4: true once the Verbose log switch differs from VERBOSE_DEFAULT
 
@@ -147,6 +156,9 @@ static function bool GetSwitch(int Fix)
 		case FIX_SKULLJACK:      return !default.bSkulljackOff;
 		case FIX_FOG_REVEAL:     return !default.bFogRevealOff;
 		case FIX_WATCHER_CAMERA: return !default.bWatcherCameraOff;
+		case FIX_INVITE_DIRECT:  return !default.bInviteDirectOff;
+		case FIX_TARGET_REFRESH: return !default.bTargetRefreshOff;
+		case FIX_CATCH_UP:       return !default.bCatchUpOff;
 	}
 	return false;
 }
@@ -178,6 +190,9 @@ static function SetSwitch(int Fix, bool bOn)
 		case FIX_SKULLJACK:      default.bSkulljackOff = !bOn; break;
 		case FIX_FOG_REVEAL:     default.bFogRevealOff = !bOn; break;
 		case FIX_WATCHER_CAMERA: default.bWatcherCameraOff = !bOn; break;
+		case FIX_INVITE_DIRECT:  default.bInviteDirectOff = !bOn; break;
+		case FIX_TARGET_REFRESH: default.bTargetRefreshOff = !bOn; break;
+		case FIX_CATCH_UP:       default.bCatchUpOff = !bOn; break;
 		default: return;
 	}
 	`log("Coop fixes: " $ FixName(Fix) @ "switched" @ (bOn ? "ON" : "OFF") $ ";" @ StateText(), , 'X2TC');
@@ -217,6 +232,9 @@ static function string FixName(int Fix)
 		case FIX_SKULLJACK:      return "Rules: Skulljack chance as in single player";
 		case FIX_FOG_REVEAL:     return "Rules: reveal shooters in the fog";
 		case FIX_WATCHER_CAMERA: return "Camera: follow moves (watcher)";
+		case FIX_INVITE_DIRECT:  return "Steam: a co-op invite joins directly";
+		case FIX_TARGET_REFRESH: return "Partner: refresh targets once caught up";
+		case FIX_CATCH_UP:       return "Partner screen: fast mode while behind";
 	}
 	return "unknown fix" @ Fix;
 }
@@ -262,6 +280,9 @@ static function string ShortName(int Fix)
 		case FIX_SKULLJACK:      return "skulljack";
 		case FIX_FOG_REVEAL:     return "fog";
 		case FIX_WATCHER_CAMERA: return "watcher camera";
+		case FIX_INVITE_DIRECT:  return "invite direct";
+		case FIX_TARGET_REFRESH: return "target refresh";
+		case FIX_CATCH_UP:       return "catch up";
 	}
 	return "fix" $ Fix;
 }

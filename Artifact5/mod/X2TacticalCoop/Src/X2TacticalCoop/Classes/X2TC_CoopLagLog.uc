@@ -559,7 +559,7 @@ function TryLogUpdate(int i)
 		}
 	}
 	BehindText = LastBehindMs >= 0 ? SecondsText(LastBehindMs) : "?";
-	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop lag G #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB build" @ U.BuildMs @ "arrive" @ ArriveText @ "load" @ U.LoadMs @ "transit" @ TransitText @ "backlog" @ LastBacklog @ "behind" @ BehindText, , 'X2TC');
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop lag G #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB build" @ U.BuildMs @ "arrive" @ ArriveText @ "load" @ U.LoadMs @ "transit" @ TransitText @ "backlog" @ LastBacklog @ "behind" @ BehindText $ ((LastBehindMs > 5000 && LastOldestAction != "") ? " oldest" @ LastOldestAction : ""), , 'X2TC'); // 0.8.5: the oldest action when > 5 s behind
 	if (U.bAlien)
 	{
 		AddStat(GBuild, U.BuildMs);
@@ -689,6 +689,8 @@ function Sample()
 	{
 		GuestSummary();
 	}
+	// 0.8.5: the game's fast mode while the partner is behind (X2TC_CoopCatchUp).
+	class'X2TC_CoopCatchUp'.static.Update(LastBehindMs, LastOldestAction);
 }
 
 function GuestSummary()

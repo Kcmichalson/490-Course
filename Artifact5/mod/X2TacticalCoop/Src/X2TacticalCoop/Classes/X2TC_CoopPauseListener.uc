@@ -22,6 +22,12 @@ event OnInit(UIScreen Screen)
 {
 	local XComEngine Engine;
 
+	// 0.8.5: give the player's own fast-mode setting back before the options can show or
+	// save it (X2TC_CoopCatchUp borrows it while the partner is behind).
+	if (UIPauseMenu(Screen) != none)
+	{
+		class'X2TC_CoopCatchUp'.static.Restore("pause menu");
+	}
 	if (UIPauseMenu(Screen) == none || Screen.IsA('UIShellStrategy') || !class'X2TC_CoopSession'.static.IsSessionActive())
 	{
 		return; // not co-op, or not the tactical pause menu: untouched

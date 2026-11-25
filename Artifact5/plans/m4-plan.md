@@ -1328,7 +1328,173 @@ tests as possible."
 - Part 3, PC alone: the saves without the mod.
 - The friend's sheet is `checklists/m4-084-friend.md`.
 
-## Code audit before 1.0 (plan only; Kc: "that will wait for the end")
+### 0.8.4c Part 2 results (PC + friend over Steam, 2026-11-23/24)
+Logs: `local/m4-logs/m4-084-pc-steam.log`, `m4-084-friend.log`.
+- **Missions:** Gatecrasher (14 turns, clean end: MISSION OVER on the
+  friend's PC), then a Guerrilla Op (Overpass), which ended with the friend
+  quitting.
+- **Internet lag:**
+  - Updates of 50-470 KB took 0.2-1.7 s round trip, about 400 KB/s against
+    the LAN laptop's 210 KB/s.
+  - Each update still leaves the host's queue in one frame. So the ceiling
+    tracks the receiving PC (guess: its per-frame processing), not the
+    network or a setting.
+  - In alien turns the partner's screen was 6-9 s behind on average and
+    11-21 s at worst, then caught up.
+  - At its worst, the oldest action still playing was usually
+    `X2Action_EnterCover`, `MoveDirect` or `Delay`.
+  - Transit was 0.05-0.9 s. **Over the internet, the animation backlog
+    dominates, not the transfer.**
+- **Soft lock after the host's objective hack:**
+  - The partner's copy of the hack screen opened about 8 s late (its
+    screen was already 7.7 s behind). The result arrived 1.9 s later, and
+    the mod released the screen then.
+  - In `X2Action_Hack.uc` (SrcOrig L386-480; Highlander L451-522) the
+    action opens the screen, plays the soldier's begin animation, *then*
+    sets HasFinishedUI = false and waits for it.
+  - A release during the begin animation is overwritten, and the action
+    waits forever. After that, the partner's "behind" grew without end
+    (7.7, 20, 37, 73, 107 s) and the backlog went from 59 to 371 frames.
+  - The first hack (a tower) was released 14 s after it opened and played
+    normally.
+  - **Cause found in source; the fix is untested.**
+- **Invite accepted without CO-OP > JOIN (STEAM) first:** the mod's own
+  M2-era invite listener travelled to the multiplayer menu
+  (`X2TC_InviteListener.CheckInvite`), so the friend landed in a stock
+  custom-match lobby. From the main menu, with JOIN (STEAM) first, the next
+  invite joined normally.
+- **"Can't shoot certain newly acquired targets" (friend):**
+  - Not in the logs. All 18 abilities the partner sent were applied; the
+    only refusals were two moves with no path in range.
+  - The partner's own target list isn't logged, so it can't be checked.
+  - **Kc's detail (2026-11-24):** "they show as possible targets but are
+    greyed out in the interface and unselectable."
+  - The stock enemy bar (`UITacticalHUD_Enemies.uc` L301-400) lists the
+    unit's targetable enemies and dims those the selected ability can't
+    currently affect (L387-399). So the look itself also happens in single
+    player, for example with no clear line of fire.
+  - Three possible causes, not yet told apart:
+    - normal game behavior;
+    - a partner screen behind the game state (its soldiers and enemies drawn
+      where they were seconds ago);
+    - a co-op visibility bug.
+- **Not done:** the camera override off (no switch line in either log);
+  the partner's hack probe near an objective (no partner soldier was within
+  3 tiles).
+- **Friend's request:** "a lobby system to automatically reconnect or
+  receive an invite when the next battle starts."
+
+### 0.8.5 (approved by Kc, 2026-11-24; written, not built or tested)
+Kc: "You may write it. For reference on the greyed-target, if I give myself
+the soldier, I can shoot it. [...] If I give it to myself, then give it
+back, they can then shoot them. Main priority for the invite is making sure
+that they don't need to click the menu button on their end before accepting
+the steam invite since that will be a major issue for typical users without
+instruction otherwise."
+
+The proposal as approved:
+1. **Hack soft lock** (fix switch "Hacks: the starter controls"):
+   - After the partner releases a held hack screen, it repeats
+     `OnHackingUIComplete()` on that screen's hack action (the screen's
+     owner; public, L197) once a second.
+   - It stops when the action has completed, or after 30 s.
+   - A repeat is harmless once the action waits.
+   - Logged once when a repeat was needed.
+2. **A co-op invite joins without JOIN (STEAM) first.**
+   - The host's co-op session gets a marker: a max squad cost no stock
+     match uses (`XComOnlineGameSettings.SetMaxSquadCost` L88).
+   - An invite with the marker, accepted on the main menu, goes straight
+     to the co-op session.
+   - Any other invite is left to the game: no more travel to the
+     multiplayer menu, since MULTIPLAYER is Mr.Fear's area (Kc).
+   - Guess: Steam carries the marker into the invite's settings. Logged,
+     and if it doesn't, the old armed path still works.
+3. **The friend's "next battle" request, in two steps:**
+   - **(a) With item 2,** after each mission the partner only accepts the
+     host's next invite.
+   - **(b) Optional, behind a switch:** the host remembers the partner's
+     Steam ID (sent at connect) and, on the next HOST (STEAM), invites them
+     directly (`OnlinePlayerInterface.SendGameInviteToFriend` L813),
+     keeping the overlay as a fallback. Untested native; one try.
+   - A real lobby that keeps both games connected between missions isn't
+     possible before 1.0: the session closes at each mission end by
+     design. That's for after 1.0.
+4. **Lag fix (changed by this evidence):**
+   - Over the internet the transfer is under 1 s, and the partner is 6-21 s
+     behind on animations.
+   - Proposed: **option 3, zip catch-up** on the partner while it's behind
+     by more than a threshold (for example 3 s, until under 1 s). The game
+     plays its own fast mode (`X2Action.ShouldPlayZipMode` L1175-1178) on
+     the partner only. Behind a switch.
+   - Option 4 (new frames) moves to after 1.0: it cuts the transfer, which
+     is now the smaller part.
+5. **Logging:**
+   - The partner's G line names the oldest action still playing once it's
+     more than 5 s behind.
+   - A shot probe (Verbose, both PCs): whenever the enemy bar has a dimmed
+     enemy, log the frame and, per dimmed enemy:
+     - the visibility manager's gameplay visibility and clear line of
+       sight;
+     - the tile distance;
+     - the shot's own availability code.
+   - **Checklist test:** when a greyed enemy appears on the partner, the
+     host takes that soldier on SQUAD and tries the same shot. If the host
+     can't shoot it either, it's stock behavior; if the host can, it's
+     co-op.
+6. **Camera override off:** still to test (unchanged).
+
+#### 0.8.5 as built (2026-11-24)
+Version `0.8.5`; three new switches (26 in all); syntax check: 30 files, 0
+problems. **Auto-invite removed before any build (Kc, 2026-11-24):** "don't
+do auto invite. Players may find it weird if the game can invite someone
+they didn't click [...]". Not to be proposed again.
+- **Invite without JOIN (STEAM) (top priority):**
+  - The host's Steam session carries the marker 271828 as its max squad
+    cost.
+  - On the main menu only, `X2TC_InviteListener` takes the game's own invite
+    handler off. A marked invite joins through `X2TC_CoopSession.JoinFromInvite`,
+    the same path as the armed one. Any other invite goes on to the game's
+    handler unchanged.
+  - The handler goes back on as soon as a screen opens on another map. The
+    old travel to the multiplayer menu is removed.
+  - Switch "Steam: a co-op invite joins directly".
+  - **Not covered:** accepting while the game is closed (the game handles a
+    boot invite before the mod's listener exists). The checklist tests it last.
+- **Greyed targets (cause found in source; fix untested):**
+  - Kc's detail settles that it's co-op, not stock behavior: the host could
+    shoot, and after a give-back so could the partner.
+  - The ruleset rebuilds a unit's action cache only when the history index
+    changes (`X2TacticalGameRuleset.uc` L545-642). The replay moves the
+    index to each frame before updating visibility for it
+    (`XComReplayMgr.uc` L158-168). A cache built in that gap keeps the old
+    visibility and stays "current". The host's owner change adds a frame,
+    so it rebuilds, which matches Kc's give-back.
+  - **Fix:** once caught up, and when input turns on, the partner marks the
+    caches outdated the ruleset's own way. It lowers the index by one for a
+    call to `OnObliterateGameState` (L408-418), then refreshes the enemy
+    bar. No history change.
+  - Switch "Partner: refresh targets once caught up". Possibly also behind
+    the partner's hack `AA_NoTargets` (a guess).
+- **Hack soft lock:**
+  - On release, the partner keeps the hack action (the screen's owner) and
+    calls its `OnHackingUIComplete` once a second until it completes, for at
+    most 30 s.
+  - Logged once if a repeat was needed, and again when it finishes. Under
+    "Hacks: the starter controls".
+- **Fast mode while behind (`X2TC_CoopCatchUp`):**
+  - On the partner, the profile's fast-mode flag is turned on in memory
+    while it is more than 3 s behind, and off below 1 s.
+  - It is also put back when the pause menu opens, the map closes or the
+    session resets. It is never saved; untouched if the player already uses
+    fast mode.
+  - Switch "Partner screen: fast mode while behind".
+- **Logging:**
+  - The G line adds `oldest <action>` when more than 5 s behind.
+  - `X2TC_CoopShotProbe` (Verbose, both PCs) logs each dimmed enemy's
+    visibility, LOS and tiles, the StandardShot code, and the index the
+    cache was built at.
+- **Test:** `checklists/m4-085.md`.
+
 
 Kc (2026-11-21): find "every single file you've written, it's purpose,
 its risks/liabilities and if there's any superior alternates." It runs

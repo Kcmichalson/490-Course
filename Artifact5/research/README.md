@@ -8,6 +8,10 @@ came from (a link, a file path and line in the SDK, or a test Kc ran).
 - `sdk-findings.md`: what the SDK source shows (written in M1)
 - `resources.md`: the modding tools, guides and references we use, and
   what each is for
+- `player-text.md`: every text the mod shows a player, with a column for
+  Kc's new wording
+- `chosen-partner.md`: why the Chosen's reveal and taunts don't play on the
+  partner (read only; guesses until tested)
 
 Quote at most a few lines of SDK source at a time, always with its path
 and line numbers. Never paste whole classes (see CLAUDE.md).

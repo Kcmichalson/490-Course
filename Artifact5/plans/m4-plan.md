@@ -1556,4 +1556,95 @@ the campaign test finds. Its own short plan after the 0.8.0 run.
 
 ## Left for later
 Network-size optimization, split turns, more than two players, parallel
-campaigns.
+campaigns. After 1.0 (Kc, 2026-11-25): the Lost-mission hang (a 952 KB
+update never reached the partner; fix: "new frames, second try") and doors
+on the partner (no left-click; the door still looks shut). Also after 1.0
+(Kc, 2026-11-26): joining from a Steam invite accepted while the game is
+closed.
+
+## 0.8.7 (draft, not approved; 2026-11-25, Session 9)
+No code until Kc says so. All causes below are guesses from the SDK and the
+mod's code. The 0.8.5 logs are on the PC; read them first (step 0).
+
+0. **Read the 0.8.5 logs** (local/m4-logs on the PC):
+   - Sessions 2 and 4, the friend's crash: XCom_Net lines with
+     "PingMCP" or "LostConnection".
+   - Session 3, the stuck rejoin: did the host still hold the old
+     connection?
+   - Mission 3, the Specialist: owner and can-act in the squad-state lines.
+   - The retaliation mission: see research/chosen-partner.md, "Suggested
+     order".
+1. **Partner crash on returning to the main menu** (switch "Stability:
+   clear the online check when leaving"). Guess: the game's own
+   lost-connection code runs while the engine counts the game as
+   multiplayer (XComTacticalController.uc L3037-3071; L2687-2711 in
+   PlayerWaiting). It starts PingMCP (4 s timeout, XComMCP.uc L655) with a
+   callback on the tactical controller. The travel to the main menu destroys
+   that controller before the answer, and the answer then fails ("Failed to
+   find function None in XComMCP"). Fix: set
+   `MCPManager.OnEventCompleted = none`, as the game's own handlers do
+   (L3085, L3105). Do it before each of the partner's trips to the main
+   menu (LEAVE, MISSION OVER, HOST DISCONNECTED) and again when the main
+   menu opens.
+2. **Stuck rejoin:**
+   - (a) A newer co-op invite replaces a join that hasn't reached the
+     mission (today: "ignored"), unless the current join started under 5 s
+     ago (duplicate callbacks).
+   - (b) A 20 s watchdog on the Steam join (no result: cancel, "The invite
+     is expired or invalid.").
+   - (c) The main-menu CO-OP button reads CO-OP: CANCEL during a Steam join
+     too.
+   - (d) Moved to item 6 (no longer conditional).
+3. **Specialist couldn't act after the partner left:** cause unknown. The
+   host already controls every soldier after the partner leaves
+   (known-issues, "by design"), so it isn't simply ownership. Decide after
+   step 0.
+4. **Chosen on the partner** (research/chosen-partner.md):
+   - (a) Stream each new unit's cinematic maps on the partner (covers the
+     reveal, the name card and the opening taunt). Small.
+   - (b) Rebuild the taunt lines the history doesn't carry. Medium, its own
+     switch, time-boxed; can move after 1.0.
+5. **Test (checklists/m4-087.md, written with the code):**
+   - The partner returns to the main menu 3+ times: LEAVE, a mission end,
+     the host quitting.
+   - A rejoin after a stuck join.
+   - A partner objective hack (first test of the 0.8.5 soft-lock fix).
+   - A partner disconnect mid-mission.
+   - A mission with a Chosen.
+   - Build ID with each result.
+
+Added after Kc's review (2026-11-26; Kc: "The rest looks good"):
+
+6. **The host is never stuck by a vanished partner** (0.8.5: the friend's
+   power outage left Kc to Alt+F4 with no save). If the partner is silent
+   for about 30-60 s, the host treats it as gone:
+   - it drops the connection;
+   - it clears any pending partner move or ability;
+   - it plays on alone, as when the partner leaves.
+   Test: end the partner's game with Task Manager mid-mission, once in each
+   turn.
+7. **Rejoin the running mission.** Check whether the host can host again
+   after the partner leaves, and the partner join the same mission. Hosting
+   already starts mid-mission, and a join sends the full history. If it's
+   cheap, it goes in 0.8.7: it gives the Lost hang and any disconnect a
+   workaround, and changes the "can't rejoin" line in known-issues. If not,
+   report the cost first.
+8. **Retest what 0.8.5 left untested** in the 0.8.7 run:
+   - the hack soft lock;
+   - the greyed-target refresh;
+   - fast mode on a long mission;
+   - the host's pause-menu save during co-op.
+9. **Camera override decision:** one mission with "Camera: follow moves
+   (override)" off. If the watcher handles the camera, delete
+   X2TC_Action_CameraFollowUnit and its switch before 0.9.
+10. **Before tagging 0.9:**
+    - the code audit and its fixes (after 0.8.7);
+    - the save-without-the-mod check;
+    - the release checklist's already-settled items ticked.
+
+**Order:** 0.8.7 (items 0-7, 9) → the test run (5, 8) → the code audit
+and its fixes → 0.9, release candidate, and a friend playtest → polish and
+dev tools removed → 1.0.
+
+**After 1.0 (Kc, 2026-11-26):** joining from a Steam invite accepted while
+the game is closed.

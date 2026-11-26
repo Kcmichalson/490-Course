@@ -6161,3 +6161,101 @@ followed until the partner joined.
     named co-op passive.
   - **How It Was Verified:** grep: no other "0.8.5" in mod/; syntax check on
     the class, 0 problems. Not built.
+  - **Prompt:** "Okay, what's needed for 1.0 release from here? The hacking
+    softlock was resolved and I believe you made fixes to the crash issues."
+  - **Provided:** what's left for 1.0, from plans/m4-plan.md ("1.0 plan"),
+    release/release-checklist.md and the 0.8.5 run. Two corrections:
+    - The 0.8.5 hack fix is untested: no hack came up in that run.
+    - The XComMCP crash on returning to the main menu is still open; only
+      the 0.8.0 and 0.8.2 crashes were fixed.
+    - LOG.md also has no result for the save-without-the-mod check.
+    - No file changes.
+  - **Prompt:** "Yes, draft 0.8.7"
+  - **Provided:** a 0.8.7 draft in chat (not approved, nothing written to
+    plans/):
+    - **The main-menu crash.** Guess, from the SDK: the game's own
+      lost-connection code (XComTacticalController.uc L3037-3071, and
+      L2687-2711 in PlayerWaiting) runs only while the engine counts the game
+      as multiplayer. It starts PingMCP (4 s timeout, XComMCP.uc L655) with a
+      callback on the tactical controller. The travel to the main menu
+      destroys the controller before the answer comes. Fix: clear
+      `MCPManager.OnEventCompleted` before that travel and on the main menu,
+      as the game's own handlers do (L3085, L3105).
+    - **The stuck rejoin.** A newer invite replaces a join that hasn't
+      reached the mission. Also: a 20 s watchdog on the Steam join, and
+      CO-OP: CANCEL during Steam joins.
+    - **The partner's soldiers.** They go back to the host on disconnect.
+      Guess for the Specialist.
+    - **Test checklist:** includes a partner objective hack.
+    - **Logs:** the 0.8.5 logs are on the PC (local/m4-logs isn't on the
+      laptop), so none of this was checked against them.
+  - **How It Was Verified:** SDK reads (laptop SrcOrig) at the lines above;
+    mod code reads (X2TC_CoopSession JoinFromInvite L758-772, Poll's connect
+    retries L1771-1796, OnConnectionClosed L3244-3255). Everything about
+    causes is a guess until the logs or a test show it.
+  - **Prompt:** "Don't write code yet [...] please do the planning
+    necessary. Perhaps see what might be causing the Chosen issue. [The
+    reinforcement and X4 cutscenes work; the Chosen teleport-in, opening
+    taunt, name card and mid-game voice taunts don't; the partner can open
+    the Chosen overview.] Push the lost-mission hang and doors fixes to post
+    1.0"
+  - **Provided (no code):**
+    - **New research/chosen-partner.md** (read only), with two causes, both
+      guesses:
+      - The Chosen's cinematic maps are streamed only by the host's
+        mid-mission unit creation (XComGameState_Unit.uc L1282-1312,
+        L1548). The reveal matinee, which starts the name card and the
+        opening lines, can't be found on the partner.
+      - The taunt lines are in transient fields
+        (XComGameState_NarrativeManager.uc L17-18), so the partner's history
+        has none to play.
+    - **plans/m4-plan.md:**
+      - The Lost hang and doors moved to "Left for later" (after 1.0, Kc).
+      - A "0.8.7 (draft, not approved)" section: step 0 log reads, the
+        crash, the rejoin, the Specialist and the Chosen (a, b), and the
+        test list.
+    - **release/known-issues.md:** six rows from the 0.8.5 run. The hang
+      and doors are marked after 1.0.
+    - **research/README.md:** lists the two new notes.
+  - **Misreads / rule breaks:** my earlier draft's item 3 ("the partner's
+    soldiers go back to the host on disconnect") was wrong. known-issues
+    already says the host controls every soldier after the partner leaves.
+    The draft in m4-plan.md now says the cause is unknown.
+  - **How It Was Verified:** SDK reads at the lines cited in the note. No
+    test; the logs are on the PC.
+  - **Prompt:** "Those sound like reasonable fixes for me. Is there any
+    other changes you'd recommend in the current plan before 0.9? 0.9 to 1.0
+    will be polish and removing dev tools. 0.9 Should be release ready
+    otherwise."
+  - **Provided:** recommendations for 0.8.7 / 0.9, in chat (plan not
+    changed):
+    - The host must never be stuck by a vanished partner (the power-outage
+      Alt+F4).
+    - A rejoin into the running mission.
+    - The Steam invite accepted while the game is closed.
+    - Retest everything 0.8.5 left untested.
+    - The camera-override decision.
+    - The code audit and the save-without-the-mod check before 0.9.
+  - **Misreads / rule breaks:** my known-issues row for the Lost hang gave
+    the workaround "the partner leaves and rejoins". The same file says the
+    partner can't rejoin a mission, so I corrected the row.
+  - **How It Was Verified:** reread release/known-issues.md ("Limits by
+    design"); LOG.md greps (autosave worked in 0.8.4c; the power-outage
+    entry above).
+  - **Prompt (2026-11-26):** "Accepting the steam invite while the game is
+    closed is a nonsignificant issue and can be pushed after 1.0. The rest
+    looks good."
+  - **Provided (no code):**
+    - **plans/m4-plan.md, 0.8.7 draft:** new items 6-10:
+      - the host is never stuck by a silent partner (replaces 2(d));
+      - a rejoin into the running mission (check the cost first);
+      - retesting what 0.8.5 left untested;
+      - the camera-override decision;
+      - the pre-0.9 audit, save check and checklist ticks;
+      - and the order up to 1.0.
+    - **The closed-game invite** is added to "Left for later" (after 1.0).
+    - **release/known-issues.md:** the invite row says the closed-game case
+      is after 1.0 ("start the game first"). It also notes that the direct
+      invite worked in the 0.8.5 Steam run.
+    - The draft is still not approved for code: Kc will say when.
+  - **How It Was Verified:** reread the edited sections; nothing to build.

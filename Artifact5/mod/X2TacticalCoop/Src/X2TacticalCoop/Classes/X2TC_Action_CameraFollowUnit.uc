@@ -1,15 +1,14 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_Action_CameraFollowUnit
 //
-//  What it changes: CLASS OVERRIDE of X2Action_CameraFollowUnit (approved by Kc,
-//  2026-11-20, plans/m4-plan.md 0.8.0 "Camera"; listed in the release's compatibility
-//  notes). The stock action skips the follow camera for a moving unit when the engine
-//  reports a multiplayer game, except for concealed friendly units
-//  (X2Action_CameraFollowUnit.uc L47-61). The guard's suspected cause on the guest: its
-//  network connection makes IsMultiPlayerGame() true (a guess; X2TC_CoopSession logs the
-//  value at HOST and JOIN). Only while a co-op session is active and the fix switch
-//  "Partner's camera follows moves" is on, this override ignores that multiplayer branch
-//  and follows as in single-player. In every other case (normal single-player, the
+//  What it changes: this is the mod's one class override, of X2Action_CameraFollowUnit
+//  (listed in the release's compatibility notes). The stock action skips the follow
+//  camera for a moving unit when the engine reports a multiplayer game, except for
+//  concealed friendly units (X2Action_CameraFollowUnit.uc L47-61). On the guest, the
+//  network connection probably makes IsMultiPlayerGame() true (a guess; X2TC_CoopSession
+//  logs the value at HOST and JOIN). While a co-op session is active and the fix switch
+//  "Partner's camera follows moves" is on, the override skips that multiplayer branch
+//  and follows the unit as in single-player. Otherwise (normal single-player, the
 //  tutorial, multiplayer matches, the switch off) it returns exactly what the stock
 //  function returns.
 //

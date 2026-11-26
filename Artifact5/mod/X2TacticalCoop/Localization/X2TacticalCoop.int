@@ -1,3 +1,8 @@
-; X2TacticalCoop localization (English). No strings yet.
-; This file exists because the build converts the Localization folder and
-; seems to need it (plans/m0-toolchain-plan.md).
+; English localization.
+
+; The hidden co-op passive every unit carries (X2TC_CoopRulesAbility). It's kept out of
+; the barracks ability lists; these names are for any screen that still shows it.
+[X2TC_CoopRules X2AbilityTemplate]
+LocFriendlyName="Co-op Rules"
+LocHelpText="In co-op, flanking crits and suppression work as in single player."
+LocLongDescription="In co-op, flanking crits and suppression work as in single player."

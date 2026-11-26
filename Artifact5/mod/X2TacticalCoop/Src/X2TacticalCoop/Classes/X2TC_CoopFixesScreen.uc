@@ -1,15 +1,13 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopFixesScreen
 //
-//  What it changes: adds the CO-OP: FIXES screen (plans/m4-plan.md, "On-screen
-//  toggles"). Either player opens it with CO-OP: FIXES on the tactical HUD
-//  (X2TC_CoopListener). It lists SAFE MODE and one checkbox per 0.8.x fix (the list scrolls);
-//  each click changes X2TC_CoopFixes on this machine only and is logged. Esc, the B
-//  button, right-click or CLOSE close it. A new screen, not a class override; built like
-//  X2TC_CoopSquadScreen.
-//  0.8.4 (plans/m4-plan.md, "1.0 plan" item 1): plain labels, grouped (Stability,
-//  Partner, Partner screen, Camera, Hacks, Rules), a short header, and a last row for
-//  the Verbose log switch (X2TC_CoopFixes.SetVerbose; not a fix, so SAFE MODE doesn't
+//  What it changes: adds the CO-OP: FIXES screen. Either player opens it with CO-OP: FIXES
+//  on the tactical HUD (X2TC_CoopListener). It lists SAFE MODE and one checkbox per fix
+//  (the list scrolls); each click changes X2TC_CoopFixes on this machine only and is
+//  logged. Esc, the B button, right-click or CLOSE close it. A new screen, not a class
+//  override; built like X2TC_CoopSquadScreen.
+//  Plain labels, grouped (Stability, Partner, Partner screen, Camera, Hacks, Rules), a
+//  short header, and a last row for the Verbose log switch (X2TC_CoopFixes.SetVerbose; not a fix, so SAFE MODE doesn't
 //  touch it).
 //
 //  Relies on (paths in Development\SrcOrig):
@@ -23,7 +21,7 @@
 class X2TC_CoopFixesScreen extends UIScreen;
 
 const PANEL_WIDTH = 700;
-const PANEL_HEIGHT = 760; // 0.8.1: 17 rows; 0.8.2: 26; the list scrolls (UIList adds a scrollbar)
+const PANEL_HEIGHT = 760; // the list scrolls (UIList adds a scrollbar)
 const LIST_HEIGHT = 580;
 
 var UIPanel Container;
@@ -32,7 +30,7 @@ var UIX2PanelHeader Header;
 var UIList FixList;
 var UIButton CloseButton;
 var array<UIMechaListItem> Rows; // row 0 = SAFE MODE, row k + 1 = fix Order[k], last row = Verbose log
-var array<int> Order;            // 0.8.4: fixes in display order (grouped)
+var array<int> Order;            // fixes in display order (grouped)
 
 // Opens the screen on this machine (once).
 static function Open()
@@ -120,7 +118,7 @@ function RefreshRows()
 	Rows[Rows.Length - 1].UpdateDataCheckbox("Verbose log (for bug reports; not a fix)", "", class'X2TC_CoopFixes'.static.Verbose(), OnCheckbox);
 }
 
-// 0.8.4: the fixes in display order, grouped by their label's first word.
+// The fixes in display order, grouped by their label's first word.
 function BuildOrder()
 {
 	Order.Length = 0;
@@ -128,7 +126,7 @@ function BuildOrder()
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_REPLAY_VISUALS);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_BOUND_SKIP);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CAN_ACT);
-	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_TARGET_REFRESH); // 0.8.5
+	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_TARGET_REFRESH);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_ATTACHED_MOVES);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_GUEST_BORDERS);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_PATH_HIDE);
@@ -136,7 +134,7 @@ function BuildOrder()
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_GLOW);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_WHEEL);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_STEP_ALL);
-	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CATCH_UP); // 0.8.5
+	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CATCH_UP);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_PARTNER_PAUSE);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CAMERA);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_WATCHER_CAMERA);
@@ -149,7 +147,7 @@ function BuildOrder()
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_SKULLJACK);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_FOG_REVEAL);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_VIP_HOST);
-	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_INVITE_DIRECT); // 0.8.5
+	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_INVITE_DIRECT);
 	if (Order.Length != class'X2TC_CoopFixes'.const.FIX_COUNT)
 	{
 		`log("Coop fixes: display order lists" @ Order.Length @ "of" @ class'X2TC_CoopFixes'.const.FIX_COUNT @ "fixes", , 'X2TC');

@@ -1,11 +1,11 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopTurnUI
 //
-//  What it changes: three pieces of the co-op tactical screen (plans/m3-plan.md, Stage 6),
-//  as static helpers the session and the follower call:
+//  What it changes: pieces of the co-op tactical screen, as static helpers the session
+//  and the follower call:
 //    - the blue banner: the game's own turn banner (UITurnOverlay), its XCOM-turn style
-//      with our text: "FRIENDLY ACTION" while the other player's soldier acts, and (from
-//      0.5.1) "NO SOLDIERS ASSIGNED" on the partner's screen while it has none; the stock
+//      with our text: "FRIENDLY ACTION" while the other player's soldier acts, and
+//      "NO SOLDIERS ASSIGNED" on the partner's screen while it has none; the stock
 //      texts are put back when it is hidden;
 //    - a small status line at the top right ("Partner is ready to end the turn",
 //      "Waiting for the host to end the turn"): a UIText the listener adds to the HUD;
@@ -29,7 +29,8 @@
 class X2TC_CoopTurnUI extends Object dependson(UI_Definitions);
 
 const FRIENDLY_TEXT = "FRIENDLY ACTION";
-const NO_SOLDIERS_TEXT = "NO SOLDIERS ASSIGNED"; // Run 1 (Kc): the partner has none to control
+// the partner has none to control -- Kc
+const NO_SOLDIERS_TEXT = "NO SOLDIERS ASSIGNED";
 const STATUS_TEXT_NAME = 'X2TC_CoopStatus';
 const GUEST_END_TURN_NAME = 'X2TC_CoopGuestEndTurn'; // the listener's button name
 

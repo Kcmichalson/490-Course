@@ -1,12 +1,12 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopMenuBar
 //
-//  What it changes: 0.8.4b (Kc, 2026-11-23: "move the co-op button to be an additional
-//  button to the left of multiplayer on the main bar"). Adds a CO-OP button to the retail
-//  main menu's bottom row, just left of MULTIPLAYER, styled like the row's own buttons.
-//  Clicking it opens a two-choice box: JOIN (STEAM) (then accept the host's invite) or
-//  JOIN BY IP (the address box). While a JOIN BY IP connects, the button reads
-//  CO-OP: CANCEL and a click cancels it (0.8.3's CONNECTING (CANCEL)).
+//  move the co-op button to be an additional button to the left of multiplayer on the main bar -- Kc
+//
+//  What it changes: adds a CO-OP button to the retail main menu's bottom row, just left
+//  of MULTIPLAYER, styled like the row's own buttons. Clicking it opens a two-choice box:
+//  JOIN (STEAM) (then accept the host's invite) or JOIN BY IP (the address box). While a
+//  JOIN BY IP connects, the button reads CO-OP: CANCEL and a click cancels it.
 //    - The row is rebuilt by the shell itself (UIFinalShell.UpdateMenu L127-149 clears it
 //      with UIShell.ClearMenu L248-256, at start and on login changes), so this hidden
 //      panel checks twice a second and puts the button back when it's missing. It joins
@@ -37,7 +37,7 @@ var int TimesAdded;
 
 // Adds the helper to a retail main menu. False if this isn't one (the caller keeps the
 // top-right buttons then).
-// (0.8.4b build fix: not named Attach, which Actor.uc L1960 already declares.)
+// (Not named Attach, which Actor.uc L1960 already declares.)
 static function bool AddToMainMenu(UIScreen Shell)
 {
 	local X2TC_CoopMenuBar Helper;
@@ -159,7 +159,7 @@ function OnBarClicked(UIButton Button)
 	PlayClick();
 	DialogData.eType = eDialog_Normal;
 	DialogData.strTitle = "CO-OP" @ class'X2TC_CoopListener'.static.VersionTag();
-	DialogData.strText = "Join a friend's co-op mission. JOIN (STEAM): then accept the host's Steam invite. JOIN BY IP: on the same network, type the host's address.";
+	DialogData.strText = "Join a friend's co-op mission";
 	DialogData.strAccept = "JOIN (STEAM)";
 	DialogData.strCancel = "JOIN BY IP";
 	DialogData.fnCallback = OnChoice;

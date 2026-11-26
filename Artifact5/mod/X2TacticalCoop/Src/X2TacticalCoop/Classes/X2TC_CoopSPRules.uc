@@ -2,10 +2,10 @@
 //  X2TacticalCoop: X2TC_CoopSPRules
 //
 //  What it changes: while a co-op session runs on the host, units created mid-mission keep
-//  their single-player abilities (plans/m4-plan.md, 0.8.1 item 2).
+//  their single-player abilities.
 //  Once the network manager has a server or client, the engine reports a multiplayer game
-//  on both machines (`XENGINE.IsMultiPlayerGame()` = True from HOST on, logged since
-//  0.8.0; native, so the mod can't clear it). One effect: when a unit is created during
+//  on both machines (`XENGINE.IsMultiPlayerGame()` = True from HOST on, as the log shows;
+//  native, so the mod can't clear it). One effect: when a unit is created during
 //  the mission (reinforcements, the Chosen arriving, spawned units), the ruleset skips
 //  every ability whose template isn't marked for the multiplayer game area
 //  (X2TacticalGameRuleset.InitializeUnitAbilities, SDK L877-889; Highlander L896-908:

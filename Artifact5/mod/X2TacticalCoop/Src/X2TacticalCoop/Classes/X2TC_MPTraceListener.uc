@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_MPTraceListener
 //
-//  What it changes: nothing in the game. Diagnostics for M2 (plans/m2-plan.md). The game
+//  What it changes: nothing in the game. Diagnostics for M2. The game
 //  suppresses its own multiplayer log categories, so this listener writes X2TC lines to
 //  Launch.log that show how far the multiplayer flow got:
 //    - every screen that opens: its class, and the class of the current game mode;

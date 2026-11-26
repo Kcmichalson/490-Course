@@ -1,8 +1,8 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopOwnership
 //
-//  What it changes: which player each XCOM soldier belongs to in a co-op mission
-//  (plans/m3-plan.md, Stage 6 and the co-op squad screen). Every soldier belongs to the
+//  What it changes: which player each XCOM soldier belongs to in a co-op mission.
+//  Every soldier belongs to the
 //  host (P1) until the squad screen gives it to the partner (P2): the host writes the
 //  unit value X2TC_Owner (1 or 2) in a change state, which reaches the guest in the next
 //  partial history. The value is the game's own name-to-number data on the unit (no mod
@@ -85,7 +85,7 @@ static function GetSquad(out array<XComGameState_Unit> Squad)
 
 // Host: one soldier's owner, in a submitted change state. The value is cleared by the
 // game when the next mission starts (eCleanup_BeginTactical, XComGameState_Unit.uc
-// L2229), so nothing stays in the campaign (Kc, 2026-11-15). The caller checks that the
+// L2229), so nothing stays in the campaign. The caller checks that the
 // ruleset and visualizer are idle. Returns false if the unit isn't an ownable soldier.
 static function bool SetOwner(int UnitID, int Owner)
 {
@@ -125,8 +125,8 @@ static function bool GuestHasActions()
 	return PlayerHasActions(OWNER_GUEST);
 }
 
-// True if any soldier of this owner (OWNER_HOST or OWNER_GUEST) can still act. 0.8.0: the
-// host's also include the non-soldier XCOM units it controls (IsHostOnlyUnit).
+// True if any soldier of this owner (OWNER_HOST or OWNER_GUEST) can still act. The host's
+// also include the non-soldier XCOM units it controls (IsHostOnlyUnit).
 static function bool PlayerHasActions(int Owner)
 {
 	local XComGameState_Unit UnitState;
@@ -145,11 +145,10 @@ static function bool PlayerHasActions(int Owner)
 	return false;
 }
 
-// 0.8.0 (Stage 8.1 run 0: the host moved a VIP with the FRIENDLY ACTION banner up): a
-// living XCOM-team unit on the board that isn't a soldier (a rescued VIP or civilian, a
-// mind-controlled enemy...). These have no owner value, so they are the host's (P1), but
-// only soldiers were counted when deciding whether the host still had actions. Not on the
-// squad screen. Fix switch: "VIPs and civilians count as the host's".
+// A living XCOM-team unit on the board that isn't a soldier (a rescued VIP or civilian, a
+// mind-controlled enemy...). These have no owner value, so they are the host's (P1). If
+// only soldiers were counted when deciding whether the host still had actions, the host
+// could move a VIP with the FRIENDLY ACTION banner up. Not on the squad screen. Fix switch: "VIPs and civilians count as the host's".
 static function bool IsHostOnlyUnit(XComGameState_Unit UnitState)
 {
 	return class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_VIP_HOST)
@@ -157,10 +156,11 @@ static function bool IsHostOnlyUnit(XComGameState_Unit UnitState)
 		&& !UnitState.IsDead() && !UnitState.bRemovedFromPlay && !UnitState.GetMyTemplate().bIsCosmetic;
 }
 
-// 0.6.3 (Stage 7 Run 2): whether a soldier can do anything now, the way the game decides
-// whether a unit still has actions (the ruleset's unit cache, bAnyActionsAvailable,
-// X2GameRuleset.uc L70). Action points alone counted a soldier bound by a Viper as able to
-// act (Kc: no banner while both his soldiers were bound). Falls back to action points.
+// Whether a soldier can do anything now, the way the game decides whether a unit still
+// has actions (the ruleset's unit cache, bAnyActionsAvailable, X2GameRuleset.uc L70).
+// Action points alone count a soldier bound by a Viper as able to act.
+// no banner while both my soldiers were bound -- Kc
+// Falls back to action points.
 static function bool UnitCanAct(XComGameState_Unit UnitState)
 {
 	local GameRulesCache_Unit UnitCache;
@@ -171,7 +171,7 @@ static function bool UnitCanAct(XComGameState_Unit UnitState)
 		return false;
 	}
 	Rules = `TACTICALRULES;
-	// 0.8.1 (0.8.0b Run 2: a bound soldier was still selectable on the guest): the unit
+	// A bound soldier was still selectable on the guest: the unit
 	// cache's bAnyActionsAvailable also counts abilities the player can't trigger (e.g. a
 	// 0-cost placeholder), so a bound soldier with its action points "could act". Use the
 	// game's own rule, which the controller uses for selection: not bound, not panicked, and
@@ -188,9 +188,10 @@ static function bool UnitCanAct(XComGameState_Unit UnitState)
 	return true;
 }
 
-// 0.6.3 (Stage 7 Run 2): every soldier's state, logged by the host at each XCOM turn
-// start (Kc's last soldier never got actions back after a Viper's bind; this shows why
-// next time): owner, action points, can act, incapacitated, panicked, and its effects.
+// Every soldier's state, logged by the host at each XCOM turn start: owner, action
+// points, can act, incapacitated, panicked, and its effects.
+// my last soldier never got actions back after a viper's bind -- Kc
+// This shows why if it happens again.
 static function LogSquadState(string Why)
 {
 	local array<XComGameState_Unit> Squad;

@@ -1,35 +1,34 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopListener
 //
-//  What it changes: adds the two co-op test buttons (plans/m3-plan.md, Stage 2).
+//  What it changes: adds the co-op buttons.
 //    - CO-OP: HOST on the tactical HUD of a single-player mission (not in multiplayer
 //      matches): starts the host side of X2TC_CoopSession.
 //    - CO-OP: JOIN on the main menu: opens the game's text box for the host's address
 //      (an IP address or its one-number form), then starts the guest side.
 //  Each writes X2TC lines to Launch.log; the address itself is never logged.
-//  On the guest, after it has opened the host's mission (Stage 3), the tactical HUD gets
-//  no HOST button; instead it and the game's replay screen (UIReplay) tell the session
-//  they opened. From Stage 4, the replay screen is closed when the session's follower
-//  (X2TC_CoopReplayMgr) has replaced the stock replay manager. From Stage 5 the guest's
-//  tactical HUD has CO-OP: LEAVE (X2TC_CoopSession.LeaveAsGuest) where HOST would be.
-//  From Stage 6 both HUDs get CO-OP: END TURN (host: ends the turn, asking first while
-//  the partner's soldiers can act; guest: tells the host it is ready) and a status line
-//  (a UIText named X2TC_CoopStatus that X2TC_CoopTurnUI sets), and CO-OP: SQUAD, which
-//  opens X2TC_CoopSquadScreen. Stage 7 (0.6.0): CO-OP: HOST (STEAM) on the host's HUD
-//  (then INVITE (STEAM)) and CO-OP: JOIN (STEAM) on the main menu. 0.8.0: CO-OP: FIXES on
-//  both HUDs (X2TC_CoopFixesScreen), and HOST refused in the campaign's tutorial mission
-//  (XComGameReplicationInfo.uc L159-166 spawns XComTutorialMgr there). 0.8.3: while a
-//  JOIN is connecting, the JOIN button reads CO-OP: CONNECTING (CANCEL), and a click
-//  cancels it (UIScreenStack.GetFirstInstanceOf L620, UIPanel.GetChildByName L856).
-//  0.8.4 (plans/m4-plan.md, C items 9, 11, 13; "1.0 plan" item 1): with RELEASE_UI, the
-//  main menu shows CO-OP: JOIN (STEAM) first and CO-OP: JOIN BY IP under it (the
-//  MULTIPLAYER button is gone: X2TC_MainMenuListener), and the tactical HUD's column of
-//  CO-OP buttons becomes one Co-op icon with a panel (X2TC_CoopMenu). Visible without the
-//  panel: the status line and, on the partner, END TURN (READY). Before hosting, the
+//  On the guest, after it has opened the host's mission, the tactical HUD gets no HOST
+//  button; instead it and the game's replay screen (UIReplay) tell the session they
+//  opened. The replay screen is closed once the session's follower (X2TC_CoopReplayMgr)
+//  has replaced the stock replay manager. The guest's tactical HUD has CO-OP: LEAVE
+//  (X2TC_CoopSession.LeaveAsGuest) where HOST would be.
+//  Both HUDs get CO-OP: END TURN (host: ends the turn, asking first while the partner's
+//  soldiers can act; guest: tells the host it is ready), a status line (a UIText named
+//  X2TC_CoopStatus that X2TC_CoopTurnUI sets), CO-OP: SQUAD, which opens
+//  X2TC_CoopSquadScreen, and CO-OP: FIXES (X2TC_CoopFixesScreen). The host's HUD also has
+//  CO-OP: HOST (STEAM) (then INVITE (STEAM)), and the main menu CO-OP: JOIN (STEAM). HOST
+//  is refused in the campaign's tutorial mission (XComGameReplicationInfo.uc L159-166
+//  spawns XComTutorialMgr there). While a JOIN is connecting, the JOIN button reads
+//  CO-OP: CONNECTING (CANCEL), and a click cancels it (UIScreenStack.GetFirstInstanceOf
+//  L620, UIPanel.GetChildByName L856).
+//  With RELEASE_UI, the main menu shows CO-OP: JOIN (STEAM) first and CO-OP: JOIN BY IP
+//  under it (no MULTIPLAYER button: X2TC_MainMenuListener), and the tactical HUD's column
+//  of CO-OP buttons becomes one Co-op icon with a panel (X2TC_CoopMenu). Visible without
+//  the panel: the status line and, on the partner, END TURN (READY). Before hosting, the
 //  host's panel has HOST (STEAM), HOST BY IP and FIXES; SQUAD and END TURN appear once
-//  hosting. MOVE TO CURSOR is gone from the partner's HUD (M and right-click still work).
-//  0.8.4b (Kc): on the retail main menu, one CO-OP button in the bottom row instead of the
-//  two top-right JOIN buttons (X2TC_CoopMenuBar); SetJoinLabel relabels it too.
+//  hosting. There's no MOVE TO CURSOR on the partner's HUD (M and right-click still work).
+//  On the retail main menu, one CO-OP button in the bottom row replaces the two top-right
+//  JOIN buttons (X2TC_CoopMenuBar); SetJoinLabel relabels it too.
 //
 //  Both are mouse-only buttons at the top right, like the MULTIPLAYER button
 //  (X2TC_MainMenuListener). JOIN sits below the MP TEST buttons' column so the test build
@@ -53,10 +52,11 @@ class X2TC_CoopListener extends UIScreenListener dependson(UIInputDialogue);
 
 // Long enough for an IP address or its one-number form, with room for a mistake.
 const ADDRESS_MAX_CHARS = 40;
-// 0.8.3 (Kc, after 0.8.2 Run 2: a mistyped address needed a restart): JOIN's label while
-// a JOIN is connecting; a click cancels it (X2TC_CoopSession.CancelGuestConnect).
+// JOIN's label while a JOIN is connecting; a click cancels it
+// (X2TC_CoopSession.CancelGuestConnect).
+// a mistyped address needed a restart -- Kc
 const CONNECTING_LABEL = "CO-OP: CONNECTING (CANCEL)";
-// 0.8.4: true: the release layout (Co-op icon and panel, "BY IP" names, no MULTIPLAYER);
+// true: the release layout (Co-op icon and panel, "BY IP" names, no MULTIPLAYER);
 // false: the old test column.
 const RELEASE_UI = true;
 
@@ -68,14 +68,14 @@ event OnInit(UIScreen Screen)
 
 	if (UIShell(Screen) != none && RELEASE_UI && class'X2TC_CoopMenuBar'.static.AddToMainMenu(Screen))
 	{
-		// 0.8.4b (Kc): one CO-OP button in the main menu's own row, left of MULTIPLAYER.
+		// One CO-OP button in the main menu's own row, left of MULTIPLAYER.
 		`log("Coop: CO-OP button attached to the main menu row of" @ string(Screen.Class.Name), , 'X2TC');
 		class'X2TC_CoopSession'.static.LogNetDiagnostics("main menu");
 	}
 	else if (UIShell(Screen) != none && RELEASE_UI)
 	{
-		// 0.8.4: Steam first (the main path), then BY IP; the MULTIPLAYER button is gone.
-		// 0.8.4b: only where the row button can't be added (not the retail menu).
+		// Steam first (the main path), then BY IP, and no MULTIPLAYER button. Only where
+		// the row button can't be added (not the retail menu).
 		AddButton(Screen, 'X2TC_CoopJoinSteamButton', "CO-OP: JOIN (STEAM)" @ VersionTag(), OnJoinSteamClicked, 40);
 		AddButton(Screen, 'X2TC_CoopJoinButton', JoinLabel(GuestSession != none && GuestSession.IsGuestConnecting()), OnJoinClicked, 90);
 		`log("Coop: JOIN (STEAM) and JOIN BY IP buttons added to" @ string(Screen.Class.Name), , 'X2TC');
@@ -84,14 +84,14 @@ event OnInit(UIScreen Screen)
 	else if (UIShell(Screen) != none)
 	{
 		AddButton(Screen, 'X2TC_CoopJoinButton', JoinLabel(GuestSession != none && GuestSession.IsGuestConnecting()), OnJoinClicked, 290);
-		// Stage 7: join over Steam (accept the host's Steam invite after clicking this).
+		// Join over Steam (accept the host's Steam invite after clicking this).
 		AddButton(Screen, 'X2TC_CoopJoinSteamButton', "CO-OP: JOIN (STEAM)", OnJoinSteamClicked, 340);
 		`log("Coop: JOIN button added to" @ string(Screen.Class.Name), , 'X2TC');
-		class'X2TC_CoopSession'.static.LogNetDiagnostics("main menu"); // 0.8.1
+		class'X2TC_CoopSession'.static.LogNetDiagnostics("main menu");
 	}
 	else if (UIAvengerHUD(Screen) != none)
 	{
-		// 0.8.1: is the engine's multiplayer flag off again back on the Avenger?
+		// Is the engine's multiplayer flag off again back on the Avenger?
 		class'X2TC_CoopSession'.static.LogNetDiagnostics("Avenger");
 	}
 	else if (UITacticalHUD(Screen) != none && IsSinglePlayerTactical(Screen) && RELEASE_UI)
@@ -102,22 +102,21 @@ event OnInit(UIScreen Screen)
 	{
 		if (GuestSession != none)
 		{
-			// The guest's copy of the host's mission (Stage 3): no HOST button here.
+			// The guest's copy of the host's mission: no HOST button here.
 			GuestSession.OnGuestMissionScreen("tactical HUD");
-			// Stage 5: the guest's way out, from the start.
+			// The guest's way out, from the start.
 			AddButton(Screen, 'X2TC_CoopLeaveButton', "CO-OP: LEAVE" @ VersionTag(), OnLeaveClicked, 260);
-			// Stage 5 Run 2: the game's own unit cycling is off with a tutorial-style
-			// replay manager (XComTacticalController.uc L540-544).
+			// The game's own unit cycling is off with a tutorial-style replay manager
+			// (XComTacticalController.uc L540-544).
 			AddButton(Screen, 'X2TC_CoopNextButton', "CO-OP: NEXT SOLDIER", OnNextSoldierClicked, 310);
-			// Run 6 fallback: hover the destination, then click this; the host builds the path.
+			// Fallback: hover the destination, then click this; the host builds the path.
 			AddButton(Screen, 'X2TC_CoopMoveButton', "CO-OP: MOVE TO CURSOR (M)", OnMoveToCursorClicked, 360);
-			// Stage 6 (0.5.0): the guest's END TURN only tells the host it is ready.
+			// The guest's END TURN only tells the host it is ready.
 			AddButton(Screen, 'X2TC_CoopGuestEndTurn', "CO-OP: END TURN (READY)", OnGuestEndTurnClicked, 420);
-			// Fixes A-D (Runs 8-9) keep their defaults (A and D on, B and C off) without
-			// buttons: from 0.5.3 fix D, the fresh pathing pawn, is permanent (Kc).
+			// Fixes A-C keep their defaults (A on, B and C off) without buttons.
 			// The co-op squad screen (owners and settings; view only unless allowed).
 			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 470);
-			// 0.8.0: the fix switches and SAFE MODE (this machine only).
+			// The fix switches and SAFE MODE (this machine only).
 			AddButton(Screen, 'X2TC_CoopFixesButton', "CO-OP: FIXES", OnFixesClicked, 520);
 			AddStatusText(Screen, 580);
 			`log("Coop: LEAVE, NEXT SOLDIER, MOVE, END TURN, SQUAD and FIXES buttons added to the guest's tactical HUD", , 'X2TC');
@@ -126,34 +125,34 @@ event OnInit(UIScreen Screen)
 		else
 		{
 			AddButton(Screen, 'X2TC_CoopHostButton', "CO-OP: HOST" @ VersionTag(), OnHostClicked, 260);
-			// Stage 6 (0.5.0): ends XCOM's turn, asking first while the partner's soldiers
+			// Ends XCOM's turn, asking first while the partner's soldiers
 			// can act (Backspace does the same once hosting).
 			AddButton(Screen, 'X2TC_CoopHostEndTurn', "CO-OP: END TURN", OnHostEndTurnClicked, 310);
 			// The co-op squad screen: soldier owners and the co-op settings.
 			AddButton(Screen, 'X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, 360);
-			// Stage 7: host over Steam (private Steam session, then the invite overlay).
+			// Host over Steam (private Steam session, then the invite overlay).
 			AddButton(Screen, 'X2TC_CoopHostSteamButton', "CO-OP: HOST (STEAM)", OnHostSteamClicked, 410);
-			// 0.8.0: the fix switches and SAFE MODE (this machine only).
+			// The fix switches and SAFE MODE (this machine only).
 			AddButton(Screen, 'X2TC_CoopFixesButton', "CO-OP: FIXES", OnFixesClicked, 460);
 			AddStatusText(Screen, 520);
 			`log("Coop: HOST, END TURN and FIXES buttons added to the tactical HUD (tutorial mission=" $ IsTutorialMission() $ ")", , 'X2TC');
-			class'X2TC_CoopSession'.static.LogNetDiagnostics("tactical HUD, before HOST"); // 0.8.1
+			class'X2TC_CoopSession'.static.LogNetDiagnostics("tactical HUD, before HOST");
 		}
 	}
 	else if (UIReplay(Screen) != none)
 	{
-		// The game's replay screen, which its replay mode opens (Stage 3). With no guest
+		// The game's replay screen, which its replay mode opens. With no guest
 		// session here, the session object was lost in the map load (or this is not co-op).
 		if (GuestSession != none)
 		{
 			GuestSession.OnGuestMissionScreen("replay screen");
-			// Stage 4: with our follower in charge, close the stock replay screen, so the
+			// With our follower in charge, close the stock replay screen, so the
 			// ruleset's replay state doesn't press its play button and the Challenge
 			// summary doesn't open at the end (X2TacticalGameRuleset.uc L4993-5001,
 			// UIReplay.uc L374-382).
 			if (GuestSession.HasFollower())
 			{
-				// Run 7 (0.4.0): closed 0.2 s later rather than inside its own OnInit, which
+				// Closed 0.2 s later rather than inside its own OnInit, which
 				// may have left it in the screen stack (the pathing pawn hides itself while
 				// it is there; X2TC_CoopReplayMgr.KeepPathingVisible also checks).
 				`log("Coop guest: closing the stock replay screen in 0.2 s (the follower drives the replay)", , 'X2TC');
@@ -167,7 +166,7 @@ event OnInit(UIScreen Screen)
 	}
 }
 
-// 0.8.4: the release HUD (the Co-op icon and its panel, X2TC_CoopMenu).
+// The release HUD (the Co-op icon and its panel, X2TC_CoopMenu).
 function AddReleaseHUD(UIScreen Screen, X2TC_CoopSession GuestSession)
 {
 	local X2TC_CoopMenu Menu;
@@ -193,7 +192,7 @@ function AddReleaseHUD(UIScreen Screen, X2TC_CoopSession GuestSession)
 	Session = class'X2TC_CoopSession'.static.FindSession();
 	bHosting = Session != none && Session.IsHost() && Session.IsPollRunning();
 	Menu.AddItem('X2TC_CoopHostSteamButton', "CO-OP: HOST (STEAM)" @ VersionTag(), OnHostSteamClicked, "Host this mission and invite a Steam friend");
-	Menu.AddItem('X2TC_CoopHostButton', "CO-OP: HOST BY IP" @ VersionTag(), OnHostClicked, "Host on your network; the partner joins with your IP address");
+	Menu.AddItem('X2TC_CoopHostButton', "CO-OP: HOST BY IP" @ VersionTag(), OnHostClicked, "Host on your network, share your IPv4 address to let others join.");
 	Menu.AddItem('X2TC_CoopSquadButton', "CO-OP: SQUAD", OnSquadClicked, "Give soldiers to the partner or take them back");
 	Menu.AddItem('X2TC_CoopHostEndTurn', "CO-OP: END TURN", OnHostEndTurnClicked, "End XCOM's turn (asks first while the partner's soldiers can act)");
 	Menu.AddItem('X2TC_CoopFixesButton', "CO-OP: FIXES", OnFixesClicked, "Co-op fixes on this PC; turn one off only if it misbehaves");
@@ -203,8 +202,8 @@ function AddReleaseHUD(UIScreen Screen, X2TC_CoopSession GuestSession)
 	class'X2TC_CoopSession'.static.LogNetDiagnostics("tactical HUD, before HOST");
 }
 
-// 0.8.4: after HOST BY IP or HOST (STEAM) starts hosting: show SQUAD and END TURN, hide
-// the other way to host.
+// After HOST BY IP or HOST (STEAM) starts hosting: show SQUAD and END TURN, and hide the
+// other way to host.
 function ShowHostingItems(UIButton Button, name OtherHostButton)
 {
 	local X2TC_CoopMenu Menu;
@@ -223,27 +222,27 @@ function ShowHostingItems(UIButton Button, name OtherHostButton)
 	Menu.SetItemVisible('X2TC_CoopHostEndTurn', true);
 }
 
-// "(v0.3.8)": the mod's version on the CO-OP buttons, so each machine's build can be
-// checked on screen (Kc, 2026-11-14).
+// "(vX.Y.Z)": the mod's version on the CO-OP buttons, so each machine's build can be
+// checked on screen.
 static function string VersionTag()
 {
 	return "(v" $ class'X2TC_CoopSession'.static.ModVersion() $ ")";
 }
 
-// 0.8.3: the main-menu JOIN button's label.
+// The main-menu JOIN button's label.
 static function string JoinLabel(bool bConnecting)
 {
 	return bConnecting ? CONNECTING_LABEL : (RELEASE_UI ? "CO-OP: JOIN BY IP" : "CO-OP: JOIN") @ VersionTag();
 }
 
-// 0.8.3: relabel the main menu's JOIN button, if the main menu is open.
+// Relabels the main menu's JOIN button, if the main menu is open.
 static function SetJoinLabel(bool bConnecting)
 {
 	local XComPlayerController PC;
 	local UIScreen ShellScreen;
 	local UIButton JoinButton;
 
-	// 0.8.4b: the main menu row's CO-OP button, if it's there.
+	// The main menu row's CO-OP button, if it's there.
 	JoinButton = class'X2TC_CoopMenuBar'.static.FindBarButton();
 	if (JoinButton != none)
 	{
@@ -287,7 +286,7 @@ function AddButton(UIScreen Screen, name ButtonName, string Label, delegate<UIBu
 	NewButton.DisableNavigation();
 }
 
-// Stage 6: the co-op status line (X2TC_CoopTurnUI.SetStatusText), hidden until used.
+// The co-op status line (X2TC_CoopTurnUI.SetStatusText), hidden until used.
 function AddStatusText(UIScreen Screen, float Y)
 {
 	local UIText StatusText;
@@ -300,14 +299,14 @@ function AddStatusText(UIScreen Screen, float Y)
 	StatusText.Hide();
 }
 
-// Stage 7, host: the first click starts hosting over Steam; later clicks reopen the Steam
+// Host: the first click starts hosting over Steam; later clicks reopen the Steam
 // invite overlay.
 function OnHostSteamClicked(UIButton Button)
 {
 	local X2TC_CoopSession Session;
 
 	PlayClickSound(Button);
-	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
+	class'X2TC_CoopMenu'.static.CloseFor(Button);
 	if (RefuseInTutorial("HOST (STEAM)"))
 	{
 		return;
@@ -323,11 +322,11 @@ function OnHostSteamClicked(UIButton Button)
 	if (Session.StartHostSteam())
 	{
 		Button.SetText("CO-OP: INVITE (STEAM)" @ VersionTag());
-		ShowHostingItems(Button, 'X2TC_CoopHostButton'); // 0.8.4
+		ShowHostingItems(Button, 'X2TC_CoopHostButton');
 	}
 }
 
-// Stage 7, guest: wait for the host's Steam invite.
+// Guest: wait for the host's Steam invite.
 function OnJoinSteamClicked(UIButton Button)
 {
 	`log("Coop: JOIN (STEAM) clicked", , 'X2TC');
@@ -344,11 +343,11 @@ function OnJoinSteamClicked(UIButton Button)
 function OnSquadClicked(UIButton Button)
 {
 	PlayClickSound(Button);
-	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
+	class'X2TC_CoopMenu'.static.CloseFor(Button);
 	class'X2TC_CoopSquadScreen'.static.Open();
 }
 
-// Stage 6: the guest is ready to end XCOM's turn.
+// The guest is ready to end XCOM's turn.
 function OnGuestEndTurnClicked(UIButton Button)
 {
 	local X2TC_CoopSession GuestSession;
@@ -363,13 +362,13 @@ function OnGuestEndTurnClicked(UIButton Button)
 	GuestSession.GuestEndTurnPressed();
 }
 
-// Stage 6: the host's END TURN (the co-op check, then the game's own end turn).
+// The host's END TURN (the co-op check, then the game's own end turn).
 function OnHostEndTurnClicked(UIButton Button)
 {
 	local X2TC_CoopSession Session;
 
 	PlayClickSound(Button);
-	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
+	class'X2TC_CoopMenu'.static.CloseFor(Button);
 	Session = class'X2TC_CoopSession'.static.FindSession();
 	if (Session == none || Session.RoleName() != "host")
 	{
@@ -387,15 +386,15 @@ function PlayClickSound(UIButton Button)
 	}
 }
 
-// 0.8.0: the fixes screen, on either machine.
+// The fixes screen, on either machine.
 function OnFixesClicked(UIButton Button)
 {
 	PlayClickSound(Button);
-	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
+	class'X2TC_CoopMenu'.static.CloseFor(Button);
 	class'X2TC_CoopFixesScreen'.static.Open();
 }
 
-// 0.8.0 (Kc): the campaign's tutorial mission runs its own scripted replay manager
+// The campaign's tutorial mission runs its own scripted replay manager
 // (XComTutorialMgr, spawned when the tutorial is on: XComGameReplicationInfo.uc L159-166);
 // co-op isn't offered there.
 function bool IsTutorialMission()
@@ -419,7 +418,7 @@ function OnHostClicked(UIButton Button)
 {
 	`log("Coop: HOST clicked", , 'X2TC');
 	PlayClickSound(Button);
-	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
+	class'X2TC_CoopMenu'.static.CloseFor(Button);
 	if (RefuseInTutorial("HOST"))
 	{
 		return;
@@ -428,18 +427,18 @@ function OnHostClicked(UIButton Button)
 	{
 		Button.SetText("CO-OP: HOSTING" @ VersionTag());
 		Button.DisableButton();
-		ShowHostingItems(Button, 'X2TC_CoopHostSteamButton'); // 0.8.4
+		ShowHostingItems(Button, 'X2TC_CoopHostSteamButton');
 	}
 }
 
-// Stage 5 Run 2: select the guest's next XCOM soldier.
+// Selects the guest's next XCOM soldier.
 function OnNextSoldierClicked(UIButton Button)
 {
 	local X2TC_CoopReplayMgr Follower;
 	local XComTacticalGRI TacticalGRI;
 
 	PlayClickSound(Button);
-	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
+	class'X2TC_CoopMenu'.static.CloseFor(Button);
 	TacticalGRI = XComTacticalGRI(Button.WorldInfo.GRI);
 	if (TacticalGRI != none)
 	{
@@ -453,7 +452,7 @@ function OnNextSoldierClicked(UIButton Button)
 	Follower.SelectNextGuestUnit();
 }
 
-// Run 6: move the guest's selected soldier to the tile under the 3D cursor.
+// Moves the guest's selected soldier to the tile under the 3D cursor.
 function OnMoveToCursorClicked(UIButton Button)
 {
 	local X2TC_CoopReplayMgr Follower;
@@ -473,13 +472,13 @@ function OnMoveToCursorClicked(UIButton Button)
 	Follower.MoveActiveUnitToCursor();
 }
 
-// Stage 5: the guest leaves the co-op mission and goes back to the main menu.
+// The guest leaves the co-op mission and goes back to the main menu.
 function OnLeaveClicked(UIButton Button)
 {
 	local X2TC_CoopSession GuestSession;
 
 	PlayClickSound(Button);
-	class'X2TC_CoopMenu'.static.CloseFor(Button); // 0.8.4
+	class'X2TC_CoopMenu'.static.CloseFor(Button);
 	Button.DisableButton();
 	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
 	if (GuestSession == none)
@@ -499,7 +498,7 @@ function OnJoinClicked(UIButton Button)
 
 	`log("Coop: JOIN clicked", , 'X2TC');
 
-	// 0.8.3: while a JOIN is connecting, the button reads CONNECTING (CANCEL).
+	// While a JOIN is connecting, the button reads CONNECTING (CANCEL).
 	GuestSession = class'X2TC_CoopSession'.static.FindGuestSession();
 	if (GuestSession != none && GuestSession.IsGuestConnecting())
 	{
@@ -545,7 +544,7 @@ function OnAddressAccepted(string Text)
 	`log("Coop: address entered (form:" @ class'X2TC_CoopSession'.static.AddressForm(Address) $ ")", , 'X2TC');
 	if (class'X2TC_CoopSession'.static.GetSession().StartGuest(Address))
 	{
-		SetJoinLabel(true); // 0.8.3
+		SetJoinLabel(true);
 	}
 }
 

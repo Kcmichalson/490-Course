@@ -2,7 +2,7 @@
 //  X2TacticalCoop: X2TC_CoopPauseListener
 //
 //  What it changes: in a co-op session only, the tactical pause menu pauses this machine's
-//  game again, as in single-player (plans/m4-plan.md, 0.8.1 item 2). The pause menu
+//  game again, as in single-player. The pause menu
 //  pauses only when the engine doesn't report a multiplayer game (UIPauseMenu.InitScreen,
 //  SDK L88-91), and co-op makes it report one (X2TC_CoopSPRules). Closing the menu
 //  unpauses as before (UIPauseMenu.OnRemoved calls SetPause(false) unconditionally,
@@ -22,8 +22,8 @@ event OnInit(UIScreen Screen)
 {
 	local XComEngine Engine;
 
-	// 0.8.5: give the player's own fast-mode setting back before the options can show or
-	// save it (X2TC_CoopCatchUp borrows it while the partner is behind).
+	// Give the player's own fast-mode setting back before the options can show or save it
+	// (X2TC_CoopCatchUp borrows it while the partner is behind).
 	if (UIPauseMenu(Screen) != none)
 	{
 		class'X2TC_CoopCatchUp'.static.Restore("pause menu");

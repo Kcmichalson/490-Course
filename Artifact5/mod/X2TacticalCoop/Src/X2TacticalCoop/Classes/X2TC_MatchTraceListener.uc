@@ -1,11 +1,11 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_MatchTraceListener
 //
-//  What it changes: nothing in the game. Diagnostics only (plans/m2-live-test-plan.md,
-//  table rows 8-11). The game's own multiplayer log categories are suppressed, so this
-//  writes X2TC lines to Launch.log for the steps of a match:
+//  What it changes: nothing in the game. Diagnostics only. The game's own multiplayer log
+//  categories are suppressed, so this writes X2TC lines to Launch.log for the steps of a
+//  match:
 //    - a multiplayer lobby opens (a lobby that ends in a map change logs no "closed"
-//      line: Stage 1e showed OnRemoved is not called then; the LoadMap line marks it)
+//      line: OnRemoved is not called then; the LoadMap line marks it)
 //    - the lobby's state changes: players in the lobby, opponent joined, network
 //      connection, match can start
 //    - the tactical HUD opens (the tactical map is up), with the game class
@@ -17,7 +17,7 @@
 //
 //  Each timer logs one "poll timer running" line the first time it fires, and the turn
 //  poll logs once why it has no acting player yet. Without them a silent log could mean
-//  either "nothing changed" or "the timer never ran" (Stage 1e could not tell which).
+//  either "nothing changed" or "the timer never ran".
 //
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\UIScreenListener.uc         (OnInit, OnRemoved)

@@ -6032,3 +6032,132 @@ followed until the partner joined.
     asking (a Python copy inside Artifact5/; nothing deleted).
   - **How It Was Verified:** greps of the saved logs; the timings and
     quotes above come from them. `cmp` showed pc-4 = launch-4.
+
+### 2026-11-25 — Session 9: comment cleanup in mod/X2TacticalCoop (comments only, not built)
+- **Planned:** plans/m4-comment-cleanup-plan.md (approved by Kc this session).
+  Comments that quote Kc become short lines in Kc's style, signed `-- Kc`;
+  Mr.Fear becomes "Fear"; every other comment says what the code does and
+  why, without version tags, run/stage numbers, dates, plan references or
+  credit-only Kc mentions (that history stays here in LOG.md). The class
+  headers ("What it changes" / "Relies on") and the SDK file and line
+  references stay.
+- **Changed:** comments in all 36 files of mod/X2TacticalCoop (30 classes,
+  4 config files, the .int, the .x2proj). No code changed. There are 18 `-- Kc`
+  lines (the plan's table) and 2 "Fear" mentions. 796 comments became 760:
+  comments that only gave a version were removed. The SDK comment quoted in
+  X2TC_CoopSession (replay delegates) is now a paraphrase.
+- **Problems / left as found:**
+  - X2TC_CoopListener's test-layout comment (RELEASE_UI=false branch) still
+    says fix D is permanent, but X2TC_CoopFixes says fix D was removed.
+  - X2TC_InviteListener says the check above OnInviteAccepted "is delayed",
+    but the code doesn't delay it.
+  - X2TC_MPTraceListener still mentions M2.
+  - Some evidence numbers (e.g. "5508 selected-unit lines") are now only in
+    this log.
+- **Checks:** a script compared the original files (backed up first) with
+  the edited ones with all comments stripped: 36 files, code changed 0.
+  `tools/check_unrealscript.py`: 30 files, problems 0 (it printed "SDK SrcOrig not
+  found; inherited-name checks skipped"; the code is identical, so those
+  checks can't have changed). Not built or tested in game; build ID 8270065.
+- **Session 9 prompt log:**
+  - **Prompt:** "Please look through the files in the mod\X2Tactical Co-op
+    folder [...] find all comments written by claude, next I will ask you to
+    change or remove them"
+  - **Provided:** an inventory of all 796 comments (scratchpad file, not in
+    the repo), tagged by kind. All looked Claude-written; not confirmed with
+    git (CLAUDE.md: no git commands).
+  - **Prompt:** "Please change any that quote me to be in my style, like
+    this: shift tab is the steam overlay hotkey don't use -- Kc [...] refer to
+    him casually as Fear [...] edit the comments to look more natural [...]
+    Preview the changes"
+  - **Provided:** a preview (17 Kc lines, 2 Fear changes, plainer-style
+    examples) and one unclear comment (CONNECTING (CANCEL)); no file changes.
+  - **Prompt:** "Yes, the comment can be rewritten. Go ahead"
+  - **Provided:** the plan saved; the config files done by me, the 30
+    classes by four sub-agents with one set of files each; the checks above.
+  - **Misreads / rule breaks:** the first prompt's folder name ("X2Tactical
+    Co-op") didn't match; I used mod/X2TacticalCoop. The Session 8 prompt
+    log at the end of this file wasn't touched.
+  - **How It Was Verified:** comment-stripped comparison (0 code changes in
+    36 files), the syntax check (0 problems), and greps: no "Mr.Fear",
+    plans/, dates or Run/Stage tags left in comments. The only Kc mentions
+    are the 18 `-- Kc` lines, and "0.8.3" is only inside Kc's own quote.
+  - **Prompt:** "Yes, fix them" (the two stale comments)
+  - **Provided:** X2TC_CoopListener's test-layout comment now reads "Fixes A-C
+    keep their defaults (A on, B and C off)". Fix D is gone, and those defaults
+    are the ones in X2TC_CoopReplayMgr's defaultproperties. The comment above
+    X2TC_InviteListener.OnInviteAccepted now says the check runs right away.
+    It also says what happens with the game's own handler on and off, as the
+    code does (bStockHandlerOff).
+  - **Not fixed (out of scope; noted for Kc):** the InviteListener header
+    still calls the invite marker a "guess until tested". The 0.8.5 Steam run
+    above logged `co-op marker=True ... joining directly`.
+  - **How It Was Verified:** the comment-stripped comparison still shows 0
+    code changes in 36 files; the syntax check on both classes found 0
+    problems. Not built.
+  - **Prompt:** "Yes. Also, please give me every piece of custom loc that a
+    player will see when playing so I can update it now. Especially the pop
+    ups and what the client/host see when hosting/joining."
+  - **Provided:** the InviteListener header no longer calls the marker a
+    guess ("tested over Steam on build 8270065"). New file
+    research/player-text.md lists the 95 player-visible texts of the release
+    layout: main menu joining, join errors, the host's and the partner's
+    tactical HUD, the squad and fixes screens, and the shot breakdown. Each
+    row has file:line and a blank "New text" column for Kc. Test-layout-only
+    texts are listed separately. None of the text is in the .int file; it's
+    all in the .uc files.
+  - **How It Was Verified:** the strings were found by grepping the UI calls
+    (AddButton, AddItem, InitButton, SetText, SetStatusText, ShowGuestMessage,
+    dialog strTitle/strText/strAccept/strCancel, banner consts) and reading
+    the functions that build text. The line numbers were checked with grep;
+    two wrong ranges and an off-by-one in the fix labels were corrected.
+    0 code changes; syntax check 0 problems. Guess: a string drawn by code
+    the greps didn't cover could be missing.
+  - **Prompt:** "Replace 4 with just Join a friend's co-op mission [...]
+    9 [...] 11, 13 [...] 22 [...] 31 [...] 47 [...] 48 [...] Oh yeah also
+    [...] the classes had perks called X2TacticalCoop_*something* and they
+    were visible and unlocalized in the barracks screen."
+  - **Provided:** the new texts in the code. Row 4: X2TC_CoopMenuBar popup
+    text. Row 9: JOIN (STEAM) popup. Rows 11 and 13: both Steam invite errors
+    now say "The invite is expired or invalid.". Row 22: the HOST BY IP
+    tooltip (the label is unchanged). Row 31: host status line. Row 47:
+    mission over. research/player-text.md marks each row as applied.
+    The perk: X2TC_CoopRulesAbility's passive X2TC_CoopRules has no
+    localization, and nothing in its template hides it from the barracks
+    summary. The SDK folder (D:) couldn't be reached this session, so the fix
+    (a hide flag on the template, and/or a name in the .int) isn't checked
+    or written yet.
+  - **Misreads / rule breaks:** Kc's "48" text (HOST DISCONNECTED) belongs
+    to row 49. I applied it to row 49 and left row 48 (`XCOM won/lost`) as
+    it was.
+  - **How It Was Verified:** the comment-stripped comparison shows exactly
+    those 8 string literals changed (3 files) and nothing else; syntax check
+    0 problems. Not built. The mod version is still 0.8.5.
+  - **Prompt:** "You are on the laptop, the game is located at C:\Program
+    Files (x86)\Steam\steamapps\common\XCOM 2 as is the SDK in the common
+    folder. Name it as well as hiding it in the barracks"
+  - **Provided:**
+    - **Hide flag:** X2TC_CoopRulesAbility sets
+      `bDontDisplayInAbilitySummary = true`. It's declared at
+      X2AbilityTemplate.uc L138, and UIUtilities_Strategy.uc L1408-1434
+      skips it in the ability summary.
+    - **Names:** Localization/X2TacticalCoop.int gets an
+      `[X2TC_CoopRules X2AbilityTemplate]` section: LocFriendlyName "Co-op
+      Rules", plus help and long description. The section format was checked
+      against the game's XComGame.int. The file is plain ASCII.
+    - **Syntax check:** tools/check_unrealscript.py now also looks for
+      SrcOrig in the laptop's Steam folder (C:\Program Files (x86)\Steam\...),
+      after the PC's D: path.
+  - **Laptop paths:** read only, on Kc's word this session. CLAUDE.md still
+    lists only the D: paths.
+  - **How It Was Verified:** the full syntax check ran with SrcOrig found
+    (inherited-name checks included): 30 files, 0 problems. The
+    comment-stripped comparison shows only the one new template line and the
+    new .int section. Not built or tested in game. Guess until tested: the
+    perk no longer shows in the barracks.
+  - **Prompt:** "Yes, make it 0.8.6"
+  - **Provided:** X2TC_VERSION is now "0.8.6" (X2DownloadableContentInfo_
+    X2TacticalCoop.uc L23). 0.8.6 = the Session 9 player text and the hidden,
+    named co-op passive.
+  - **How It Was Verified:** grep: no other "0.8.5" in mod/; syntax check on
+    the class, 0 problems. Not built.

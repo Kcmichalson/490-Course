@@ -35,7 +35,12 @@ import re
 import sys
 
 DEFAULT_CLASSES = pathlib.Path(__file__).resolve().parent.parent / "mod" / "X2TacticalCoop" / "Src" / "X2TacticalCoop" / "Classes"
-SDK_SRCORIG = pathlib.Path(r"D:\SteamLibrary\steamapps\common\XCOM 2 War of the Chosen SDK\Development\SrcOrig")
+# The PC's Steam library first, then the laptop's default Steam folder.
+SDK_SRCORIG_CANDIDATES = [
+    pathlib.Path(r"D:\SteamLibrary\steamapps\common\XCOM 2 War of the Chosen SDK\Development\SrcOrig"),
+    pathlib.Path(r"C:\Program Files (x86)\Steam\steamapps\common\XCOM 2 War of the Chosen SDK\Development\SrcOrig"),
+]
+SDK_SRCORIG = next((p for p in SDK_SRCORIG_CANDIDATES if p.is_dir()), SDK_SRCORIG_CANDIDATES[0])
 
 
 def strip(src):

@@ -1,11 +1,10 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopReplayMgr
 //
-//  What it changes: the guest's replay manager in a co-op mission (plans/m3-plan.md,
-//  Stage 4). X2TC_CoopSession puts it in place of the stock replay manager on the
-//  guest's copy of the host's mission, before the game starts its replay. It replays
-//  from the mission's start state like the stock one (so the scene is built the proven
-//  way, Stage 3), then keeps following: whenever the guest's history grows (the host's
+//  What it changes: the guest's replay manager in a co-op mission. X2TC_CoopSession puts
+//  it in place of the stock replay manager on the guest's copy of the host's mission,
+//  before the game starts its replay. It replays from the mission's start state like the
+//  stock one (so the scene is built the way that's known to work), then keeps following: whenever the guest's history grows (the host's
 //  partial histories), it steps forward to the newest frame, the way the inactive
 //  player's replay manager does in stock multiplayer. It never stops the replay, so the
 //  guest's ruleset never adds game states of its own (AddNewStatesAllowed is false while
@@ -19,7 +18,7 @@
 //  field (XComGameReplicationInfo.uc L25), as the multiplayer game does with
 //  XComMPReplayMgr (XComMPTacticalGRI.uc L287).
 //
-//  Stage 5: it extends the tutorial's replay manager (XComTutorialMgr), so bInTutorial is
+//  It extends the tutorial's replay manager (XComTutorialMgr), so bInTutorial is
 //  set. In that mode a context the guest submits during the replay goes to
 //  HandleSubmittedGameStateContext instead of being applied (X2GameRuleset.uc L290-293),
 //  and input state changes are allowed (XComTacticalController.uc L780-786). This class
@@ -30,7 +29,7 @@
 //  the end-of-battle observer) is switched off, and every tutorial function it replaces
 //  logs once when called, so anything tutorial-specific that fires shows in Launch.log.
 //
-//  Stage 6 (0.5.0): selection (NEXT SOLDIER, Tab, the automatic skip) only lands on the
+//  Selection (NEXT SOLDIER, Tab, the automatic skip) only lands on the
 //  guest's own soldiers (X2TC_CoopOwnership, P2) and moves off P1's; the start and end
 //  of XCOM's input phase are passed to the session (its "ready" lasts one turn).
 //
@@ -60,34 +59,34 @@ var int TurnScanFrame;   // last frame checked for player-turn starts
 var bool bBehind;        // stepping toward the newest frame
 var bool bGuestInputOn;  // the guest's input is on (XCOM's turn, caught up)
 var bool bInputPhase;    // XCOM's turn: tutorial mode on (the ruleset stays in PerformingReplay)
-var string LastMoveChecks; // Run 4 diagnostics: the last logged move-guard values
+var string LastMoveChecks; // diagnostics: the last logged move-guard values
 var string LastAbilityKey; // the last ability capture (template, source, target)
-var bool bPawnForceLogged; // Run 7: the "pathing pawn shown" line, once per input-on
-// Run 8 (0.4.2): competing fixes for normal moves, each switched on screen by a guest
-// button (X2TC_CoopListener), so one run tests them all. A: refresh the reachable-tiles
-// cache (0.4.1); B: history current index -1 while the input is on; C: world sync on
-// each refresh.
+var bool bPawnForceLogged; // the "pathing pawn shown" line, once per input-on
+// Competing fixes for normal moves, each switched on screen by a guest button
+// (X2TC_CoopListener), so one test run can try them all. A: refresh the reachable-tiles
+// cache; B: history current index -1 while the input is on; C: world sync on each
+// refresh.
 var bool bFixCache;
 var bool bFixHistoryIndex;
 var bool bFixWorldSync;
-var float LastStateLogTime; // Run 8: the 0.5 s move-state line
-var int LastRefreshUnitID;  // Run 8: the unit, frame and input state of the last pathing refresh
+var float LastStateLogTime; // the 0.5 s move-state line
+var int LastRefreshUnitID;  // the unit, frame and input state of the last pathing refresh
 var int LastRefreshFrame;
 var name LastSeenInputState;
 var float LastAbilityTime; // its WorldInfo.RealTimeSeconds
 var array<name> LoggedTutorialCalls; // tutorial functions already logged once
-var int LastSkipFromUnitID; // Stage 6: the P1 soldier the selection last moved off (retried after new frames)
-var int MissionEndFrameSeen;     // 0.5.3: the end-of-battle frame the replay passed (-1 = none)
-var int TargetRefreshes;         // 0.8.5: RefreshTargets calls this mission
+var int LastSkipFromUnitID; // the P1 soldier the selection last moved off (retried after new frames)
+var int MissionEndFrameSeen;     // the end-of-battle frame the replay passed (-1 = none)
+var int TargetRefreshes;         // RefreshTargets calls this mission
 var float MissionEndSeenTime;    // its WorldInfo.RealTimeSeconds
 var bool bMissionOver;           // "mission over" handed to the session; no more input
-var bool bLoggedNoneCanAct;      // 0.8.0: "none of the guest's soldiers can act" logged once
-var bool bTutorialControlsSet;   // 0.8.0: this follower turned bIsTutorialAllowingControls on
-var string LastTutorialControlsWhy; // 0.8.0: the reason last logged for that flag
-var string LastHackAvailability;    // 0.8.1: the last logged hack-ability line
-var int ObjectChecks;               // 0.8.2: map-object checks so far (X2TC_CoopObjectLink)
+var bool bLoggedNoneCanAct;      // "none of the guest's soldiers can act" logged once
+var bool bTutorialControlsSet;   // this follower turned bIsTutorialAllowingControls on
+var string LastTutorialControlsWhy; // the reason last logged for that flag
+var string LastHackAvailability;    // the last logged hack-ability line
+var int ObjectChecks;               // map-object checks so far (X2TC_CoopObjectLink)
 
-const MISSION_END_WAIT_SECONDS = 8.0; // 0.5.3: longest wait for the visualizer after the end frame
+const MISSION_END_WAIT_SECONDS = 8.0; // longest wait for the visualizer after the end frame
 
 simulated event StartReplay(int SessionStartStateIndex)
 {
@@ -113,7 +112,7 @@ simulated event StartReplay(int SessionStartStateIndex)
 	{
 		`log("Coop follower: no guest session to tell", , 'X2TC');
 	}
-	// Run 8: the M key and right-click for move to cursor.
+	// The M key and right-click for move to cursor.
 	class'X2TC_CoopInput'.static.Install();
 }
 
@@ -124,7 +123,7 @@ function ScanTurnBegins()
 	if (CurrentHistoryFrame > TurnScanFrame)
 	{
 		class'X2TC_CoopSession'.static.LogTurnBegins("guest", TurnScanFrame + 1, CurrentHistoryFrame);
-		// 0.5.3: the end of the battle, passed by the replay.
+		// The end of the battle, passed by the replay.
 		if (MissionEndFrameSeen < 0)
 		{
 			EndFrame = class'X2TC_CoopSession'.static.FindGameEndFrame(TurnScanFrame + 1, CurrentHistoryFrame);
@@ -139,7 +138,7 @@ function ScanTurnBegins()
 	}
 }
 
-// 0.5.3: once the end of the battle has been shown (caught up and the visualizer idle,
+// Once the end of the battle has been shown (caught up and the visualizer idle,
 // or MISSION_END_WAIT_SECONDS after it was passed), the guest's input goes off for good
 // and the session shows "mission over".
 function CheckMissionEnd()
@@ -169,9 +168,10 @@ function CheckMissionEnd()
 	}
 }
 
-// The following state. Named WaitForPlayerInput (Run 3, 0.3.6) because the controller
-// refuses every move while a tutorial manager is in any other state
-// (XComTacticalController.PerformPath L1098); Run 2's moves never reached the capture.
+// The following state. It's named WaitForPlayerInput because the controller refuses
+// every move while a tutorial manager is in any other state
+// (XComTacticalController.PerformPath L1098); under another name, moves never reached the
+// capture.
 // It replaces the tutorial's state of that name (XComTutorialMgr.uc L655-751): its
 // validating HandleSubmittedGameStateContext and its Begin code (which sets up the
 // tutorial's next scripted input) are overridden here.
@@ -189,11 +189,11 @@ state WaitForPlayerInput
 		if (CurrentHistoryFrame < StepForwardStopFrame)
 		{
 			bBehind = true;
-			// 0.8.1 (0.8.0b Run 2: enemy turns played longer on the guest): outside XCOM's
-			// turn, once the visualizer is idle, build every pending frame in one step
-			// (bStepAll, XComReplayMgr.StepReplayForward L104, L139), as live play builds
-			// the AI's frames together, so parallel visuals can merge. A guess that this is
-			// the main cause. Fix switch: "Partner: faster enemy turns".
+			// Enemy turns played longer on the guest. Outside XCOM's turn, once the
+			// visualizer is idle, build every pending frame in one step (bStepAll,
+			// XComReplayMgr.StepReplayForward L104, L139), as live play builds the AI's
+			// frames together, so parallel visuals can merge. That this is the main cause is
+			// a guess. Fix switch: "Partner: faster enemy turns".
 			if (!IsXComTurn() && !class'XComGameStateVisualizationMgr'.static.VisualizerBusy()
 				&& class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_STEP_ALL))
 			{
@@ -204,14 +204,14 @@ state WaitForPlayerInput
 				StepReplayForward();
 			}
 			ScanTurnBegins();
-			class'X2TC_CoopSession'.static.GuestCheckHackResult(); // 0.8.1
+			class'X2TC_CoopSession'.static.GuestCheckHackResult();
 		}
 		else if (bBehind)
 		{
 			bBehind = false;
 			LastSkipFromUnitID = 0;
 			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: replayed to frame" @ CurrentHistoryFrame @ "(history frames=" $ `XCOMHISTORY.GetNumGameStates() $ ")", , 'X2TC');
-			RefreshTargets("caught up"); // 0.8.5
+			RefreshTargets("caught up");
 		}
 
 		UpdateGuestInput();
@@ -223,7 +223,7 @@ Begin:
 	// SetupForPlayerInputUsingFrame) must not run.
 }
 
-// Stage 5 (Run 2 version). Two levels:
+// Two levels:
 //  - The XCOM input phase, for the whole of XCOM's turn once caught up: tutorial mode on,
 //    and the ruleset taken out of its replay state the way the tutorial does before the
 //    player's input (SetupForPlayerInputUsingFrame, XComTutorialMgr.uc L291-305:
@@ -232,8 +232,8 @@ Begin:
 //    (X2TacticalGameRuleset.uc L5434-5451, L4963-4978); the game states TurnPhase_Begin
 //    builds reach HandleSubmittedGameStateContext and are not applied. Leaving the phase
 //    calls ResumeReplay (back to PerformingReplay, L1418-1421) and turns tutorial mode
-//    off. Run 1 showed why: in PerformingReplay no soldier could be selected, and tutorial
-//    mode on from the start played the tutorial's intro (X2TacticalGameRuleset.uc
+//    off. Testing showed why: in PerformingReplay no soldier could be selected, and
+//    tutorial mode on from the start played the tutorial's intro (X2TacticalGameRuleset.uc
 //    L3422-3437).
 //  - Input on (ActiveUnit_Moving) inside the phase while nothing is animating and the
 //    replay is caught up; the replay's input state otherwise.
@@ -250,24 +250,23 @@ function UpdateGuestInput()
 		return;
 	}
 
-	// Run 3 (0.3.6): the phase may only begin once the ruleset is in PerformingReplay. In
-	// Run 2 it began during LoadTacticalGame, which then saw tutorial mode on and played
-	// the tutorial intro (X2TacticalGameRuleset.uc L3422-3437), and EndReplay did nothing
-	// there.
+	// The phase may only begin once the ruleset is in PerformingReplay. If it begins during
+	// LoadTacticalGame, that sees tutorial mode on and plays the tutorial intro
+	// (X2TacticalGameRuleset.uc L3422-3437), and EndReplay does nothing there.
 	bWantPhase = IsXComTurn() && (bInputPhase || (!bBehind && Rules.IsInState('PerformingReplay')))
-		&& MissionEndFrameSeen < 0; // 0.5.3: no input after the end of the battle
-	// Run 4 (0.3.7): no EndReplay/ResumeReplay any more. In Run 3, EndReplay took the
-	// ruleset through TurnPhase_Begin, whose phase change is added straight to the history
-	// (BeginState_RulesAuthority, X2TacticalGameRuleset.uc L706-723, AddGameStateToHistory,
-	// not a submit), so the guest's history grew by 2 frames by itself. The ruleset now
-	// stays in PerformingReplay; Run 2 showed selection and ability capture work there.
+		&& MissionEndFrameSeen < 0; // no input after the end of the battle
+	// No EndReplay/ResumeReplay here. EndReplay took the ruleset through TurnPhase_Begin,
+	// whose phase change is added straight to the history (BeginState_RulesAuthority,
+	// X2TacticalGameRuleset.uc L706-723, AddGameStateToHistory, not a submit), so the
+	// guest's history grew by 2 frames by itself. The ruleset stays in PerformingReplay;
+	// selection and ability capture work there.
 	if (bWantPhase && !bInputPhase)
 	{
 		bInputPhase = true;
 		bInTutorial = true;
 		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: XCOM input phase begins (tutorial mode on, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 		TellSessionInputPhase(true);
-		// 0.8.2: map objects against the host's states (objective hacks); detail the first time.
+		// Check map objects against the host's states (objective hacks); detail the first time.
 		ObjectChecks++;
 		class'X2TC_CoopObjectLink'.static.CheckObjects("XCOM turn" @ ObjectChecks, ObjectChecks == 1);
 	}
@@ -276,7 +275,7 @@ function UpdateGuestInput()
 		SetGuestInput(TacticalController, false);
 		bInputPhase = false;
 		bInTutorial = false;
-		HideAbilityShine(); // 0.8.1: RefreshShine does nothing once tutorial mode is off
+		HideAbilityShine(); // RefreshShine does nothing once tutorial mode is off
 		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: XCOM input phase ends (tutorial mode off, ruleset state" @ Rules.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 		TellSessionInputPhase(false);
 	}
@@ -291,7 +290,7 @@ function UpdateGuestInput()
 		}
 		if (bFixHistoryIndex && !bBehind && `XCOMHISTORY.GetCurrentHistoryIndex() != -1)
 		{
-			// Fix B (Run 8 toggle): the replay keeps the history's "current index" on its
+			// Fix B (on-screen toggle): the replay keeps the history's "current index" on its
 			// frame (XComReplayMgr.StartReplay; StepReplayForward); a normal game runs at -1
 			// (the newest frame). Natives that read "current" state may behave differently.
 			if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: fix B: history current index" @ `XCOMHISTORY.GetCurrentHistoryIndex() @ "-> -1", , 'X2TC');
@@ -300,7 +299,7 @@ function UpdateGuestInput()
 		LogMoveState(TacticalController);
 	}
 
-	// 0.5.1: and only with a soldier to control (NO SOLDIERS ASSIGNED otherwise).
+	// And only with a soldier to control (NO SOLDIERS ASSIGNED otherwise).
 	bWant = bInputPhase && !bBehind && !class'XComGameStateVisualizationMgr'.static.VisualizerBusy() && HasControllableSoldier();
 	if (bWant != bGuestInputOn)
 	{
@@ -309,13 +308,13 @@ function UpdateGuestInput()
 	UpdateTutorialControls(TacticalController);
 	if (bInputPhase)
 	{
-		HideAbilityShine(); // 0.8.1
-		LogHackAvailability(TacticalController); // 0.8.1 diagnostics
+		HideAbilityShine();
+		LogHackAvailability(TacticalController); // diagnostics
 	}
 }
 
-// 0.8.1 diagnostics (0.8.0b Run 2: the guest's Specialist couldn't use an access point,
-// and nothing was captured): the selected unit's hack-type abilities and the code the
+// Diagnostics (the guest's Specialist couldn't use an access point, and nothing was
+// captured): the selected unit's hack-type abilities and the code the
 // game gives each (the HUD shows a hack icon only for AA_Success, UITacticalHUD_
 // AbilityContainer ShouldShowAbilityIcon). Logged when the line changes.
 function LogHackAvailability(XComTacticalController TacticalController)
@@ -352,8 +351,7 @@ function LogHackAvailability(XComTacticalController TacticalController)
 	}
 }
 
-// 0.8.0 (no move range or cover icons on the guest, Stage 7 Run 2 and 8.1): in tutorial
-// mode the move input's Tick hides the path, both move-range borders and the cover icons
+// The guest showed no move range or cover icons. In tutorial mode the move input's Tick hides the path, both move-range borders and the cover icons
 // unless the tutorial manager's bIsTutorialAllowingControls is on (XComTacticalInput.uc
 // L1905-1925: SetPathingUIVisible(false, false) every frame; ActionIconMgr.ShowIcons and
 // the Volume's BorderComponent(Dashing).SetUIHidden in L1821-1848). The tutorial turns it
@@ -406,7 +404,7 @@ function UpdateTutorialControls(XComTacticalController TacticalController)
 	}
 }
 
-// Stage 6: a soldier the guest may select: its own (P2's), or any with the squad
+// A soldier the guest may select: its own (P2's), or any with the squad
 // screen's "Soldier ownership" off.
 function bool GuestMayControl(XComGameState_Unit UnitState)
 {
@@ -420,8 +418,8 @@ function bool GuestMayControl(XComGameState_Unit UnitState)
 	return class'X2TC_CoopOwnership'.static.GetOwner(UnitState) == class'X2TC_CoopOwnership'.const.OWNER_GUEST;
 }
 
-// 0.5.1: true if any living soldier is one the guest may control (Run 1: with none,
-// the input stayed on for a soldier given back to the host).
+// True if any living soldier is one the guest may control (without this check, the input
+// stayed on for a soldier given back to the host).
 function bool HasControllableSoldier()
 {
 	local array<XComGameState_Unit> Squad;
@@ -438,8 +436,8 @@ function bool HasControllableSoldier()
 	return false;
 }
 
-// 0.5.1: a left-click on a soldier selects it (Run 1: the game's own click-to-select is
-// off whenever a tutorial manager exists, XComTacticalInput.uc L2846). Uses the tile
+// A left-click on a soldier selects it (the game's own click-to-select is off whenever a
+// tutorial manager exists, XComTacticalInput.uc L2846). Uses the tile
 // under the 3D cursor; ignored over the HUD (XComInputBase.TestMouseConsumedByFlash L166)
 // and outside move mode. Returns true if a soldier was selected.
 function bool SelectUnitUnderCursor()
@@ -490,7 +488,7 @@ function bool SelectUnitUnderCursor()
 	return false;
 }
 
-// Stage 6: the guest's "ready to end the turn" lasts one XCOM turn.
+// The guest's "ready to end the turn" lasts one XCOM turn.
 function TellSessionInputPhase(bool bBegins)
 {
 	local X2TC_CoopSession Session;
@@ -502,7 +500,7 @@ function TellSessionInputPhase(bool bBegins)
 	}
 }
 
-// Run 4 diagnostics: the guards a clicked move passes before it is submitted
+// Diagnostics: the guards a clicked move passes before it is submitted
 // (XComTacticalInput.ClickToPath L3047-3095: the visualizer must not block ability
 // activation; XComTacticalController.PerformPath L1093-1110: the unit not already
 // moving, a tutorial manager in WaitForPlayerInput, a path of 2+ tiles). Logs a line
@@ -530,8 +528,8 @@ function LogMoveChecks(XComTacticalController TacticalController)
 		@ "path of 2+ tiles=" $ (TacticalController.m_kPathingPawn != none && TacticalController.m_kPathingPawn.PathTiles.Length > 1)
 		@ "input state=" $ TacticalController.GetInputState()
 		@ "active unit=" $ TacticalController.GetActiveUnitStateRef().ObjectID;
-	// Run 6 (0.3.9): the pathing pawn's own view (Run 5: "path of 2+ tiles" was never true
-	// and no path line showed). Its Tick leaves the path empty when it is hidden or has no
+	// The pathing pawn's own view ("path of 2+ tiles" was never true and no path line
+	// showed). Its Tick leaves the path empty when it is hidden or has no
 	// active unit, and otherwise aims at the closest reachable tile to the cursor
 	// (XComPathingPawn.uc L846-1040).
 	Checks @= PathingPawnText(TacticalController, ActiveUnitState);
@@ -547,10 +545,7 @@ function LogMoveChecks(XComTacticalController TacticalController)
 	}
 }
 
-// 0.8.1: fix D (ApplyFreshPawn, Run 9 / 0.4.3) removed: in 0.8.0b Run 2 it only changed a
-// highlight's colour once the tutorial flag showed the move range (Kc's rule, plans/m4-plan.md).
-
-// Run 8: switches fix A, B or C (the guest's FIX buttons); returns the new setting.
+// Switches fix A, B or C (the guest's FIX buttons); returns the new setting.
 // Forces a pathing refresh at the next tick so the change shows at once.
 function bool ToggleFix(name Fix)
 {
@@ -567,9 +562,9 @@ function bool ToggleFix(name Fix)
 	return bNow;
 }
 
-// Run 8: the whole move-mode state every 0.5 s while the guest's input is on (replaces
-// the change-only "move check" lines). Each condition on the way from the cursor to a
-// submitted move (plans/m3-plan.md, Stage 5 Run 8 trace) is in it.
+// The whole move-mode state every 0.5 s while the guest's input is on (replaces the
+// change-only "move check" lines). Each condition on the way from the cursor to a
+// submitted move is in it.
 function LogMoveState(XComTacticalController TacticalController)
 {
 	local XComGameState_Unit UnitState;
@@ -623,12 +618,12 @@ function LogMoveState(XComTacticalController TacticalController)
 		@ "blocks abilities=" $ `XCOMVISUALIZATIONMGR.VisualizerBlockingAbilityActivation()
 		@ "tutorial state=" $ IsInState('WaitForPlayerInput')
 		@ "fixes A=" $ bFixCache @ "B=" $ bFixHistoryIndex @ "C=" $ bFixWorldSync
-		@ "tutorial controls=" $ bIsTutorialAllowingControls; // 0.8.0
+		@ "tutorial controls=" $ bIsTutorialAllowingControls;
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: move state:" @ Line, , 'X2TC');
 }
 
-// Run 7 (0.4.0): Run 6's diagnostics showed the pathing pawn hidden in every line, so
-// its Tick cleared the path (XComPathingPawn.uc L900-920). The pawn hides itself every
+// The diagnostics showed the pathing pawn hidden in every line, so its Tick cleared the
+// path (XComPathingPawn.uc L900-920). The pawn hides itself every
 // tick while the stock replay screen is in the stack and tutorial mode is off (L870),
 // and the replay screen was closed during its own OnInit, possibly too early to leave
 // the stack. While the guest's input is on: close a replay screen still in the stack,
@@ -670,15 +665,15 @@ function KeepPathingVisible(XComTacticalController TacticalController)
 	}
 }
 
-// Run 8 (0.4.1): with the pawn visible (Run 7), its destination still didn't follow the
-// mouse in move mode, while it did during ability targeting (path of 2+ tiles=True only
+// With the pawn visible, its destination still didn't follow the mouse in move mode, while it did during ability targeting (path of 2+ tiles=True only
 // in UsingTargetingMethod). Move mode reads the unit's reachable-tiles cache
 // (XComPathingPawn.SetActive L451-468: ActiveCache = the XGUnit's
 // m_kReachableTilesCache), which keeps a unit state and a history index of its own
 // (X2ReachableTilesCache.uc L30-41) and on the guest is never refreshed by the normal
 // turn loop. Refresh it with the unit's current state, and re-activate the pawn: when the
 // input comes on, when the active unit changes, after each catch-up, and when the input
-// state returns to move mode (after targeting; Kc: the line stayed frozen after Esc).
+// state returns to move mode after targeting.
+// the line stayed frozen after esc -- Kc
 function RefreshPathingIfNeeded(XComTacticalController TacticalController)
 {
 	local name InputStateName;
@@ -729,7 +724,7 @@ function RefreshPathing(XComTacticalController TacticalController, string Reason
 	}
 	if (bFixWorldSync)
 	{
-		// Fix C (Run 8 toggle): sync the world's visualizers and tile data to the history
+		// Fix C (on-screen toggle): sync the world's visualizers and tile data to the history
 		// (XComWorldData.SyncVisualizers L754), as stock multiplayer's follower once did
 		// on receiving a history (commented out in XComMPReplayMgr.uc L80-82).
 		`XWORLD.SyncVisualizers();
@@ -743,9 +738,9 @@ function RefreshPathing(XComTacticalController TacticalController, string Reason
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: pathing refreshed (" $ Reason $ "): unit" @ UnitState.ObjectID @ "action points=" $ UnitState.NumAllActionPoints() @ "cache origin=" $ TileText(Origin) @ "max cost=" $ MaxCost @ "frame" @ CurrentHistoryFrame, , 'X2TC');
 }
 
-// Run 7: Kc saw the selection stay on a soldier with no actions left; the game's own
-// "select the next unit" runs in the ruleset's UnitActions state, which the guest's
-// ruleset never enters. Move the selection to the next unit with action points.
+// the selection stayed on a soldier with no actions left -- Kc
+// The game's own "select the next unit" runs in the ruleset's UnitActions state, which
+// the guest's ruleset never enters. Move the selection to the next unit with action points.
 function SkipUnitWithoutActions(XComTacticalController TacticalController)
 {
 	local XComGameState_Unit ActiveUnitState, UnitState;
@@ -756,7 +751,7 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 		return;
 	}
 	ActiveUnitState = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TacticalController.GetActiveUnitStateRef().ObjectID));
-	// Stage 6: also move off a P1 soldier (the game may select one by itself).
+	// Also move off a P1 soldier (the game may select one by itself).
 	if (ActiveUnitState == none || (class'X2TC_CoopOwnership'.static.UnitCanAct(ActiveUnitState) && GuestMayControl(ActiveUnitState)))
 	{
 		return;
@@ -765,11 +760,10 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 	{
 		return; // already tried to move off this P1 soldier; no P2 soldier could be selected
 	}
-	// 0.8.0b (0.8.0 Run 1: 5508 alternating "selected unit" lines, 2885 in Stage 8.1 run 2):
-	// with none of the guest's soldiers able to act, every soldier this skips to can't act
-	// either, so it re-selected them every tick; each selection moves the camera back to
-	// the soldier (Kc: edge scrolling snapped back). Stop until one can act again, whatever
-	// the bound-skip switch says.
+	// If none of the guest's soldiers can act, every soldier this skips to can't act either,
+	// so it would re-select them every tick, and each selection pulls the camera back.
+	// edge scrolling snapped back -- Kc
+	// Stop until one can act again, whatever the bound-skip switch says.
 	if (!GuestHasSoldierThatCanAct())
 	{
 		if (!bLoggedNoneCanAct)
@@ -800,7 +794,7 @@ function SkipUnitWithoutActions(XComTacticalController TacticalController)
 	}
 }
 
-// 0.8.0b: true if any living XCOM unit the guest may control can act.
+// True if any living XCOM unit the guest may control can act.
 function bool GuestHasSoldierThatCanAct()
 {
 	local XComGameState_Unit UnitState;
@@ -848,7 +842,7 @@ static function string TileText(TTile Tile)
 	return Tile.X $ "," $ Tile.Y $ "," $ Tile.Z;
 }
 
-// Run 6 fallback for moves: the tile under the 3D cursor, sent as a one-tile move; the
+// Fallback for moves: the tile under the 3D cursor, sent as a one-tile move; the
 // host builds the path itself (X2TC_CoopSession). For the guest's MOVE TO CURSOR button.
 function MoveActiveUnitToCursor()
 {
@@ -889,7 +883,7 @@ function SetGuestInput(XComTacticalController TacticalController, bool bOn)
 			SelectGuestUnit(TacticalController, 1);
 		}
 		TacticalController.SetInputState(GUEST_INPUT_STATE);
-		RefreshTargets("input on"); // 0.8.5
+		RefreshTargets("input on");
 		if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: input on (state" @ TacticalController.GetInputState() $ ", active unit" @ TacticalController.GetActiveUnitStateRef().ObjectID $ ", ruleset state" @ `TACTICALRULES.GetStateName() $ ", frame" @ CurrentHistoryFrame $ ")", , 'X2TC');
 	}
 	else
@@ -900,14 +894,15 @@ function SetGuestInput(XComTacticalController TacticalController, bool bOn)
 	}
 }
 
-// 0.8.5 (0.8.4c Part 2: the partner's soldier saw an enemy but couldn't target it until the
-// host took the soldier and gave it back). The ruleset caches each unit's actions and
+// The partner's soldier saw an enemy but couldn't target it until the host took the
+// soldier and gave it back. The ruleset caches each unit's actions and
 // their targets by history index and rebuilds the cache only when the index changes
 // (X2TacticalGameRuleset.GetGameRulesCache_Unit L545-642). While the replay steps, the
 // index moves to each frame before the visibility manager is updated for it
 // (XComReplayMgr.StepReplayForward L158-168), so a cache built in between keeps the old
 // visibility and still counts as current for the newest frame; a new frame (the host's
-// owner change) rebuilds it. A guess from source; X2TC_CoopShotProbe logs the evidence.
+// owner change) rebuilds it. That's a guess from the source; X2TC_CoopShotProbe logs the
+// evidence.
 // Once caught up, mark the caches outdated the ruleset's own way (OnObliterateGameState
 // L408-418 marks every entry newer than the current index), by lowering the index by one
 // for that call only, then refresh the enemy bar. Nothing is added to the history. Fix
@@ -942,8 +937,7 @@ function RefreshTargets(string Why)
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop follower: targets refreshed (" $ Why $ ", index" @ Index $ ", refresh" @ TargetRefreshes $ ")", , 'X2TC');
 }
 
-// 0.8.1 (0.8.0b Run 2: a path to the cursor showed while a soldier moved): leaving the move
-// input state for the replay's state keeps the path, both range borders and the cover
+// A path to the cursor showed while a soldier moved. Leaving the move input state for the replay's state keeps the path, both range borders and the cover
 // icons up (XComTacticalInput ActiveUnit_Moving.EndState: no SetPathingUIVisible(false)
 // when the next state is InReplayPlayback; Highlander L1840-1850). Hide them the way
 // SetPathingUIVisible does (Highlander L1866-1893, all public calls). Fix switch: "Partner
@@ -975,7 +969,7 @@ function HidePathingUI(XComTacticalController TacticalController)
 	}
 }
 
-// 0.8.1 (0.8.0b Run 2: every ability icon glowed on the guest): in tutorial mode each icon
+// Every ability icon glowed on the guest. In tutorial mode each icon
 // shows the tutorial shine when IsNextAbility says yes (UITacticalHUD_Ability.RefreshShine
 // and ShouldShowShine, Highlander L307-337), and this follower must answer yes (other
 // code hides abilities otherwise, e.g. ThrowGrenade). Hide the shine on every icon that
@@ -1015,13 +1009,13 @@ function int SelectGuestUnit(XComTacticalController TacticalController, int Dire
 	local int i, Start, Index, Skipped;
 	local bool bSkipSpent;
 
-	// 0.8.0 (Stage 8.1 run 2: a soldier bound by a Viper could be selected but not used):
-	// skip soldiers that can't act (X2TC_CoopOwnership.UnitCanAct: no action points, or the
+	// A soldier bound by a Viper could be selected but not used, so skip soldiers that
+	// can't act (X2TC_CoopOwnership.UnitCanAct: no action points, or the
 	// ruleset's unit cache says no actions). Fix switch: "Partner skips soldiers that
 	// can't act".
 	bSkipSpent = class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_BOUND_SKIP);
 
-	// Stage 6: only the soldiers the guest may control.
+	// Only the soldiers the guest may control.
 	foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
 	{
 		if (UnitState.GetTeam() == eTeam_XCom && !UnitState.IsDead() && !UnitState.IsIncapacitated()
@@ -1083,7 +1077,7 @@ function SelectNextGuestUnit()
 	SelectGuestUnitStep(1);
 }
 
-// 0.5.3: the next (1) or previous (-1) soldier, during XCOM's input phase (H = previous).
+// The next (1) or previous (-1) soldier, during XCOM's input phase (H = previous).
 function SelectGuestUnitStep(int Direction)
 {
 	local XComTacticalController TacticalController;
@@ -1113,7 +1107,7 @@ function bool IsXComTurn()
 	return PlayerState != none && PlayerState.TeamFlag == eTeam_XCom;
 }
 
-// Stage 5: every context the guest submits during the replay arrives here (tutorial
+// Every context the guest submits during the replay arrives here (tutorial
 // mode). Nothing is applied on the guest; moves go to the host.
 simulated function bool HandleSubmittedGameStateContext(XComGameStateContext SubmittedContext)
 {
@@ -1138,13 +1132,13 @@ simulated function bool HandleSubmittedGameStateContext(XComGameStateContext Sub
 		{
 			Session.SendGuestMove(AbilityContext.InputContext.MovementPaths[0].MovingUnitRef.ObjectID,
 				AbilityContext.InputContext.MovementPaths[0].MovementTiles, FramesBefore);
-			return true; // as for abilities below (Run 6)
+			return true; // as for abilities below
 		}
 		`log("Coop follower: captured a move but found no guest session", , 'X2TC');
 		return false;
 	}
 
-	// 0.8.0 hack routing: the guest's own hack screen submits FinalizeHack (its Hack button)
+	// Hack routing: the guest's own hack screen submits FinalizeHack (its Hack button)
 	// or CancelHack (the co-op Cancel button). Send the choice, not the ability: the host
 	// plays it on its hidden copy of the screen (X2TC_CoopSession.HostDriveHack).
 	if (Session != none && class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_HACK_ROUTING)
@@ -1153,9 +1147,9 @@ simulated function bool HandleSubmittedGameStateContext(XComGameStateContext Sub
 		return true;
 	}
 
-	// Stage 5b (pulled into Run 4): abilities go to the host too. The UI re-submits a
-	// refused activation (Run 2: each ability two or three times), so an identical capture
-	// within a second is not sent again.
+	// Abilities go to the host too. The UI re-submits a refused activation (each ability
+	// came in two or three times), so an identical capture within a second is not sent
+	// again.
 	AbilityKey = AbilityContext.InputContext.AbilityTemplateName $ "/" $ AbilityContext.InputContext.SourceObject.ObjectID $ "/" $ AbilityContext.InputContext.PrimaryTarget.ObjectID;
 	if (AbilityKey == LastAbilityKey && WorldInfo.RealTimeSeconds - LastAbilityTime < 1.0)
 	{
@@ -1168,10 +1162,10 @@ simulated function bool HandleSubmittedGameStateContext(XComGameStateContext Sub
 	if (Session != none)
 	{
 		Session.SendGuestAbility(AbilityContext, FramesBefore);
-		// Run 6 (0.3.9): report success for a forwarded ability. In tutorial mode
-		// ActivateAbility takes the non-latent path, whose result is this return value
+		// Report success for a forwarded ability. In tutorial mode ActivateAbility takes
+		// the non-latent path, whose result is this return value
 		// (XComGameStateContext_Ability.uc L1348-1351, L1451); false left the targeting UI
-		// open (Run 5) and made the UI submit again. Nothing is applied on the guest either
+		// open and made the UI submit again. Nothing is applied on the guest either
 		// way: the ruleset returns this value without adding anything
 		// (X2GameRuleset.uc L290-293).
 		return true;
@@ -1180,7 +1174,7 @@ simulated function bool HandleSubmittedGameStateContext(XComGameStateContext Sub
 	return false;
 }
 
-// 0.8.0: if this context is the open hack screen's finalize or cancel ability (whatever
+// If this context is the open hack screen's finalize or cancel ability (whatever
 // the hack's template names them, UIHackingScreen.InitScreen L86-109), send the guest's
 // choice (its selected reward option, or 0 to cancel) and return true.
 function bool SendHackChoiceIfHack(XComGameStateContext_Ability AbilityContext, X2TC_CoopSession Session)
@@ -1194,8 +1188,8 @@ function bool SendHackChoiceIfHack(XComGameStateContext_Ability AbilityContext, 
 		return false;
 	}
 	TemplateName = AbilityContext.InputContext.AbilityTemplateName;
-	// 0.8.2 (0.8.1 Run 1: the laptop picked and rolled on the PC's hack): a choice from the
-	// host's hack (watched here) is never sent. True: nothing is applied here either.
+	// The guest once picked and rolled on the host's hack, so a choice from the host's hack
+	// (watched here) is never sent. True: nothing is applied here either.
 	// Switch "Hacks: watcher can't click".
 	if (class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_HACK_NO_CLICK)
 		&& class'X2TC_CoopOwnership'.static.GetOwner(HackScreen.UnitState) != class'X2TC_CoopOwnership'.const.OWNER_GUEST
@@ -1298,7 +1292,7 @@ defaultproperties
 {
 	bSingleStepMode=false
 	bInReplay=false
-	// Off until the XCOM input phase (Run 1: on from the start played the tutorial intro).
+	// Off until the XCOM input phase (on from the start, it played the tutorial intro).
 	bInTutorial=false
 	bFixCache=true
 	bFixHistoryIndex=false

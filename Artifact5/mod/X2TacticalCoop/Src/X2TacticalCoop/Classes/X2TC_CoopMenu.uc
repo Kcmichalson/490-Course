@@ -1,20 +1,19 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopMenu
 //
-//  What it changes: 0.8.4 (plans/m4-plan.md, C item 13 and "1.0 plan" item 1; Kc: one
-//  "Co-op" button in the top-right HUD icon row instead of the column of CO-OP buttons).
-//  Adds one icon-style "Co-op" button just left of the game's top-right icon row on the
-//  tactical HUD. Clicking it opens a small panel under it with the role's CO-OP actions
-//  (X2TC_CoopListener adds them, each with one line of help as its tooltip); clicking the
-//  icon again or any action closes it. Not a class override: a panel on the HUD.
+//  What it changes: adds one icon-style "Co-op" button just left of the game's top-right
+//  icon row on the tactical HUD. Clicking it opens a small panel under it with the role's
+//  CO-OP actions (X2TC_CoopListener adds them, each with one line of help as its
+//  tooltip); clicking the icon again or any action closes it. Not a class override, just
+//  a panel on the HUD.
+//  one co-op button in the top right icon row instead of the column of co-op buttons -- Kc
 //    - Position: the row is one Flash panel that lays out up to 10 icons itself, with no
 //      slot for a non-ability button (UITacticalHUD_MouseControls.uc L58, L77-150). Its
 //      active icon count follows the stock rule (L136-150: 1 while a shot menu is up,
 //      else 5, 6 with command abilities, 7 with an active Chosen), and the button's x is
 //      computed from it, re-checked 4 times a second. ICON_STEP, ROW_MARGIN and ICON_SIZE
-//      are guesses until measured from a screenshot (checklists/m4-084.md); each position
-//      change is logged.
-//    - Escape and clicking outside don't close it in 0.8.4 (the icon toggles it).
+//      are guesses until measured from a screenshot; each position change is logged.
+//    - Escape and clicking outside don't close it (the icon toggles it).
 //
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\UITacticalHUD.uc                 (m_kMouseControls L72, m_isMenuRaised)
@@ -206,7 +205,7 @@ function UpdatePosition()
 	}
 	LastActiveIcons = Count;
 	CoopIcon.SetPosition(-(ROW_MARGIN + Count * ICON_STEP + ICON_SIZE), ROW_Y);
-	// 0.8.4c: Verbose only (0.8.4b Part 1: the placement looked right at 1, 5 and 6 icons).
+	// Verbose only: the placement already looked right at 1, 5 and 6 icons.
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop UI: Co-op button placed left of" @ Count @ "HUD icons (x" @ -(ROW_MARGIN + Count * ICON_STEP + ICON_SIZE) $ ")", , 'X2TC');
 }
 

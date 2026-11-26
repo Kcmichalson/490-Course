@@ -1,17 +1,13 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopObjectLink
 //
-//  What it changes: nothing (0.8.3: read-only). It checks the link between the map's
-//  interactive objects (doors, workstations, objective computers) and their states in the
-//  history (plans/m4-plan.md, 0.8.2 item 3), on the guest and (0.8.3) on the host.
-//  0.8.3 (0.8.2 Runs 2-3: every object matched, yet the partner still couldn't hack the
-//  objective, and its copy reported 0 hack rewards): the re-link repair and its switch are
-//  gone (in 0.8.2 Run 1 it re-linked a stacked tower to another tower's state and the
-//  partner crashed). Each must-hack object now also logs its reward flags, BattleData's
-//  reward lists, whether the tactical hack is done, and CanInteractHack for each squad
-//  soldier (XComGameState_InteractiveObject.uc L507-520, L861-886;
+//  What it changes: nothing; read-only. It checks the link between the map's interactive
+//  objects (doors, workstations, objective computers) and their states in the history, on
+//  the guest and on the host. Each must-hack object also logs its reward flags,
+//  BattleData's reward lists, whether the tactical hack is done, and CanInteractHack for
+//  each squad soldier (XComGameState_InteractiveObject.uc L507-520, L861-886;
 //  XComGameState_BattleData.uc L175-178, L969), to compare the two PCs.
-//  0.8.1 Run 1: the guest's Specialist got no hack icon at an objective computer; the same
+//  Why: the guest's Specialist got no hack icon at an objective computer; the same
 //  soldier given to the host could hack it. A hack target counts only if the unit's
 //  interaction points include the object (X2Condition_Interactive.uc L28-34), and a point
 //  is dropped when the actor's GetInteractiveState() is None or not hackable
@@ -25,8 +21,8 @@
 //      object's IsEnabled / MustBeHacked / HasBeenHacked / hack reward count. One summary.
 //  Called at the start of each XCOM turn by X2TC_CoopReplayMgr on the guest and by
 //  X2TC_CoopSession's poll on the host.
-//  0.8.4 (0.8.3 Run 1: both PCs' lines matched and CanInteractHack was true for every
-//  soldier, yet the partner's hack abilities found no targets): ProbeHack logs each step
+//  Both PCs' lines matched and CanInteractHack was true for every soldier, yet the
+//  partner's hack abilities found no targets, so ProbeHack logs each step
 //  of the hack target check for the selected unit near a must-hack object, on both PCs,
 //  from X2TC_CoopSession's poll (X2Condition_HackingTarget.uc L44-78,
 //  X2Condition_UnitInteractions.uc L31-71, X2AbilityTarget_Single.uc L16-17,
@@ -49,9 +45,9 @@
 class X2TC_CoopObjectLink extends Object dependson(X2Condition_UnitInteractions);
 
 const MAX_DETAIL_LINES = 40;
-const PROBE_TILES = 3; // 0.8.4: the hack probe looks at must-hack objects this close (or in view)
+const PROBE_TILES = 3; // the hack probe looks at must-hack objects this close (or in view)
 
-// 0.8.3: "840:r0 tac strat can 24n 27y": rewards, the object's reward flags, and
+// "840:r0 tac strat can 24n 27y": rewards, the object's reward flags, and
 // CanInteractHack for each living squad soldier.
 static function string HackText(XComGameState_InteractiveObject ObjectState, array<XComGameState_Unit> Squad)
 {
@@ -169,7 +165,7 @@ static function CheckObjects(string Why, bool bDetail)
 	}
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop objects (" $ Why $ "):" @ Total @ "interactive actors," @ Mismatched @ "mismatched," @ NoState @ "with no state,"
 		@ Hackable @ "must be hacked", , 'X2TC');
-	// 0.8.3: the hack check for the must-hack objects, the same on both PCs.
+	// The hack check for the must-hack objects, the same on both PCs.
 	BattleData = XComGameState_BattleData(History.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop objects hack (" $ Why $ "): BattleData rewards tac" @ (BattleData != none ? string(BattleData.TacticalHackRewards.Length) : "?")
 		@ "strat" @ (BattleData != none ? string(BattleData.StrategyHackRewards.Length) : "?")
@@ -177,7 +173,7 @@ static function CheckObjects(string Why, bool bDetail)
 		$ "; objects:" @ (HackList != "" ? HackList : "none"), , 'X2TC');
 }
 
-// 0.8.4 hack probe (plans/m4-plan.md, "1.0 plan" item 4): for the selected unit, each
+// Hack probe: for the selected unit, each
 // step of the hack target check against every unhacked must-hack object within
 // PROBE_TILES tiles, or seen by the unit (for a Gremlin's or BIT's ranged hack). Logs only
 // when the text changes from LastText. Steps, as X2Condition_HackingTarget.uc L44-78 runs

@@ -2,9 +2,9 @@
 //  X2TacticalCoop: X2TC_CoopOwnerMemory
 //
 //  What it changes: remembers, on the host's PC, which soldiers the squad screen gave to
-//  the partner, per campaign, outside the save (Kc, 2026-11-15: "track what soldiers were
-//  originally the host/partners [...] without baking it into the save"). When the PC
-//  hosts a later mission of the same campaign, X2TC_CoopSession gives those soldiers back
+//  the partner, per campaign, outside the save.
+//  track what soldiers were originally the host/partners ... without baking it into the save -- Kc
+//  When the PC hosts a later mission of the same campaign, X2TC_CoopSession gives those soldiers back
 //  to the partner. The list lives in the mod's own config file (config
 //  X2TacticalCoopOwners), which the game writes to the player's own config folder on the
 //  first save. The shipped default (Config\XComX2TacticalCoopOwners.ini) holds no entries

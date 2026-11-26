@@ -1,9 +1,8 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopSquadScreen
 //
-//  What it changes: adds the co-op squad screen to a co-op tactical mission
-//  (plans/m3-plan.md, "Co-op squad screen", approved by Kc 2026-11-15). Both players open
-//  it with CO-OP: SQUAD (X2TC_CoopListener). It shows:
+//  What it changes: adds the co-op squad screen to a co-op tactical mission. Both players
+//  open it with CO-OP: SQUAD (X2TC_CoopListener). It shows:
 //    - one row per XCOM soldier (name, class) with a P1 (host) / P2 (partner) switch, in
 //      the game's scrolling list, so squads larger than 6 fit;
 //    - three checkboxes: Soldier ownership (on), Partner may end the turn (off), Partner
@@ -136,7 +135,7 @@ function RefreshRows()
 	local X2TC_CoopSession Session;
 	local XComGameState_Unit UnitState;
 	local bool bCanEdit, bHost;
-	local int i, OwnerValue; // not "Owner": that's Actor's field (compiler warning, 0.8.0 build)
+	local int i, OwnerValue; // not "Owner": that's Actor's field (compiler warning)
 	local string Label, Who;
 
 	Session = class'X2TC_CoopSession'.static.FindSession();
@@ -176,7 +175,7 @@ function RefreshRows()
 	SettingRows[1].SetDisabled(!bCanEdit);
 	SettingRows[2].UpdateDataCheckbox("Partner may edit this screen (host only)", "", Session != none && Session.GetSetting(class'X2TC_CoopSession'.const.SETTING_PARTNER_EDIT), OnSettingCheckbox);
 	SettingRows[2].SetDisabled(!bHost || !bCanEdit);
-	// Stage 8.1 test switch: host only, and only before the partner follows.
+	// Test switch: host only, and only before the partner follows.
 	SettingRows[3].UpdateDataCheckbox("SYNC: NEW FRAMES (test; set before the partner joins)", "", Session != none && Session.GetSetting(class'X2TC_CoopSession'.const.SETTING_NEW_FRAMES), OnSettingCheckbox);
 	SettingRows[3].SetDisabled(!bHost || !bCanEdit || (Session != none && Session.bGuestFollowing));
 }

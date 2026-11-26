@@ -1,22 +1,22 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopInput
 //
-//  What it changes: two inputs for the co-op guest, so it can move soldiers without the
-//  mouse crossing the map to the MOVE TO CURSOR button (plans/m3-plan.md, Stage 5,
-//  Run 8; Kc 2026-11-14):
+//  What it changes: the co-op keys and clicks. Two of them let the guest move soldiers
+//  without dragging the mouse across the map to the MOVE TO CURSOR button:
 //    - the M key: move the selected soldier to the tile under the 3D cursor;
 //    - a right-click on the map, only while the game's own path is empty (when the
 //      normal path works, right-click is left to the game).
 //  Both act only while the guest's follower has its input on (XCOM's turn, caught up);
 //  every other key and click passes through untouched.
-//  Stage 6 (0.5.0): Tab on the guest selects its next soldier (during XCOM's input
-//  phase); Backspace and End on the host go through the co-op End Turn check while the
-//  partner's soldiers can still act and it isn't ready (X2TC_CoopSession).
-//  0.5.1: left-click selects a soldier on the guest. 0.5.3: H = previous soldier on both
-//  sides; on the host, Tab and H cycle only its own soldiers that can act; on the guest,
-//  Backspace and End end the turn when "Partner may end the turn" is on. The host builds the path
-//  (X2TC_CoopSession, X2PathSolver.BuildPath). 0.8.2: Escape on the guest opens the pause
-//  menu while its input is off (GuestOpenPauseMenu).
+//  The rest:
+//    - Tab and H select the next and previous soldier. On the guest that's its own
+//      soldiers during XCOM's input phase; on the host, only its own soldiers that can act.
+//    - Backspace and End on the host go through the co-op End Turn check while the
+//      partner's soldiers can still act and it isn't ready (X2TC_CoopSession). On the
+//      guest they end the turn when "Partner may end the turn" is on.
+//    - Left-click selects a soldier on the guest.
+//    - Escape on the guest opens the pause menu while its input is off (GuestOpenPauseMenu).
+//  The host builds the path (X2TC_CoopSession, X2PathSolver.BuildPath).
 //
 //  How: an Interaction inserted at the front of the game viewport's global interactions
 //  (GameViewportClient.InsertInteraction, Engine\Classes\GameViewportClient.uc L756),
@@ -38,11 +38,13 @@ class X2TC_CoopInput extends Interaction;
 
 const INPUT_OBJECT_NAME = "X2TC_CoopInput_Main";
 const MOVE_KEY = 'M';
-const PREVIOUS_KEY = 'H'; // 0.5.3: previous soldier (Kc: not Shift+Tab, Steam's overlay)
+// previous soldier
+// shift tab is the steam overlay hotkey don't use -- Kc
+const PREVIOUS_KEY = 'H';
 
-var bool bShiftDown;      // 0.6.0: a Shift key is held (for Shift+Tab)
-var int WheelEventsLogged; // 0.8.1: wheel events logged so far (the first few only)
-var int EscapeEventsLogged; // 0.8.2: Escape presses logged while the partner waits (the first few only)
+var bool bShiftDown;      // a Shift key is held (for Shift+Tab)
+var int WheelEventsLogged; // wheel events logged so far (only the first few are logged)
+var int EscapeEventsLogged; // Escape presses logged while the partner waits (only the first few)
 
 // Installs the input once per game. Logs whether it was installed now or already there.
 static function Install()
@@ -75,7 +77,7 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 	local X2TC_CoopSession Session;
 	local int Direction;
 
-	// 0.6.0: Shift is tracked (never consumed) so Shift+Tab means "previous", as in the game
+	// Shift is tracked (never consumed) so Shift+Tab means "previous", as in the game
 	// (XComTacticalInput.uc Key_Tab L2197-2210), when Steam's overlay doesn't take it.
 	if (Key == 'LeftShift' || Key == 'RightShift')
 	{
@@ -87,16 +89,16 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 	// and must not move a soldier).
 	if (class'X2TC_CoopSquadScreen'.static.FindOpen() != none || class'X2TC_CoopFixesScreen'.static.IsOpen())
 	{
-		return false; // 0.8.1: the fixes screen too (its list scrolls with the wheel)
+		return false; // the fixes screen too (its list scrolls with the wheel)
 	}
 
-	// Stage 6, host: Backspace and End end the turn (XComTacticalInput.uc Key_Backspace
+	// Host: Backspace and End end the turn (XComTacticalInput.uc Key_Backspace
 	// L2462, Key_End L2468, Back_Button L2417-2442, on release). While the host should be
 	// asked first, they go through the co-op check instead; otherwise the game has them.
 	if (Key == 'BackSpace' || Key == 'End')
 	{
 		Session = class'X2TC_CoopSession'.static.FindSession();
-		// 0.5.3, guest: with "Partner may end the turn" on, the same keys end the turn on
+		// Guest: with "Partner may end the turn" on, the same keys end the turn on
 		// the guest too (its END TURN button's path); otherwise they do nothing there.
 		if (Session != none && Session.RoleName() == "guest")
 		{
@@ -116,8 +118,8 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 			}
 			return true;
 		}
-		// 0.5.1: also while the host's input is locked (Multiplayer_Inactive doesn't end
-		// the turn on these keys).
+		// Also while the host's input is locked (Multiplayer_Inactive doesn't end the turn
+		// on these keys).
 		if (Session == none || Session.RoleName() != "host" || !Session.bGuestFollowing
 			|| !(Session.HostShouldAskBeforeEndTurn() || Session.bHostLocked) || IsDialogShowing())
 		{
@@ -137,12 +139,11 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 		Follower = X2TC_CoopReplayMgr(TacticalGRI.ReplayMgr);
 	}
 
-	// Stage 6, guest: Tab selects the next of the guest's soldiers, as in normal play
-	// (the game's own cycling is off with a tutorial-style replay manager,
-	// XComTacticalController.uc L540-544). 0.5.3: H selects the previous one (unbound in
-	// the game's DefaultInput.ini and an empty Key_H in XComInputBase.uc L1148; Shift+Tab
-	// is Steam's overlay), and on the host Tab and H cycle only the host's own soldiers
-	// that can act.
+	// Guest: Tab selects the next of the guest's soldiers, as in normal play (the game's
+	// own cycling is off with a tutorial-style replay manager, XComTacticalController.uc
+	// L540-544). H selects the previous one (unbound in the game's DefaultInput.ini and an
+	// empty Key_H in XComInputBase.uc L1148). On the host, Tab and H cycle only the host's
+	// own soldiers that can act.
 	if (Key == 'Tab' || Key == PREVIOUS_KEY)
 	{
 		Direction = 1;
@@ -175,8 +176,7 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 		return true;
 	}
 
-	// 0.8.1 (0.8.0b Run 2: the wheel didn't change floors on the guest; F and C did): the
-	// game binds MouseScrollUp/Down to the same F/C handlers (DefaultInput.ini, tactical
+	// The mouse wheel didn't change floors on the guest (F and C did). The game binds MouseScrollUp/Down to the same F/C handlers (DefaultInput.ini, tactical
 	// section), which in move mode call the 3D cursor's AscendFloor / DescendFloor
 	// (XComTacticalInput ActiveUnit_Moving Key_F/Key_C, XCom3DCursor.uc L355-364). The
 	// wheel is lost somewhere before that on the guest (cause not found in source). While
@@ -217,21 +217,21 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 		return true;
 	}
 
-	// 0.8.2 (0.8.1 Run 1: the laptop couldn't pause while none of its soldiers could act):
-	// the guest's input is then InReplayPlayback, whose Escape goes to the global
+	// The guest couldn't pause while none of its soldiers could act. Its input is then
+	// InReplayPlayback, whose Escape goes to the global
 	// Start_Button (XComTacticalInput.uc L1696-1709 -> UIPauseMenu(, true)). That opens
 	// nothing while ShouldBlockPauseMenu() is true (XComPresentationLayerBase.uc L1813;
 	// XComTacticalController.uc L2208-2217: the player's state is 'EndingTurn' or the shot
-	// HUD is up). The guess: the guest's player sits in 'EndingTurn' while it has nothing to
-	// do. Logged below. While the guest's input is off, Escape opens the pause menu here,
-	// without the gameplay block and with saving off (only the host saves). The pause
-	// listener then pauses only this PC, as before. Fix switch: "Partner: pause while waiting".
+	// HUD is up). Our guess is that the guest's player sits in 'EndingTurn' while it has
+	// nothing to do; GuestOpenPauseMenu logs it. While the guest's input is off, Escape opens
+	// the pause menu here, past the gameplay block and with saving off (only the host saves).
+	// The pause listener then pauses only this PC. Fix switch: "Partner: pause while waiting".
 	if (Key == 'Escape' && Follower != none && !Follower.bGuestInputOn)
 	{
 		return EventType == IE_Released && GuestOpenPauseMenu();
 	}
 
-	// 0.5.1: left-click on a soldier selects it on the guest (the follower checks the HUD,
+	// Left-click on a soldier selects it on the guest (the follower checks the HUD,
 	// move mode and ownership); every other left-click passes through.
 	if (Key == 'LeftMouseButton')
 	{
@@ -262,7 +262,7 @@ function bool HandleKey(int ControllerId, name Key, EInputEvent EventType, optio
 	return true;
 }
 
-// 0.8.2, guest, Escape released while its input is off: open the pause menu unless one is
+// Guest, Escape released while its input is off: open the pause menu unless one is
 // already up, a dialog or hack screen is open, or the switch is off. Returns true if it
 // opened it (the key is then consumed); false leaves Escape to the game.
 function bool GuestOpenPauseMenu()

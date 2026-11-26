@@ -1,16 +1,15 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_MainMenuListener
 //
-//  What it changes: adds a MULTIPLAYER button to the main menu (M2, plans/m2-plan.md).
-//  Clicking it loads the multiplayer shell map with the player controller's ClientTravel
-//  (the old Multiplayer item's StartMPShellState loads nothing on build 8270065; M2
-//  Stage 1c). It also writes X2TC lines to Launch.log: one when a main menu
-//  screen opens (the M0 hello-world check), one when the button is added, one per click.
-//  It also fixes the return from a lobby or match: when the main menu opens with the
-//  game's "go on to the multiplayer menu" request, it travels there itself
-//  (ReturnToMPMenuIfAsked; plans/m2-live-test-plan.md).
-//  0.8.4: with X2TC_CoopListener.RELEASE_UI this listener only logs that the main menu
-//  opened; the MULTIPLAYER button and the lobby-return travel are off.
+//  What it changes: adds a MULTIPLAYER button to the main menu. Clicking it loads the
+//  multiplayer shell map with the player controller's ClientTravel (the old Multiplayer
+//  item's StartMPShellState loads nothing on build 8270065). It also writes X2TC lines to
+//  Launch.log: one when a main menu screen opens (the hello-world check), one when the
+//  button is added, one per click. It also fixes the return from a lobby or match: when
+//  the main menu opens with the game's "go on to the multiplayer menu" request, it
+//  travels there itself (ReturnToMPMenuIfAsked).
+//  With X2TC_CoopListener.RELEASE_UI this listener only logs that the main menu opened;
+//  the MULTIPLAYER button and the lobby-return travel are off.
 //  The PC test build (SHOW_TEST_BUTTONS) adds MP TEST buttons that try other ways to load
 //  a map: the "open" console command for three maps, and ClientTravel.
 //
@@ -33,7 +32,7 @@
 //    Engine\Classes\PlayerController.uc              (ClientTravel L504)
 //
 //  ScreenClass is left as none and filtered with a UIShell cast, because whether the
-//  native ScreenClass filter also matches subclasses is unknown (plans/m0-toolchain-plan.md).
+//  native ScreenClass filter also matches subclasses is unknown.
 //---------------------------------------------------------------------------------------
 
 class X2TC_MainMenuListener extends UIScreenListener;
@@ -41,7 +40,7 @@ class X2TC_MainMenuListener extends UIScreenListener;
 // The multiplayer shell map URL (SrcOrig\XComGame\Classes\XComShellPresentationLayer.uc L706).
 const MPShellURL = "XComShell_Multiplayer.umap?Game=XComGame.XComMPShell";
 
-// Stage 1e test URLs. The first is what the multiplayer menu's own exit runs
+// Test URLs. The first is what the multiplayer menu's own exit runs
 // (X2MPShellManager.uc L268); the second is the shape of the lobby's match-start command
 // (UIMPShell_Lobby.uc L648), with a multiplayer plot from the game's DefaultPlots.ini.
 const OpenShellTestURL = "XPACK_Shell_Intro?Game=XComGame.XComShell";
@@ -59,9 +58,9 @@ event OnInit(UIScreen Screen)
 
 	`log("Main menu listener loaded, screen class:" @ string(Screen.Class.Name), , 'X2TC');
 
-	// 0.8.4 (Kc, 2026-11-22: "drop the MULTIPLAYER button", stock PvP is not needed and is
-	// Mr.Fear's area): the release layout adds nothing here and leaves the return from a
-	// multiplayer lobby to the game.
+	// drop the MULTIPLAYER button -- Kc
+	// Stock PvP isn't needed here and is Fear's area, so the release layout adds nothing
+	// and leaves the return from a multiplayer lobby to the game.
 	if (class'X2TC_CoopListener'.const.RELEASE_UI)
 	{
 		return;
@@ -194,8 +193,8 @@ function OnMPButtonClicked(UIButton Button)
 		return;
 	}
 
-	// Stage 1c showed StartMPShellState and the "open" console command load nothing on
-	// 8270065, while ClientTravel loads the multiplayer shell (LOG.md, M2 Stage 1c).
+	// Testing showed StartMPShellState and the "open" console command load nothing on
+	// 8270065, while ClientTravel loads the multiplayer shell.
 	ShellPC = XComPlayerController(ShellPres.Owner);
 	if (ShellPC == none)
 	{
@@ -228,13 +227,13 @@ function OnOpenButtonClicked(UIButton Button)
 	`log("MP test OPEN: ConsoleCommand returned", , 'X2TC');
 }
 
-// Stage 1e control: the "open" command for the main shell map, from the main menu.
+// Control test: the "open" command for the main shell map, from the main menu.
 function OnOpenShellButtonClicked(UIButton Button)
 {
 	RunOpenTest(Button, "OPEN SHELL", OpenShellTestURL);
 }
 
-// Stage 1e: the "open" command for a multiplayer tactical map, the shape of the lobby's
+// The "open" command for a multiplayer tactical map, the shape of the lobby's
 // match-start command. Without a match set up the map may not start properly; the test
 // only needs to know whether the game begins loading it.
 function OnOpenMPTacButtonClicked(UIButton Button)

@@ -2,8 +2,7 @@
 //  X2TacticalCoop: X2TC_CoopStasisLanceCalc
 //
 //  What it changes: while connected in co-op, Skulljack and Skullmine use the
-//  single-player chance (plans/m4-plan.md, 0.8.2 item 6; row 5 of "Remaining multiplayer
-//  rules"). The stock calc adds its base chance (70) only when the engine doesn't report
+//  single-player chance. The stock calc adds its base chance (70) only when the engine doesn't report
 //  multiplayer (X2AbilityToHitCalc_StasisLance.uc L81), so once connected the chance is 0
 //  except on Captains and Codices (100, RollForAbilityHit L38-46).
 //  While a co-op session is on and the switch "Skulljack chance as in single player" is

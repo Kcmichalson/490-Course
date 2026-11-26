@@ -2,9 +2,8 @@
 //  X2TacticalCoop: X2TC_CoopRulesEffect
 //
 //  What it changes: while connected in co-op, a shooter's flanking crit and the
-//  suppression aim penalty come out as in single player (plans/m4-plan.md, 0.8.2 item 5;
-//  rows 1 and 4 of "Remaining multiplayer rules"). The effect of the hidden passive
-//  X2TC_CoopRules (X2TC_CoopRulesAbility), which every unit has.
+//  suppression aim penalty come out as in single player. This is the effect of the
+//  hidden passive X2TC_CoopRules (X2TC_CoopRulesAbility), which every unit has.
 //    - The engine reports a multiplayer game once connected (native), so the stock aim
 //      calc gives every flanking shot a flat MP_FLANKING_CRIT_BONUS (30) instead of the
 //      shooter's own flanking crit stat (X2AbilityToHitCalc_StandardAim.uc L534-544), and

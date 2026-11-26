@@ -3,11 +3,13 @@
 //
 //  What it changes: creates the hidden passive ability X2TC_CoopRules, which carries
 //  X2TC_CoopRulesEffect (flanking crit and suppression as in single player while connected
-//  in co-op; plans/m4-plan.md, 0.8.2 item 5), and adds it to every non-cosmetic character
+//  in co-op), and adds it to every non-cosmetic character
 //  template after the templates are created (called from the mod's DLC info). It replaces
 //  nothing; outside co-op the effect adds nothing.
 //  Built like the game's own pure passives (X2Ability.PurePassive L1575-1604): self
-//  target, triggered when the unit enters play, no icon, no visualization. The template's
+//  target, triggered when the unit enters play, no icon, no visualization, and hidden from
+//  the barracks ability summary. Its name and description are in
+//  Localization/X2TacticalCoop.int, in case any screen still shows it. The template's
 //  availability is left at the default (every game area, X2DataTemplate.uc L140), so units
 //  created mid-mission while connected keep it.
 //  Note: units in a tactical save made with this mod (co-op or not) carry the ability, so
@@ -16,6 +18,9 @@
 //  Relies on (paths in Development\SrcOrig):
 //    XComGame\Classes\X2Ability.uc                 (PurePassive L1575, DeadEye, SelfTarget,
 //                                                   UnitPostBeginPlayTrigger defaults)
+//    XComGame\Classes\X2AbilityTemplate.uc         (LocFriendlyName L108-110,
+//                                                   bDontDisplayInAbilitySummary L138)
+//    XComGame\Classes\UIUtilities_Strategy.uc      (ability summary filter L1408-1434)
 //    XComGame\Classes\X2CharacterTemplate.uc       (Abilities L28)
 //    XComGame\Classes\X2CharacterTemplateManager.uc, X2DataTemplateManager.uc
 //                                                  (GetTemplateNames L45)
@@ -46,6 +51,8 @@ static function X2AbilityTemplate CreateCoopRules()
 	Template.bIsPassive = true;
 	Template.bDisplayInUITooltip = false;
 	Template.bDisplayInUITacticalText = false;
+	// Keeps it out of the barracks ability lists (UIUtilities_Strategy.uc L1408-1434).
+	Template.bDontDisplayInAbilitySummary = true;
 
 	Template.AbilityToHitCalc = default.DeadEye;
 	Template.AbilityTargetStyle = default.SelfTarget;

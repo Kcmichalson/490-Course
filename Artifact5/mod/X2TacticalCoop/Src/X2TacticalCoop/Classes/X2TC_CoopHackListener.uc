@@ -2,7 +2,7 @@
 //  X2TacticalCoop: X2TC_CoopHackListener
 //
 //  What it changes: in a co-op session only, the hack screen shows only on the machine
-//  of the player who owns the hacking soldier (plans/m4-plan.md, 0.8.0 "Hacking"). The
+//  of the player who owns the hacking soldier. The
 //  game opens it on every machine that controls the soldier's team
 //  (X2Ability_DefaultAbilitySet.uc L1898-1902), which in co-op is both.
 //    - Owner's machine: the screen stays. On the guest it gets a CANCEL HACK button (the
@@ -12,10 +12,10 @@
 //      The host plays the guest's choice on its copy (X2TC_CoopSession.HostDriveHack),
 //      because the host's FinalizeHack reads the reward option from that screen
 //      (L1787-1800).
-//    - 0.8.1: on the guest, both kinds of screen are held open until the host's result
+//    - On the guest, both kinds of screen are held open until the host's result
 //      frame has been replayed (X2TC_CoopSession.GuestHoldHack), so the result's visual
 //      can merge into the still-running hack action.
-//    - 0.8.2: the watcher's copy is also locked against clicks (LockWatcherCopy, switch
+//    - The watcher's copy is also locked against clicks (LockWatcherCopy, switch
 //      "Hacks: watcher can't click").
 //  Outside a co-op session, or with the fix switch off ("Hack screen only for the
 //  hacker"), it only logs (in a session) and changes nothing.
@@ -34,7 +34,7 @@
 
 class X2TC_CoopHackListener extends UIScreenListener dependson(UIScreen);
 
-var int BlockerClicksLogged; // 0.8.2: clicks caught on the watcher's copy, logged (the first few)
+var int BlockerClicksLogged; // clicks caught on the watcher's copy, logged (the first few)
 
 event OnInit(UIScreen Screen)
 {
@@ -60,8 +60,8 @@ event OnInit(UIScreen Screen)
 	}
 	`log("Coop hack (" $ Session.RoleName() $ "): hack screen opened for unit" @ UnitText(HackScreen) @ "(owner" @ class'X2TC_CoopOwnership'.static.OwnerText(Owner) $ "); shown on this PC=" $ bMine, , 'X2TC');
 
-	// 0.8.1: on the guest, every hack screen (its own or the host's) waits for the hack's
-	// result frame before it may end (X2TC_CoopSession.GuestHoldHack).
+	// On the guest, every hack screen (its own or the host's) waits for the hack's result
+	// frame before it may end (X2TC_CoopSession.GuestHoldHack).
 	if (!bHost)
 	{
 		Session.GuestHoldHack(HackScreen, bMine);
@@ -80,22 +80,23 @@ event OnInit(UIScreen Screen)
 		return;
 	}
 
-	// 0.8.1 (Kc: "the other player watches"): the other player's copy stays visible (0.8.0
-	// hid it, which left a grey tablet, since the screen is drawn on the soldier's pad) but
-	// takes no input. The host plays the partner's choice on it (HostDriveHack); the
-	// guest's copy ends when the host's result frame has been replayed.
+	// the other player watches -- Kc
+	// So the other player's copy stays visible but takes no input (hiding it left a grey
+	// tablet, since the hack screen is drawn on the soldier's pad). The host plays the
+	// partner's choice on it (HostDriveHack); the guest's copy ends when the host's result
+	// frame has been replayed.
 	HackScreen.SetInputState(eInputState_None);
 	`log("Coop hack (" $ Session.RoleName() $ "): watching the other player's hack (no input here)", , 'X2TC');
 
-	// 0.8.2 (0.8.1 Run 1: the laptop could still click and roll on the PC's hack): the input
-	// state blocks keys only. Fix switch "Hacks: watcher can't click".
+	// The input state blocks keys only; the watcher could still click and roll on the
+	// other player's hack. Fix switch "Hacks: watcher can't click".
 	if (class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_HACK_NO_CLICK))
 	{
 		LockWatcherCopy(HackScreen, Session);
 	}
 }
 
-// 0.8.2: two layers on the watcher's copy.
+// Two layers on the watcher's copy.
 //  1. Mark the hack as started (an instance variable, not a default): the screen's mouse
 //     callback starts or cancels a hack only while it's false (UIHackingScreen.OnMouseEvent
 //     L345-365), and so do its keys (L388, L411, L421). On the host, HostDriveHack clears

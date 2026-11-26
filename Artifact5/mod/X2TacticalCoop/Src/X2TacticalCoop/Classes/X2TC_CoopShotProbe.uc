@@ -1,9 +1,9 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopShotProbe
 //
-//  What it changes: nothing; diagnostics only (plans/m4-plan.md, "0.8.5" item 5). 0.8.4c
-//  Part 2: on the partner, some enemies in the target bar were greyed out and couldn't be
-//  selected (Kc, 2026-11-24); the host could shoot them with the same soldier, and after
+//  What it changes: nothing; diagnostics only.
+//  some enemies in the target bar were greyed out and i couldn't select them -- Kc
+//  That was on the partner. The host could shoot them with the same soldier, and after
 //  the host gave the soldier back, so could the partner. The bar lists the enemies the
 //  selected soldier sees (visibility manager) and dims those missing from the targets of
 //  the soldier's cached actions (UITacticalHUD_Enemies.UpdateVisibleEnemies L301-355,

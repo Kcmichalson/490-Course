@@ -1,11 +1,11 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopLagLog
 //
-//  What it changes: nothing in the game. 0.8.3 (plans/m4-plan.md, "0.8.3", Design 1;
-//  Kc: "no lag changes in 0.8.3, logging only"): it times each history update the host
-//  sends to the partner and writes one compact line per update on each PC, plus a
-//  summary at the end of each alien turn, so a long mission shows which stage makes the
-//  partner's screen fall behind.
+//  What it changes: nothing in the game. It times each history update the host sends to
+//  the partner and writes one compact line per update on each PC, plus a summary at the
+//  end of each alien turn, so a long mission shows which stage makes the partner's
+//  screen fall behind.
+//  no lag changes in 0.8.3, logging only -- Kc
 //    - Host line (at the acknowledgment): wait (new frames ready -> send), build (the
 //      native SendPartialHistory call), size, rtt (send end -> acknowledgment).
 //    - Partner line: arrive (host send end -> the partner's history handler, in host
@@ -17,11 +17,10 @@
 //  partner's clock offset comes from small time pings (shortest round trip of the last
 //  10 wins). The session (X2TC_CoopSession) calls in; the visual watcher's tick
 //  (X2TC_CoopVisualWatcher) drives the partner's samples.
-//  0.8.4 (0.8.3 Run 1; plans/m4-plan.md "1.0 plan" item 4):
-//    - backlog/behind read 0 all run: GetNodesOfType(..., class'X2Action', ...) found no
-//      nodes (guess: it matches the exact class only). The sampler now walks the tree
-//      from VisualizationTree through ChildActions (X2Action.uc L32). Seconds print as
-//      "1.25s" (0.8.3 printed "0.0000s").
+//    - The partner's sampler walks the tree from VisualizationTree through ChildActions
+//      (X2Action.uc L32). GetNodesOfType(..., class'X2Action', ...) found no nodes, so
+//      backlog/behind read 0 (guess: it matches the exact class only). Seconds print as
+//      "1.25s", not float text like "0.0000s".
 //    - Host "net" part of each H line (the ~210 KB/s cap): the history goes out in bunches
 //      of about 600 bytes from the network manager's own tick (OutGameData, PendingState;
 //      XComGameStateNetworkManager.uc L33-58, L65). Each host frame counts the bunches
@@ -57,7 +56,7 @@ const TIME_PING_SECONDS = 20;   // then every 20 s
 const SAMPLE_MS = 250;          // the partner's screen is sampled 4 times a second
 const OFFSET_LOG_CHANGE_MS = 20;
 const KEEP_UPDATES = 40;
-const MAX_TREE_NODES = 2000;    // 0.8.4: the tree walk stops here (guard)
+const MAX_TREE_NODES = 2000;    // the tree walk stops here (guard)
 
 struct CoopClockSample
 {
@@ -112,7 +111,7 @@ var bool bSummaryDue;  // an XCOM update came after alien ones; log once the scr
 var CoopStat GArrive, GLoad, GTransit, GBuild, GKB, GBacklog, GBehind;
 var string PeakBehindAction;
 
-// 0.8.4, host: the bunch queue while an update drains.
+// Host: the bunch queue while an update drains.
 var bool bDrainActive;
 var int DrainLastNotHandled;   // -1 = no sample yet
 var int DrainTicks, DrainBunches, DrainPeak, WindowPeak, DrainFrameMs, DrainDoneMs, DrainStartMs, LastHostTickMs;
@@ -178,7 +177,7 @@ static function string StatText(CoopStat S)
 	return (S.Total / S.Count) $ "/" $ S.Peak;
 }
 
-// "1.25s" (0.8.4: 0.8.3 printed float text such as "0.0000s").
+// "1.25s" (float text printed as "0.0000s").
 static function string SecondsText(int Ms)
 {
 	local int Hundredths;
@@ -220,7 +219,7 @@ function HostSent(int Seq, int ToFrames, int Bytes, int StartMs, bool bAlien, ou
 	U.WaitMs = Max(DiffMs(StartMs, U.ReadyHostMs), 0);
 	U.SentHostMs = EndMs;
 	PendingSinceMs = -1;
-	// 0.8.4: count this update's bunches as they leave.
+	// Count this update's bunches as they leave.
 	bDrainActive = true;
 	DrainLastNotHandled = -1;
 	DrainTicks = 0; DrainBunches = 0; DrainPeak = 0; WindowPeak = 0; DrainFrameMs = 0; DrainDoneMs = -1;
@@ -284,7 +283,7 @@ function HostSummary()
 	HKB.Count = 0; HKB.Total = 0; HKB.Peak = 0;
 }
 
-// 0.8.4, host: from the visual watcher's tick. Counts the bunches that left since the last
+// Host: from the visual watcher's tick. Counts the bunches that left since the last
 // frame while an update drains.
 function HostTick()
 {
@@ -331,7 +330,7 @@ function HostTick()
 	}
 }
 
-// "net 96b/14f per frame 7/10 in flight 40 frame 16ms empty 520ms" (0.8.4).
+// "net 96b/14f per frame 7/10 in flight 40 frame 16ms empty 520ms".
 function string DrainText()
 {
 	if (DrainTicks == 0)
@@ -342,7 +341,7 @@ function string DrainText()
 		@ "in flight" @ WindowPeak @ "frame" @ (DrainFrameMs / DrainTicks) $ "ms empty" @ (DrainDoneMs >= 0 ? string(DrainDoneMs) $ "ms" : "no");
 }
 
-// 0.8.4: the rate settings in effect on this PC, read only ("get" changes nothing), once
+// The rate settings in effect on this PC, read only ("get" changes nothing), once
 // per session.
 function LogNetSettings(string Who)
 {
@@ -363,8 +362,8 @@ function LogNetSettings(string Who)
 	`log("Coop net settings (" $ Who $ "):" @ Text, , 'X2TC');
 }
 
-// 0.8.4c: one line (the answers end in line breaks), and no LanServerMaxTickRate (0.8.4b
-// Part 1: "Unrecognized property" in this build).
+// One line (the answers end in line breaks), and no LanServerMaxTickRate ("Unrecognized
+// property" in this build).
 static function string GetSetting(PlayerController LocalPC, string DriverClass)
 {
 	return "max client" @ OneLine(LocalPC.ConsoleCommand("get" @ DriverClass @ "MaxClientRate", false))
@@ -559,7 +558,7 @@ function TryLogUpdate(int i)
 		}
 	}
 	BehindText = LastBehindMs >= 0 ? SecondsText(LastBehindMs) : "?";
-	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop lag G #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB build" @ U.BuildMs @ "arrive" @ ArriveText @ "load" @ U.LoadMs @ "transit" @ TransitText @ "backlog" @ LastBacklog @ "behind" @ BehindText $ ((LastBehindMs > 5000 && LastOldestAction != "") ? " oldest" @ LastOldestAction : ""), , 'X2TC'); // 0.8.5: the oldest action when > 5 s behind
+	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop lag G #" $ U.Seq @ "f" $ U.ToFrames @ (U.bAlien ? "alien" : "xcom") @ (U.Bytes / 1024) $ "KB build" @ U.BuildMs @ "arrive" @ ArriveText @ "load" @ U.LoadMs @ "transit" @ TransitText @ "backlog" @ LastBacklog @ "behind" @ BehindText $ ((LastBehindMs > 5000 && LastOldestAction != "") ? " oldest" @ LastOldestAction : ""), , 'X2TC'); // the oldest action when > 5 s behind
 	if (U.bAlien)
 	{
 		AddStat(GBuild, U.BuildMs);
@@ -584,8 +583,7 @@ function TryLogUpdate(int i)
 }
 
 // The oldest history frame still playing on this PC's screen, or -1 if nothing plays.
-// 0.8.4: walks the tree from its root through ChildActions (0.8.3's GetNodesOfType call
-// found no nodes).
+// Walks the tree from its root through ChildActions (GetNodesOfType found no nodes).
 function int OldestPlayingFrame(out string ActionName)
 {
 	local XComGameStateVisualizationMgr VisMgr;
@@ -689,7 +687,7 @@ function Sample()
 	{
 		GuestSummary();
 	}
-	// 0.8.5: the game's fast mode while the partner is behind (X2TC_CoopCatchUp).
+	// The game's fast mode while the partner is behind (X2TC_CoopCatchUp).
 	class'X2TC_CoopCatchUp'.static.Update(LastBehindMs, LastOldestAction);
 }
 

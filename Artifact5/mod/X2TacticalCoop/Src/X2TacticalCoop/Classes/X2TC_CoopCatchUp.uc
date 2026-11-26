@@ -1,10 +1,10 @@
 //---------------------------------------------------------------------------------------
 //  X2TacticalCoop: X2TC_CoopCatchUp
 //
-//  What it changes: the partner's screen catches up faster (plans/m4-plan.md, "0.8.5"
-//  item 4). 0.8.4c Part 2 (over the internet) showed the partner's screen 6-9 s behind on
-//  average in alien turns and up to 21 s, while each transfer took under 1 s: the delay
-//  is animations playing late. While the partner is more than CATCH_UP_START_MS behind,
+//  What it changes: helps the partner's screen catch up. Over the internet the partner's
+//  screen ran 6-9 s behind on average in alien turns, and up to 21 s, while each transfer
+//  took under 1 s, so the delay is animations playing late. While the partner is more
+//  than CATCH_UP_START_MS behind,
 //  this turns on the game's own fast mode ("Zip Mode", the option in the game's
 //  settings), and turns it back off once the partner is less than CATCH_UP_STOP_MS
 //  behind. Partner only; the host's screen is never changed.

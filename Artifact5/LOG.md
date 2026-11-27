@@ -6457,3 +6457,49 @@ followed until the partner joined.
     script with a shell heredoc again.
   - **How It Was Verified:** the script asserted each replacement matched
     once; the syntax check found 0 problems.
+
+### 2026-11-27 — Session 8 (continued): 0.9.0 campaign join fails (size)
+- **Kc:** the friend joined a legacy Skirmish fine but couldn't join a
+  normal campaign mission. Logs: local/m4-logs/m4-090-[pc|friend]-1.log.
+  Build ID 8270065.
+- **Test results:**
+  - The Skirmish join sent 153 frames, 265,682 bytes in 437 bunches, and
+    it worked.
+  - The campaign join sent 21,960 frames, 755,027 bytes in 1242 bunches.
+    The friend asked for the history, nothing arrived, and the connection
+    closed about 100 s later. It's the same ~1150-bunch limit. Earlier
+    campaign joins were 1095-1144 bunches, so the campaign's history has
+    now grown past the limit. Every campaign join will fail from here on.
+- **Idea (not built):** the native queue `OutGameData`
+  (XComGameStateNetworkManager.uc L42-63) is a script-visible array of
+  bunches. The host could hold back bunches beyond a window (for example
+  600) and feed them in as the queue drains. **Guess:** the limit is on
+  how much is queued at once, not on the message size.
+- **Blocked:** a read of X2TC_CoopSession.uc (`sed`) was denied by a
+  permission rule. I stopped there, as CLAUDE.md says.
+- **Session 8 prompt log:**
+  - **Prompt:** "Friend was able to join standard legacy skirmish but had
+    issues joining a normal campaign mission now. [log names]"
+  - **Provided:** the cause from the logs and the pacing idea; no code.
+  - **Misreads / rule breaks:** none. The denied command wasn't retried.
+  - **How It Was Verified:** greps of both logs (the sizes come from the
+    host's "history sent" lines).
+
+### 2026-11-27 — Session 8 (continued): 0.9.1 written, queue pacing (not built)
+- **Approved:** Kc: "Yes, build it" (the pacing idea above, and the read).
+- **Changed:**
+  - New class X2TC_CoopPacer: after each send, the host keeps at most 600
+    unsent bunches in `OutGameData`, holds the rest in order, and feeds
+    them from FastSend (every 0.2 s).
+  - X2TC_CoopSession: hooks after SendHistory and after each update, the
+    feed in FastSend, and `GetPacer`.
+  - Version 0.9.1.
+- **Checks:** syntax check, 0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "Yes, build it"
+  - **Provided:** the pacer.
+  - **Misreads / rule breaks:** my first window formula was wrong; I fixed
+    it before handing over.
+  - **How It Was Verified:** syntax check. In-game: not yet. Guesses: that
+    the limit is the queue size, and that the game accepts bunches
+    appended later.

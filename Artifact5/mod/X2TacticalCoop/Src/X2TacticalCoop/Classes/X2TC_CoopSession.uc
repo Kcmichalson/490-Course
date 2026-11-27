@@ -307,6 +307,7 @@ var bool bPartnerMayEdit;      // the guest may change owners and settings (defa
 var bool bNewFramesSync;       // frames go one by one (SendGameState), not as partial histories
 var int NewFramesReceived;     // guest: frames received with OnReceiveGameState
 var int NewFramesMisplaced;    // guest: of those, not found at their index in the history
+var X2TC_CoopPacer Pacer; // 0.9.1: paces the game's outgoing queue (host)
 var X2TC_CoopNarrativeSync NarrSync; // 0.8.9: Chosen cinematics and taunts on the partner
 var bool bNewFramesFallback;   // 0.8.8, host: new frames timed out once; partial histories again
 // Lag logging and the host's objects check.
@@ -988,6 +989,10 @@ function bool IsPollRunning()
 // waiting for the one-second poll; the in-flight and latent checks still apply.
 function FastSend()
 {
+	if (Role == eCoopRole_Host)
+	{
+		GetPacer().Feed(`XCOMNETMANAGER); // 0.9.1
+	}
 	if (Role == eCoopRole_Host && PendingOwnerUnitIDs.Length > 0)
 	{
 		HostApplyPendingOwners();
@@ -2444,6 +2449,7 @@ function SendHistoryToGuest()
 	`log("Coop host: sending history, frames=" $ LastSentFrames @ "plot=" $ GetPlotName(History), , 'X2TC');
 	CountOutData(NetworkMgr, BytesBefore, BunchesBefore);
 	NetworkMgr.SendHistory(History, `XEVENTMGR);
+	GetPacer().HoldAfterSend(NetworkMgr, BunchesBefore); // 0.9.1
 	CountOutData(NetworkMgr, Bytes, Bunches);
 	`log("Coop host: history sent (queued), frames=" $ LastSentFrames $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
 }
@@ -2984,7 +2990,8 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 		StartMs = GetLag().NowMs(); // the send call is timed ("build")
 		NetworkMgr.SendPartialHistory(`XCOMHISTORY, `XEVENTMGR);
 	}
-	CountOutData(NetworkMgr, Bytes, Bunches);
+	CountOutData(NetworkMgr, Bytes, Bunches); // counted before pacing, as before
+	GetPacer().HoldAfterSend(NetworkMgr, BunchesBefore); // 0.9.1
 
 	PartialSends++;
 	bPartialInFlight = true;
@@ -4227,6 +4234,16 @@ static function ClearMcpCallback(string Why)
 }
 
 // 0.8.9: the session's narrative sync (X2TC_CoopNarrativeSync), made on first use.
+// 0.9.1: the host's queue pacer (X2TC_CoopPacer), made on first use.
+function X2TC_CoopPacer GetPacer()
+{
+	if (Pacer == none)
+	{
+		Pacer = new class'X2TC_CoopPacer';
+	}
+	return Pacer;
+}
+
 function X2TC_CoopNarrativeSync GetNarrSync()
 {
 	if (NarrSync == none)
@@ -4274,6 +4291,7 @@ function ResetSession()
 	NewFramesMisplaced = 0;
 	bNewFramesFallback = false;
 	NarrSync = none;
+	Pacer = none;
 	PendingOwnerUnitIDs.Length = 0;
 	PendingOwnerValues.Length = 0;
 	LastOwnActionUnitID = 0;

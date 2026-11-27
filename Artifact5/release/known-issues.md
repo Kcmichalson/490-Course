@@ -1,20 +1,17 @@
 # {{DECIDED_MOD_NAME}}: known issues (draft)
 
-Status as of 0.8.3 Run 1 (2026-11-22, build 8270065;
-checklists/m4-083.md; plans/m4-plan.md "0.8.3 results"). 0.8.4 written
-2026-11-22 (release UI, Verbose log, logging only for the lag cap and the
-hack), not built or tested (checklists/m4-084.md). 0.8.4c Part 2 (PC +
-friend over Steam, 2026-11-23/24): two campaign missions; results in
-plans/m4-plan.md "0.8.4c Part 2 results". 0.8.5 written 2026-11-24 (not
-built or tested; checklists/m4-085.md). Each line names where it's tracked; update after
-every test (checklists/, LOG.md).
+Status as of the 0.9.0 test release (2026-11-27, build 8270065). Last
+tested: 0.8.8 over Steam (2026-11-26). 0.8.9's changes (big turns sent
+frame by frame, no double moves, the Chosen on the partner) are in 0.9.0
+and **not yet tested**. Each line names where it's tracked (LOG.md).
 
 ## Limits by design
 - Two players only.
 - The host's campaign only: the strategy layer is the host's, and only the
   host saves.
-- The partner can't rejoin a mission after leaving or losing the
-  connection; the host plays on alone.
+- The partner can't rejoin a mission once it's a few turns in (its whole
+  history is too big to send); the host plays on alone. Rejoining at the
+  start of the next mission works.
 - VIPs, civilians and other non-soldier units are always the host's; they
   don't appear on CO-OP: SQUAD.
 - Both PCs need the same mods and DLC.
@@ -22,11 +19,16 @@ every test (checklists/, LOG.md).
 ## Open issues
 | Issue | Status |
 |---|---|
-| A long alien turn of the Lost can hang the partner's screen: the host's update for that turn (952 KB) never arrived, nor any update after it | Found in the 0.8.5 Steam run (2026-11-25). Guess: the update's size. **After 1.0** (Kc): the fix is "new frames, second try". No workaround yet: the partner can't rejoin a mission, so the host finishes it alone |
+| A long enemy turn (the Lost, retaliations) can hang the partner's screen and drop the connection | Tested 0.8.5-0.8.8: any single update over about 1150 bunches (~690 KB) never arrives. 0.9.0 (untested): big turns are sent frame by frame. Workaround: the host finishes the mission alone |
+| Partner: a move sometimes snaps back and plays again, using both actions | 0.8.8 logs: the same move sent twice. 0.9.0 (untested): a repeat within 3 s isn't sent |
+| Partner: enemies moving in the fog show their health bars and paths | Reported in the 0.8.8 run. Not looked at yet |
+| Partner: the ADVENT crate airlift (crate race) plays from the wrong place, and the old crate stays | Reported in the 0.8.8 run. Not looked at yet |
+| The rescue VIP can't be given to the partner | By design for now (see "Limits by design") |
+| The partner can't select another soldier while one is moving | See the row below |
 | Partner: can't left-click doors; opening one from the hotbar works, but the door still looks shut on the partner's screen (it's passable and doesn't break concealment) | Found in the 0.8.5 Steam run. **After 1.0** (Kc) |
-| Partner: the game crashed when it returned to the main menu, 2 of 3 times (`Failed to find function None in XComMCP`) | Found in the 0.8.5 Steam run. Guess from the SDK: the game's own lost-connection check outlives the mission. Planned for 0.8.7 (draft) |
-| Partner: after a join that never connected, the next co-op invite is ignored until both restart | Found in the 0.8.5 Steam run (mod bug). Planned for 0.8.7 (draft) |
-| Partner: the Chosen's reveal, name card, opening taunt and mid-mission voice taunts don't play (the host sees them; the partner's Chosen overview works) | Found in the 0.8.5 Steam run. Two guesses from the SDK (research/chosen-partner.md). Planned for 0.8.7 (draft) |
+| Partner: the game crashed when it returned to the main menu, 2 of 3 times (`Failed to find function None in XComMCP`) | Found in the 0.8.5 Steam run. 0.8.7 clears the game's leftover online check; no crash in the returns since (few so far) |
+| Partner: after a join that never connected, the next co-op invite is ignored until both restart | Fixed in 0.8.7 (tested: a new invite replaced the stuck join) |
+| Partner: the Chosen's reveal, name card, opening taunt and mid-mission voice taunts don't play (the host sees them; the partner's Chosen overview works) | Partner log: the Chosen's cinematic maps were never loaded. 0.9.0 (untested): the partner loads them, and the host names each taunt for the partner to play |
 | Host: a soldier couldn't act after the partner disconnected | Found in the 0.8.5 Steam run (mission 3). Not looked at yet |
 | Over the internet (0.8.4c Part 2), transfers took under 1 s, but the partner's screen was 6-9 s behind on average in alien turns and up to 21 s; it catches up between turns | Measured. 0.8.5 (untested): the game's fast mode on the partner while it's more than 3 s behind |
 | Long missions get slower for the partner: every update the host sends grows with the mission (up to about 450 KB), so late alien turns play several seconds behind on the partner's screen (about 10 s at worst in 0.8.2 Run 3) | Known; tested. 0.8.3 Run 1: the transfer between the PCs takes about 60% of each update's delay (about 210 KB/s; 0.5 s early, 3 s late), and waiting for the previous update about 25-30%; even a one-frame update is 260-290 KB late. The engine's rate settings (10-20 KB/s) don't explain the ~210 KB/s cap; 0.8.4 measures it. Fix: "new frames, second try" in 0.8.5 (approved plan; first to cut) |

@@ -82,6 +82,20 @@ taunt's "ChosenEngaged" line.
     partner's history (visualization only; nothing is sent back), and the
     event data is missing.
 
+## Evidence added 2026-11-26 (PC session)
+- **Cause 1 is now supported by a log:** the partner's log for the 0.8.5
+  retaliation (`m4-084-launch-4.log`) has `No matinees found for prefix
+  CIN_ChosenHunter_Reveal`, plus the same warning for
+  `CIN_Chosen_Extract`, `CIN_Chosen_GrenadeThrow`,
+  `CIN_Advent_Priest_Male_Reveal` and `CIN_Faceless_*`. So the partner is
+  also missing the cinematic maps of other units created mid-mission. There
+  are no "Adding matinee map" lines.
+- **Kc:** Bradford, Shen and Tygan lines play fine on the partner. Those
+  are fixed objective narratives (the partner's frames include "Trigger
+  Objective Narrative Moment" containers). So the partner can play
+  narratives; it's the dynamic (transient-list) ones that are missing,
+  which fits cause 2.
+
 ## Suggested order
 1. Read the partner's 0.8.5 log for the retaliation mission. Look for:
    - "Adding matinee map" lines, which come from the game's own

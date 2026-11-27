@@ -8,7 +8,7 @@
 <Project ToolsVersion="4.0" DefaultTargets="Default" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Name>X2TacticalCoop</Name>
-    <Description>Work in progress: experiments toward two-player networked co-op for XCOM 2: War of the Chosen. Free, unofficial, and not affiliated with or endorsed by Firaxis Games or 2K.</Description>
+    <Description>Test release: two-player networked co-op for XCOM 2: War of the Chosen. Free, unofficial, and not affiliated with or endorsed by Firaxis Games or 2K.</Description>
     <SteamPublishID>0</SteamPublishID>
     <AssemblyName>X2TacticalCoop</AssemblyName>
     <RootNamespace>X2TacticalCoop</RootNamespace>

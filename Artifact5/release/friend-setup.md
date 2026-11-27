@@ -31,9 +31,12 @@ host's missions from their own PC. About 10 minutes the first time.
 ## Partner
 10. Start the game. The main menu's bottom row shows **CO-OP
     ({{VERSION}})** left of MULTIPLAYER. The version must match the host's.
-11. Click **CO-OP**, then **JOIN (STEAM)**, then accept the host's Steam
-    invite. Wait while the mission loads; your screen catches up with the
-    host's.
+11. Stay on the main menu and accept the host's Steam invite (the Steam
+    notification, or Shift+Tab, then the chat). The mission loads by
+    itself; your screen catches up with the host's. **Start the game
+    before accepting**: an invite accepted while the game is closed doesn't
+    work yet. If the game's own multiplayer lobby opens instead, go back
+    and click **CO-OP**, then **JOIN (STEAM)**, and accept again.
 12. If a message names a **version** or **mod/DLC difference**, fix that and
     join again.
 

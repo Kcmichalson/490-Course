@@ -1702,3 +1702,22 @@ history can be sent at all. Fallback for 1.0: both as known issues.
   may fit.
 - **Untested guesses:** whether AddGameStateToHistory accepts a received
   frame; whether the event manager drifts without partial histories.
+
+## 0.8.9: Chosen on the partner (approved by Kc, 2026-11-26)
+**Kc:** "1 and 2 look good, please write them. Save 3 as a backup for
+another version"
+1. **Cinematic maps:** the partner streams each new unit's
+   `strMatineePackages` as it arrives in the history. Chosen maps are loaded
+   blocking, other units' maps in the background.
+2. **Taunts from the host:** before sending frames, the host sends a small
+   command for each frame whose narrative manager picked dynamic lines (the
+   moment's path and template name). The partner puts the same line back
+   into that frame's narrative manager before the frame is replayed, so the
+   game's own visualization plays it.
+3. **Backup, for a later version:** the partner rebuilds the line from
+   `PlayedThisTurn` / `PlayedThisMission` and `GetNarrativeMomentToPlay`
+   (research/chosen-partner.md, cause 2).
+
+**As built:** new class X2TC_CoopNarrativeSync, plus hooks in
+X2TC_CoopSession (the host's send, the command, the partner's two receive
+paths). No fix switch.

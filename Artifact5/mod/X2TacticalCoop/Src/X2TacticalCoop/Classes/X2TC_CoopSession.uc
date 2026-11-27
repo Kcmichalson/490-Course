@@ -307,6 +307,7 @@ var bool bPartnerMayEdit;      // the guest may change owners and settings (defa
 var bool bNewFramesSync;       // frames go one by one (SendGameState), not as partial histories
 var int NewFramesReceived;     // guest: frames received with OnReceiveGameState
 var int NewFramesMisplaced;    // guest: of those, not found at their index in the history
+var X2TC_CoopNarrativeSync NarrSync; // 0.8.9: Chosen cinematics and taunts on the partner
 var bool bNewFramesFallback;   // 0.8.8, host: new frames timed out once; partial histories again
 // Lag logging and the host's objects check.
 var X2TC_CoopLagLog Lag;       // both: per-update timing lines (logging only)
@@ -2099,6 +2100,15 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		return;
 	}
 
+	if (Command == class'X2TC_CoopNarrativeSync'.const.CMD_NARRATIVE)
+	{
+		if (Role == eCoopRole_Guest)
+		{
+			GetNarrSync().ReceiveLines(RawParams);
+		}
+		return;
+	}
+
 	if (Command == CMD_HISTORY_RECEIVED)
 	{
 		Params = RawParams;
@@ -2728,6 +2738,8 @@ function OnReceivePartialHistory(XComGameStateHistory InHistory, X2EventManager 
 	GetLag().GuestHistoryArrived(Frames); // first, so the time is the arrival's
 	// Before the follower replays these frames.
 	ScrubReplayVisuals(Max(PreviousFrames, 0), Frames - 1);
+	GetNarrSync().StreamNewUnits(); // 0.8.9
+	GetNarrSync().ApplyLines();
 	LogInterruptFrames("guest, as received", Max(PreviousFrames, 0), Frames - 1, 0);
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Frames, Params);
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_HISTORY_RECEIVED, Params);
@@ -2877,6 +2889,8 @@ function OnReceiveGameState(XComGameState GameState)
 		History.AddGameStateToHistory(GameState);
 		Frames = History.GetNumGameStates();
 		ScrubReplayVisuals(Index, Index);
+		GetNarrSync().StreamNewUnits(); // 0.8.9
+		GetNarrSync().ApplyLines();
 		if (Frames == Index + 1 && HasHostSoldierAction(Index, Index))
 		{
 			ShowBanner("the host's soldier acted, frame" @ Index);
@@ -2954,6 +2968,7 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 		bNewFramesSync = true;
 		`log("Coop host:" @ (Frames - LastSentFrames) @ "frames waiting; new frames from now on", , 'X2TC');
 	}
+	class'X2TC_CoopNarrativeSync'.static.HostSendLines(LastSentFrames, Frames - 1); // 0.8.9, before the frames
 	CountOutData(NetworkMgr, BytesBefore, BunchesBefore);
 	if (bNewFramesSync && !bNewFramesFallback)
 	{
@@ -4211,6 +4226,16 @@ static function ClearMcpCallback(string Why)
 	}
 }
 
+// 0.8.9: the session's narrative sync (X2TC_CoopNarrativeSync), made on first use.
+function X2TC_CoopNarrativeSync GetNarrSync()
+{
+	if (NarrSync == none)
+	{
+		NarrSync = new class'X2TC_CoopNarrativeSync';
+	}
+	return NarrSync;
+}
+
 function ResetSession()
 {
 	ClearMcpCallback("session reset");
@@ -4248,6 +4273,7 @@ function ResetSession()
 	NewFramesReceived = 0;
 	NewFramesMisplaced = 0;
 	bNewFramesFallback = false;
+	NarrSync = none;
 	PendingOwnerUnitIDs.Length = 0;
 	PendingOwnerValues.Length = 0;
 	LastOwnActionUnitID = 0;

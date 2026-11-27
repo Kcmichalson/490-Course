@@ -134,6 +134,7 @@ const CMD_HISTORY_RECEIVED = "X2TC_HistoryReceived"; // guest: a partial history
 const PARTIAL_ACK_TIMEOUT_SECONDS = 15;
 
 // Guest moves.
+const NEW_FRAMES_AUTO = 40;              // 0.8.8: more frames waiting than this: new frames
 const CMD_GUEST_MOVE = "X2TC_GuestMove";   // guest: unit ID, tile count, then X, Y, Z per tile
 const CMD_MOVE_RESULT = "X2TC_MoveResult"; // host: 1 applied / 0 refused, then the reason (moves and abilities)
 // Guest abilities: template name, source unit ID, primary target ID, location count, then
@@ -231,6 +232,7 @@ var int PendingMoveSecond;     // host: Seconds when it arrived
 var int MovesReceived;         // host
 var int MovesSent;             // guest
 var int LastGuestMoveUnitID;   // guest: the unit of the last move sent
+var TTile LastGuestMoveDest;   // 0.8.8, guest: that move's last tile
 
 // Guest abilities.
 var bool bAbilityPending;      // host: a guest ability waiting to be applied
@@ -2944,6 +2946,14 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 		return;
 	}
 
+	// 0.8.8: a batch this big would be a partial history near the ~1150-bunch limit
+	// (0.8.8 run: +146 frames = 1211 bunches and +176 = 1158 never arrived; +66 = 830
+	// did). Switch to new frames for the rest of the session, without the SQUAD tick.
+	if (!bNewFramesSync && !bNewFramesFallback && Frames - LastSentFrames > NEW_FRAMES_AUTO)
+	{
+		bNewFramesSync = true;
+		`log("Coop host:" @ (Frames - LastSentFrames) @ "frames waiting; new frames from now on", , 'X2TC');
+	}
 	CountOutData(NetworkMgr, BytesBefore, BunchesBefore);
 	if (bNewFramesSync && !bNewFramesFallback)
 	{
@@ -3314,6 +3324,22 @@ function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
 {
 	local array<byte> Params;
 	local int i;
+	local float Now;
+
+	// 0.8.8: the same move captured twice (0.8.8 run: moves 3/4, 5/6, 14/15, same unit
+	// and tile count under 1 s apart) made the soldier snap back and move again with its
+	// second action. A repeat to the same last tile within 3 s is dropped.
+	Now = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	if (Tiles.Length > 0 && UnitID == LastGuestMoveUnitID && Now - LastOwnActionTime < 3.0
+		&& Tiles[Tiles.Length - 1] == LastGuestMoveDest)
+	{
+		`log("Coop guest: the same move again within 3 s (unit" @ UnitID $ "); not sent", , 'X2TC');
+		return;
+	}
+	if (Tiles.Length > 0)
+	{
+		LastGuestMoveDest = Tiles[Tiles.Length - 1];
+	}
 
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(UnitID, Params);
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Tiles.Length, Params);

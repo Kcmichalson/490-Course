@@ -6354,3 +6354,45 @@ followed until the partner joined.
   - **How It Was Verified:** syntax check, 0 problems; the 0.8.1 cause from
     m3-logs/stage8-laptop-1.log and the SDK lines quoted in the plan.
     In-game: not yet.
+
+### 2026-11-26 — Session 8 (continued): 0.8.8 run read; 0.8.9 written
+- **Setup:** Kc + friends over Steam, 0.8.8. Build ID 8270065 (Kc's PC).
+  Logs: local/m4-logs/m4-088-[pc|friend]-[1|2].log.
+- **Kc's report:**
+  - A second friend couldn't join the mission the first had dropped from,
+    so they relaunched from the Skyranger.
+  - Two Lost-turn soft locks; the second came during the alien turn of a
+    sewer VIP rescue, a turn before victory.
+  - Partner moves sometimes snap back and replay, using both actions.
+  - Enemies moving in the fog show health bars and paths.
+  - The ADVENT crate airlift looks wrong on the partner, and the old crate
+    stays.
+  - Still no Chosen cutscenes or voice lines.
+  - Soldier assignments were remembered at the next join (good).
+- **Test results:**
+  - **New frames was never on** (no new-frame lines in either log), so
+    0.8.8's fix wasn't exercised.
+  - **Both soft locks:** partial histories of 1158 bunches (+176 frames) and
+    1211 bunches (+146) were never acknowledged, and the connection closed.
+    The same limit as before.
+  - **Snap-back:** the host received the same move twice, under 1 s apart
+    (same unit, same tile count): moves 3/4, 5/6 and 14/15. The second used
+    the second action.
+  - **Joins:** the full histories (613-695 KB, up to 1144 bunches) all
+    arrived.
+- **Changed (0.8.9):**
+  - The host switches to new frames by itself when more than 40 frames are
+    waiting.
+  - The partner doesn't send the same move to the same tile again within
+    3 s.
+  - Version 0.8.9.
+- **Not looked at:** fog health bars, the crate airlift, Chosen.
+- **Checks:** syntax check, 0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** [Kc's 0.8.8 run notes, as above] "Please look through the
+    logs and see if it can solve any outstanding issues."
+  - **Provided:** the findings and the two 0.8.9 changes.
+  - **Misreads / rule breaks:** I didn't make the SQUAD tick prominent
+    enough in the 0.8.8 test list; it was missed.
+  - **How It Was Verified:** greps of the host's log (sizes, move pairs);
+    syntax check. In-game: not yet.

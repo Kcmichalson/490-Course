@@ -56,6 +56,7 @@ event OnInit(UIScreen Screen)
 		return;
 	}
 
+	class'X2TC_CoopSession'.static.ClearMcpCallback("main menu"); // 0.8.7
 	`log("Main menu listener loaded, screen class:" @ string(Screen.Class.Name), , 'X2TC');
 
 	// drop the MULTIPLAYER button -- Kc

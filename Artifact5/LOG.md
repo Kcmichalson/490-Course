@@ -6259,3 +6259,98 @@ followed until the partner joined.
       invite worked in the 0.8.5 Steam run.
     - The draft is still not approved for code: Kc will say when.
   - **How It Was Verified:** reread the edited sections; nothing to build.
+
+### 2026-11-26 — Session 8 (continued): 0.8.7 written (not built or tested)
+- **Planned:** the small items of the 0.8.7 draft (plans/m4-plan.md, "0.8.7
+  as built").
+- **Changed:**
+  - X2TC_CoopSession: `ClearMcpCallback` (also called in ResetSession).
+    A newer invite replaces a join stuck for more than 5 s.
+  - X2TC_MainMenuListener: clears the callback when the main menu opens.
+  - Version 0.8.7.
+- **Findings:** the 0.8.5 outage log shows the host dropped the partner
+  about 60 s after the friend's log stopped, and gave the soldiers back.
+- **Checks:** syntax check, 3 files, 0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "We only have 10% usage left and I want to get 1.0 out
+    today if possible. Give a current checklist"
+  - **Provided:** a release checklist; I wrongly suggested 1.0 = 0.8.5
+    before reading the plan.
+  - **Prompt:** "I will do one final round of tests and you will do fixes
+    after got it? What were the things pertinent before release?"
+  - **Provided:** the four blockers and what to watch for.
+  - **Prompt:** "Also please freshen yourself on the plan my laptop copy
+    made. What do we need to do before 1.0?"
+  - **Provided:** the plan's order (0.8.7, test, audit, 0.9, 1.0).
+  - **Prompt:** "Briefly tell me what to test [...] let's get anything code
+    wise done now"
+  - **Provided:** the code above and a short test list.
+  - **Misreads / rule breaks:** I bumped the version with `sed -i`, against
+    the Edit/Write/Python-only rule (a one-line ASCII change; grep shows it
+    correct).
+  - **How It Was Verified:** syntax check, 0 problems; grep of the version
+    line. In-game: not yet.
+
+### 2026-11-26 — Session 8 (continued): 0.8.7 Steam run (train raid, Lost)
+- **Setup:** Kc + friend over Steam, 0.8.7 on both. Build ID 8270065
+  (Kc's PC). Logs: local/m4-logs/m4-087-[pc|friend]-[1|2].log.
+- **Kc's report:** the friend dropped partway through, on a Lost turn.
+  Rejoining didn't work. Kc saved and hosted again without either player
+  quitting; that failed too. After both restarted, the friend still
+  couldn't join. Testing stopped there.
+- **Test results:**
+  - **Drop:** the host's partial history 107 (697,023 bytes, 1147 bunches)
+    was never acknowledged, and nor was any later one. The connection
+    closed about 40 s later. Same pattern as 0.8.5 (952,795 bytes).
+  - **Rejoins (twice):** each connected and asked for the history. The
+    host queued the full history (1,847,923 bytes, 3040 bunches), it never
+    arrived, and the connection closed about 95 s later.
+  - **Size pattern over every M4 Steam log:**
+    - every message delivered was 1100 bunches or fewer (largest: a full
+      history of 668,515 bytes);
+    - every one that never arrived was 1147 or more.
+    - **Finding:** above about 1100-1150 bunches (~670-690 KB), a message
+      doesn't arrive and the connection dies. **Guess:** an engine or Steam
+      send-queue limit. This blocks the Lost missions and every mid-mission
+      rejoin (the full history grows with the mission).
+  - **0.8.7 stuck join fix works:** the friend's first rejoin hung (the old
+    session); the next invite logged "the earlier join never connected;
+    replacing it" and connected.
+  - **0.8.7 main-menu crash fix:** the friend returned to the main menu
+    once (host disconnected) with no crash. One return isn't enough to call
+    it fixed.
+- **Request (Kc):** an on-screen note when the partner is joining or has
+  connected, fading after a few seconds.
+- **Session 8 prompt log:**
+  - **Prompt:** "train raid lost mission [...] Logs attached as 087.
+    Please do what you can with these. Could do with an indicator or text
+    when it says someone is joining or has connected [...]"
+  - **Provided:** the findings above; no code changes (the fix is bigger
+    than the usage left).
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** greps of the four logs; the sizes and bunch
+    counts are copied from the host's lines.
+
+### 2026-11-26 — Session 8 (continued): 0.8.8 written (not built or tested)
+- **Planned:** plans/m4-plan.md, "0.8.8: splitting large updates".
+- **Changed:**
+  - X2TC_CoopSession.OnReceiveGameState: the guest adds each new frame in
+    order (`AddGameStateToHistory`).
+  - HostMaybeSendPartial: falls back to partial histories after one
+    timeout (`bNewFramesFallback`).
+  - Version 0.8.8.
+  - Step 3 (rejoin) not built; see "0.8.8 as built".
+- **Checks:** syntax check, 2 files, 0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "Looks good, can you make that piece chopper work?"
+  - **Provided:** why the native sends can't be split, and a 4-step plan;
+    no code.
+  - **Prompt:** "Fine, go ahead, this is the last major roadblock besides
+    the chosen thing."
+  - **Provided:** the plan saved, the cause of the 0.8.1 failure, and the
+    fix.
+  - **Misreads / rule breaks:** my Python version edit turned the file's
+    CRLF line endings into LF; I restored them (`file` shows CRLF again).
+  - **How It Was Verified:** syntax check, 0 problems; the 0.8.1 cause from
+    m3-logs/stage8-laptop-1.log and the SDK lines quoted in the plan.
+    In-game: not yet.

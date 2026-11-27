@@ -1648,3 +1648,57 @@ dev tools removed → 1.0.
 
 **After 1.0 (Kc, 2026-11-26):** joining from a Steam invite accepted while
 the game is closed.
+
+### 0.8.7 as built (Kc, 2026-11-26: "let's get anything code wise done now")
+Low usage left, so only the smallest items:
+- Item 1, as planned: `X2TC_CoopSession.ClearMcpCallback`, called in
+  ResetSession (every leave, mission-end and disconnect path) and when the
+  main menu opens. No switch.
+- Item 2(a), as planned: a newer invite replaces a join that started more
+  than 5 s earlier and never connected (the old Steam 'Game' session is
+  destroyed first). (b), (c): not built.
+- Item 6: not built. The outage log shows the host already dropped the
+  partner about 60 s after the outage (`connection closed`, soldiers given
+  back). What kept Kc stuck is still unknown.
+- Items 3, 4, 7, 9: not built (they need the logs or a test first).
+
+## 0.8.8: splitting large updates (approved by Kc, 2026-11-26)
+**Kc:** "Fine, go ahead, this is the last major roadblock besides the
+chosen thing."
+
+**Why:** the 0.8.7 run (LOG.md) showed that every message of 1147 bunches
+(~690 KB) or more never arrived and the connection died, while every one of
+1100 or fewer arrived. The native SendPartialHistory and SendHistory can't
+be split from script.
+1. **Find why "new frames" failed in 0.8.1** (frames arrived but weren't
+   added to the partner's history). Read the game's own receive path and
+   the 0.8.1 logs, then fix it behind its switch.
+2. **Turns:** with new frames on, each update is only its new frames. Any
+   gap or acknowledgment timeout falls back to a partial history.
+3. **Rejoin:** the history from the mission start (small), then the
+   frames since, one by one. If the start can't be sent on its own,
+   rejoining stays a known issue for 1.0.
+4. **Test:** a Lost or Retaliation mission with the switch on, plus a
+   rejoin late in a mission. Both logs.
+
+**Risk:** step 1 failed once already; step 3 depends on whether a partial
+history can be sent at all. Fallback for 1.0: both as known issues.
+
+### 0.8.8 as built
+- **Step 1 cause (from source and the M3 stage 8 log):** the native
+  ReceiveGameState only deserializes the frame. The game's own users (the MP
+  lobby panels) never add it to the history. The 0.8.1 log shows each frame
+  "in the history at its index=False" with the history count unchanged.
+- **Fix:** the guest adds a frame with `AddGameStateToHistory` when its
+  index is exactly the next one, scrubs its visuals, shows the banner, and
+  acknowledges. A frame that skips ahead is logged and not added.
+- **Step 2:** the existing switch (SQUAD: "SYNC: NEW FRAMES", host only,
+  before the partner joins). On the first acknowledgment timeout, the host
+  falls back to partial histories for the rest of the session.
+- **Step 3: not built.** A join's full history is one native SendHistory,
+  and there's no script call to send only part of it. Guess from the logs:
+  a history loaded from a save is much bigger (1.85 MB at 18539 frames
+  against 651 KB at 16852 without a load), so a rejoin without reloading
+  may fit.
+- **Untested guesses:** whether AddGameStateToHistory accepts a received
+  frame; whether the event manager drifts without partial histories.

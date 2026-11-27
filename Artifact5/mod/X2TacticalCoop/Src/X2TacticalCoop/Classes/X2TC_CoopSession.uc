@@ -267,6 +267,7 @@ var bool bSteamSession;        // both: this session's connection uses steamsock
 var bool bSteamGameCreated;    // both: a Steam 'Game' session was created or joined by us
 var bool bSteamInviteArmed;    // guest: the next accepted invite is a co-op invite
 var bool bSteamJoinStarted;    // guest: joining the host's Steam session
+var float SteamJoinStartTime;  // 0.8.7: RealTimeSeconds when that join started
 var bool bStockInviteHandlerOff; // guest: the game's own invite handler is taken off
 var bool bContentMismatch;     // both: the other game's mods or DLC differ (by name)
 // Hack routing (X2TC_CoopHackListener).
@@ -304,6 +305,7 @@ var bool bPartnerMayEdit;      // the guest may change owners and settings (defa
 var bool bNewFramesSync;       // frames go one by one (SendGameState), not as partial histories
 var int NewFramesReceived;     // guest: frames received with OnReceiveGameState
 var int NewFramesMisplaced;    // guest: of those, not found at their index in the history
+var bool bNewFramesFallback;   // 0.8.8, host: new frames timed out once; partial histories again
 // Lag logging and the host's objects check.
 var X2TC_CoopLagLog Lag;       // both: per-update timing lines (logging only)
 var ETeam HostLastTurnTeam;    // host: the turn team at the last poll (objects check at XCOM's turn)
@@ -757,6 +759,18 @@ function RestoreStockInviteHandlerNow()
 // once).
 function bool JoinFromInvite(const out OnlineGameSearchResult InviteResult, bool bWasSuccessful)
 {
+	// 0.8.7: a join that never reached the mission (0.8.5 run, session 3) no longer blocks
+	// a newer invite. Within 5 s it's a repeat of the same callback, so it's ignored.
+	if (bSteamJoinStarted && !IsActive() && class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - SteamJoinStartTime > 5.0)
+	{
+		`log("Coop steam guest: the earlier join never connected; replacing it with the new invite", , 'X2TC');
+		GetOnlineSub().GameInterface.ClearJoinOnlineGameCompleteDelegate(OnSteamJoinComplete);
+		if (GetOnlineSub().GameInterface.GetGameSettings('Game') != none)
+		{
+			GetOnlineSub().GameInterface.DestroyOnlineGame('Game');
+		}
+		ResetSession();
+	}
 	if (IsActive() || bSteamJoinStarted)
 	{
 		`log("Coop steam guest: co-op invite again while joining or connected; ignored", , 'X2TC');
@@ -797,6 +811,7 @@ function OnSteamInviteAccepted(const out OnlineGameSearchResult InviteResult, bo
 		return;
 	}
 	bSteamJoinStarted = true;
+	SteamJoinStartTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
 	`log("Coop steam guest: joining the host's Steam session", , 'X2TC');
 }
 
@@ -2836,7 +2851,7 @@ function bool HasHostSoldierAction(int FromFrame, int ToFrame)
 // Guest: a single frame from the host (SendGameState). Logs whether the game's own
 // network code put it into this history at its index; acknowledges with the frame count,
 // as for a partial history. Whether the follower then replays it is seen from its
-// "replayed to frame" lines. (If the frame isn't added, the mod does NOT add it itself.)
+// "replayed to frame" lines. 0.8.8: the guest adds the frame itself (see below).
 function OnReceiveGameState(XComGameState GameState)
 {
 	local XComGameStateHistory History;
@@ -2851,6 +2866,23 @@ function OnReceiveGameState(XComGameState GameState)
 	if (GameState != none)
 	{
 		Index = GameState.HistoryIndex;
+	}
+	// 0.8.8: the game's ReceiveGameState only reads the frame (its own users, the MP
+	// lobby panels, never add it either: UIMPShell_SquadCostPanel_RemotePlayer.uc L88-94),
+	// so the 0.8.1 test found every frame missing. The guest adds the next one in order.
+	if (Role == eCoopRole_Guest && GameState != none && Index == Frames)
+	{
+		History.AddGameStateToHistory(GameState);
+		Frames = History.GetNumGameStates();
+		ScrubReplayVisuals(Index, Index);
+		if (Frames == Index + 1 && HasHostSoldierAction(Index, Index))
+		{
+			ShowBanner("the host's soldier acted, frame" @ Index);
+		}
+	}
+	else if (Role == eCoopRole_Guest && Index > Frames)
+	{
+		`log("Coop guest: new frame" @ Index @ "skips ahead of history frames=" $ Frames $ "; not added (the host falls back to a partial history)", , 'X2TC');
 	}
 	bInPlace = Index >= 0 && Index < Frames && History.GetGameStateFromHistory(Index) == GameState;
 	if (!bInPlace)
@@ -2869,11 +2901,6 @@ function OnReceiveGameState(XComGameState GameState)
 	GuestExpectedFrames = Frames;
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(Frames, Params);
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_HISTORY_RECEIVED, Params);
-	// As for partial histories: the banner for the host's actions, the squad screen.
-	if (Frames - 1 >= 0 && HasHostSoldierAction(Frames - 1, Frames - 1))
-	{
-		ShowBanner("the host's soldier acted, frame" @ (Frames - 1));
-	}
 	RefreshSquadScreen();
 }
 
@@ -2894,6 +2921,13 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 		{
 			`log("Coop host: partial history" @ PartialSends @ "not acknowledged after" @ PARTIAL_ACK_TIMEOUT_SECONDS $ "s; sending again when there are new frames", , 'X2TC');
 			bPartialInFlight = false;
+			// 0.8.8: new frames that weren't acknowledged: back to partial histories for
+			// the rest of the session.
+			if (bNewFramesSync && !bNewFramesFallback)
+			{
+				bNewFramesFallback = true;
+				`log("Coop host: new frames not acknowledged; partial histories from now on", , 'X2TC');
+			}
 		}
 		return;
 	}
@@ -2911,7 +2945,7 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 	}
 
 	CountOutData(NetworkMgr, BytesBefore, BunchesBefore);
-	if (bNewFramesSync)
+	if (bNewFramesSync && !bNewFramesFallback)
 	{
 		// Only the new frames, each with its history index
 		// (XComGameStateNetworkManager.SendGameState L338).
@@ -4138,8 +4172,22 @@ function LeaveAsGuest()
 }
 
 // Back to "no session", so JOIN works again. The delegates stay registered.
+// 0.8.7: clears the game's pending online-check callback (XComMCP.OnEventCompleted), as
+// the game's own lost-connection code does (XComTacticalController.uc L3085, L3105).
+// Guess from the 0.8.5 run: the callback outlived the tactical controller and crashed
+// the partner ~1 s after the main menu loaded ("Failed to find function None in XComMCP").
+static function ClearMcpCallback(string Why)
+{
+	if (`XENGINE != none && `XENGINE.MCPManager != none)
+	{
+		`XENGINE.MCPManager.OnEventCompleted = none;
+		`log("Coop: online-check callback cleared (" $ Why $ ")", , 'X2TC');
+	}
+}
+
 function ResetSession()
 {
+	ClearMcpCallback("session reset");
 	Role = eCoopRole_None;
 	bHistoryRequested = false;
 	bHistorySent = false;
@@ -4173,6 +4221,7 @@ function ResetSession()
 	bNewFramesSync = false;
 	NewFramesReceived = 0;
 	NewFramesMisplaced = 0;
+	bNewFramesFallback = false;
 	PendingOwnerUnitIDs.Length = 0;
 	PendingOwnerValues.Length = 0;
 	LastOwnActionUnitID = 0;

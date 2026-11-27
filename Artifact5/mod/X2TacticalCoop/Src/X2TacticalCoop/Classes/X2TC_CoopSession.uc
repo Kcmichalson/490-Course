@@ -134,7 +134,7 @@ const CMD_HISTORY_RECEIVED = "X2TC_HistoryReceived"; // guest: a partial history
 const PARTIAL_ACK_TIMEOUT_SECONDS = 15;
 
 // Guest moves.
-const NEW_FRAMES_AUTO = 40;              // 0.8.8: more frames waiting than this: new frames
+const NEW_FRAMES_AUTO = 0;               // 0.8.8: more frames waiting than this: new frames. 0.9.2: 0 = off (the 0.9.1 partner crashed ~4 s after the switch; the pacer handles big updates)
 const CMD_GUEST_MOVE = "X2TC_GuestMove";   // guest: unit ID, tile count, then X, Y, Z per tile
 const CMD_MOVE_RESULT = "X2TC_MoveResult"; // host: 1 applied / 0 refused, then the reason (moves and abilities)
 // Guest abilities: template name, source unit ID, primary target ID, location count, then
@@ -452,6 +452,7 @@ function bool StartHostServer(bool bSteam)
 	Role = eCoopRole_Host;
 	bSteamSession = bSteam;
 	`log("Coop host: server created (port" @ COOP_PORT $ ", steam=" $ bSteam $ ")", , 'X2TC');
+	class'X2TC_CoopStatus'.static.Show("hosting; waiting for your partner...");
 	// Release the network manager's data before this map unloads; log the switches and
 	// the engine's multiplayer flag, for the camera question.
 	EnsureMapCleanup();
@@ -817,6 +818,7 @@ function OnSteamInviteAccepted(const out OnlineGameSearchResult InviteResult, bo
 	bSteamJoinStarted = true;
 	SteamJoinStartTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
 	`log("Coop steam guest: joining the host's Steam session", , 'X2TC');
+	class'X2TC_CoopStatus'.static.Show("joining the host...");
 }
 
 function OnSteamJoinComplete(name SessionName, bool bWasSuccessful)
@@ -1802,6 +1804,7 @@ function Poll()
 				LastAttemptSecond = Seconds;
 				bAttempt = NetworkMgr.ForceConnectionAttempt();
 				`log("Coop guest: connection attempt" @ ConnectAttempts @ "of" @ CONNECT_MAX_ATTEMPTS $ ", sent=" $ bAttempt, , 'X2TC');
+				class'X2TC_CoopStatus'.static.Show("connecting (attempt" @ ConnectAttempts @ "of" @ CONNECT_MAX_ATTEMPTS $ ")...");
 				if (ConnectAttempts == CONNECT_MAX_ATTEMPTS)
 				{
 					`log("Coop guest: last connection attempt sent; no more retries", , 'X2TC');
@@ -2090,6 +2093,7 @@ function OnRemoteCommand(string Command, array<byte> RawParams)
 		if (Role == eCoopRole_Host && !bGuestFollowing)
 		{
 			bGuestFollowing = true;
+			class'X2TC_CoopStatus'.static.Show("partner joined", true);
 			// Log the turn starts the guest will replay from the start state, to pair them.
 			HostTurnScanFrame = Number - 1;
 			HostScanTurns();
@@ -2422,6 +2426,7 @@ function RequestHistory()
 	NoParams.Length = 0; // assigned before use, as stock code does (X2TacticalMPGameRuleset.uc L343)
 	`XCOMNETMANAGER.SendRemoteCommand(CMD_REQUEST_HISTORY, NoParams);
 	`log("Coop guest: history requested", , 'X2TC');
+	class'X2TC_CoopStatus'.static.Show("connected; receiving the mission...");
 }
 
 // Host: send the whole history to the guest, once per session.
@@ -2451,6 +2456,7 @@ function SendHistoryToGuest()
 	NetworkMgr.SendHistory(History, `XEVENTMGR);
 	GetPacer().HoldAfterSend(NetworkMgr, BunchesBefore); // 0.9.1
 	CountOutData(NetworkMgr, Bytes, Bunches);
+	class'X2TC_CoopStatus'.static.Show("partner connected; sending the mission...");
 	`log("Coop host: history sent (queued), frames=" $ LastSentFrames $ ", queued bytes=" $ (Bytes - BytesBefore) @ "in" @ (Bunches - BunchesBefore) @ "bunches, data types=" $ QueuedTypes(NetworkMgr, BunchesBefore), , 'X2TC');
 }
 
@@ -2518,6 +2524,10 @@ function OnGuestMissionScreen(string ScreenName)
 		ReplayText = "in replay=" $ ReplayMgr.bInReplay @ "replay frame=" $ ReplayMgr.CurrentHistoryFrame;
 	}
 
+	if (ScreenName == "replay screen")
+	{
+		class'X2TC_CoopStatus'.static.Show("joined", true);
+	}
 	`log("Coop guest:" @ ScreenName @ "opened; session kept (loading mission=" $ bLoadingMission $ ", connections=" $ `XCOMNETMANAGER.Connections.Length $ "), frames=" $ `XCOMHISTORY.GetNumGameStates() $ "," @ ReplayText, , 'X2TC');
 
 	if (bLoadingMission && !bMissionTimerStarted)
@@ -2969,7 +2979,7 @@ function HostMaybeSendPartial(XComGameStateNetworkManager NetworkMgr)
 	// 0.8.8: a batch this big would be a partial history near the ~1150-bunch limit
 	// (0.8.8 run: +146 frames = 1211 bunches and +176 = 1158 never arrived; +66 = 830
 	// did). Switch to new frames for the rest of the session, without the SQUAD tick.
-	if (!bNewFramesSync && !bNewFramesFallback && Frames - LastSentFrames > NEW_FRAMES_AUTO)
+	if (NEW_FRAMES_AUTO > 0 && !bNewFramesSync && !bNewFramesFallback && Frames - LastSentFrames > NEW_FRAMES_AUTO)
 	{
 		bNewFramesSync = true;
 		`log("Coop host:" @ (Frames - LastSentFrames) @ "frames waiting; new frames from now on", , 'X2TC');
@@ -3282,6 +3292,7 @@ function OnConnectionClosed(int ConnectionIdx)
 	local X2TC_CoopReplayMgr Follower;
 
 	`log("Coop" @ RoleName() $ ": connection closed (connection" @ ConnectionIdx $ ")", , 'X2TC');
+	class'X2TC_CoopStatus'.static.Show((Role == eCoopRole_Host) ? "partner disconnected" : "disconnected from the host", true);
 	// The guest in a mission lost the host (the host quit, crashed or closed the
 	// session): tell the player and offer the way back to the main menu.
 	if (Role == eCoopRole_Guest && bFollowerInstalled)

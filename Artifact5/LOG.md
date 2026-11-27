@@ -6503,3 +6503,55 @@ followed until the partner joined.
   - **How It Was Verified:** syntax check. In-game: not yet. Guesses: that
     the limit is the queue size, and that the game accepts bunches
     appended later.
+
+### 2026-11-27 — Session 8 (continued): 0.9.1 run; 0.9.2 (auto new frames off)
+- **Kc:** the campaign join worked ("takes a few seconds longer in the
+  loading screen"). The friend's game crashed a few turns in while its
+  window wasn't focused. Logs: m4-091-[pc|friend]-1.log. Build ID 8270065.
+- **Test results:**
+  - **Pacing works:** the join held 827 bunches (1427 in all) and queued
+    them within 0.4 s; the friend loaded. **Finding:** the limit was the
+    queue, not the message size.
+  - **Crash:** the host switched to new frames by itself (58 frames
+    waiting). The friend added 101 frames, each logging the redscreen
+    "Game State Added to History Without Known Creation"
+    (X2TC_CoopSession::OnReceiveGameState). The game crashed about 4 s
+    later with no assert text. **Guess:** the frames added by script
+    caused it, not the window focus.
+- **Changed (0.9.2):** `NEW_FRAMES_AUTO = 0` turns the automatic switch
+  off; the pacer covers big updates. Don't tick the SQUAD SYNC: NEW FRAMES
+  box. Version 0.9.2. Syntax check: 0 problems. Not built.
+- **Request (Kc):** a status indicator, top right on both PCs, while a
+  player connects (connecting, progress, connected). Proposed; not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "That worked [...] Friend's game crashed a few turns in
+    while the window wasn't focused [...] Could really do with some sort of
+    status indicator [...]"
+  - **Provided:** the crash cause, 0.9.2, and an indicator proposal.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** greps of both logs; the syntax check.
+
+### 2026-11-27 — Session 8 (continued): connection status added to 0.9.2 (not built)
+- **Approved:** Kc: "Yes, build it" (the status indicator proposal).
+- **Changed:**
+  - New class X2TC_CoopStatus: one line in the top right through the
+    game's anchored message manager. Waiting states stay; finished ones
+    fade after 5 s.
+  - X2TC_CoopSession, one call at each stage:
+    - host: "hosting; waiting for your partner", "partner connected;
+      sending the mission", "partner joined", "partner disconnected";
+    - partner: "joining the host", "connecting (attempt N of 6)",
+      "connected; receiving the mission", "joined", "disconnected from the
+      host".
+  - Each status is also logged (`Coop status:`).
+- **Not done:** the host's "X of Y" progress. The pacer finishes queuing
+  in under 0.5 s, so the count wouldn't show how much has arrived.
+- **Checks:** syntax check, 0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "Yes, build it"
+  - **Provided:** the indicator above.
+  - **Misreads / rule breaks:** I dropped the "X of Y" progress I had
+    proposed, for the reason above.
+  - **How It Was Verified:** syntax check. In-game: not yet. Guess: the
+    message survives the loading screen; if not, "joined" still shows
+    once the mission opens.

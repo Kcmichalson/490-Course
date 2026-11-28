@@ -20,7 +20,7 @@ class X2DownloadableContentInfo_X2TacticalCoop extends X2DownloadableContentInfo
 
 // The mod's version. Logged at load so two players can check they run the same build
 // (the game's own mods hash doesn't seem to cover file contents).
-const X2TC_VERSION = "0.9.2";
+const X2TC_VERSION = "0.9.6";
 
 static event OnPostTemplatesCreated()
 {

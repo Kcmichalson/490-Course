@@ -1721,3 +1721,25 @@ another version"
 **As built:** new class X2TC_CoopNarrativeSync, plus hooks in
 X2TC_CoopSession (the host's send, the command, the partner's two receive
 paths). No fix switch.
+
+## 0.9.6: skip ahead (approved by Kc, 2026-11-27)
+**Kc:** "Yes, those are all 1.0+ fixes. Implement the catchup plan" (the
+lobby, the crate airlift and the partner's tower-hack reward are after
+1.0).
+1. When the partner's screen is more than 10 s behind and none of its own
+   orders came in the last 10 s, it jumps its replay to the newest frame
+   (`XComReplayMgr.JumpReplayToFrame`, L282-309). The jump syncs unit
+   visuals and the fog, which also fixes stale positions.
+2. A frame where a Chosen first appears, or with a taunt, stops the jump
+   just before it, so those still play.
+3. Switch "Partner screen: skip ahead when far behind", on by default; at
+   most one jump per 20 s; each jump is logged, and the status shows
+   "caught up (skipped N s)". Fast mode is reset after a jump.
+4. **Test:** a Lost or Retaliation mission; `Coop skip-ahead:` lines;
+   units in the right places afterwards; no freeze.
+
+**As built:** new class X2TC_CoopSkipAhead (called from
+X2TC_CoopCatchUp.Update every sample); switch FIX_SKIP_AHEAD (27 in all).
+**Guess:** that JumpReplayToFrame also clears the actions still queued. The
+log line after each jump shows the oldest playing frame, which checks it.
+

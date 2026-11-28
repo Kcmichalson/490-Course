@@ -135,6 +135,7 @@ function BuildOrder()
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_WHEEL);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_STEP_ALL);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CATCH_UP);
+	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_SKIP_AHEAD);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_PARTNER_PAUSE);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_CAMERA);
 	Order.AddItem(class'X2TC_CoopFixes'.const.FIX_WATCHER_CAMERA);

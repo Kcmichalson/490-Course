@@ -52,7 +52,8 @@ const FIX_WATCHER_CAMERA = 22; // follow camera by the watcher (no override)
 const FIX_INVITE_DIRECT = 23; // a co-op Steam invite joins without CO-OP, JOIN (STEAM) first
 const FIX_TARGET_REFRESH = 24; // the partner rebuilds its targets once caught up
 const FIX_CATCH_UP = 25;      // the game's fast mode on the partner while it's behind
-const FIX_COUNT = 26;
+const FIX_SKIP_AHEAD = 26;     // 0.9.6: the partner jumps to the newest frame when far behind
+const FIX_COUNT = 27;
 
 // The Verbose log switch at launch (true: playtest builds; false: 1.0).
 const VERBOSE_DEFAULT = true;
@@ -84,6 +85,7 @@ var config bool bSkulljackOff;
 var config bool bFogRevealOff;
 var config bool bWatcherCameraOff;
 var config bool bInviteDirectOff;
+var config bool bSkipAheadOff;
 var config bool bTargetRefreshOff;
 var config bool bCatchUpOff;
 var config bool bCameraOverrideRan; // diagnostics: X2TC_Action_CameraFollowUnit has run this launch
@@ -153,6 +155,7 @@ static function bool GetSwitch(int Fix)
 		case FIX_INVITE_DIRECT:  return !default.bInviteDirectOff;
 		case FIX_TARGET_REFRESH: return !default.bTargetRefreshOff;
 		case FIX_CATCH_UP:       return !default.bCatchUpOff;
+		case FIX_SKIP_AHEAD:     return !default.bSkipAheadOff;
 	}
 	return false;
 }
@@ -187,6 +190,7 @@ static function SetSwitch(int Fix, bool bOn)
 		case FIX_INVITE_DIRECT:  default.bInviteDirectOff = !bOn; break;
 		case FIX_TARGET_REFRESH: default.bTargetRefreshOff = !bOn; break;
 		case FIX_CATCH_UP:       default.bCatchUpOff = !bOn; break;
+		case FIX_SKIP_AHEAD:     default.bSkipAheadOff = !bOn; break;
 		default: return;
 	}
 	`log("Coop fixes: " $ FixName(Fix) @ "switched" @ (bOn ? "ON" : "OFF") $ ";" @ StateText(), , 'X2TC');
@@ -229,6 +233,7 @@ static function string FixName(int Fix)
 		case FIX_INVITE_DIRECT:  return "Steam: a co-op invite joins directly";
 		case FIX_TARGET_REFRESH: return "Partner: refresh targets once caught up";
 		case FIX_CATCH_UP:       return "Partner screen: fast mode while behind";
+		case FIX_SKIP_AHEAD:     return "Partner screen: skip ahead when far behind";
 	}
 	return "unknown fix" @ Fix;
 }
@@ -277,6 +282,7 @@ static function string ShortName(int Fix)
 		case FIX_INVITE_DIRECT:  return "invite direct";
 		case FIX_TARGET_REFRESH: return "target refresh";
 		case FIX_CATCH_UP:       return "catch up";
+		case FIX_SKIP_AHEAD:     return "skip ahead";
 	}
 	return "fix" $ Fix;
 }

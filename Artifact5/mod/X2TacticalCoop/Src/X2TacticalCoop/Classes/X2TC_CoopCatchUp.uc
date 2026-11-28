@@ -43,6 +43,7 @@ var config int ZipTimesOn;      // this launch, for the log
 // From X2TC_CoopLagLog.Sample (partner, about twice a second). BehindMs < 0: unknown.
 static function Update(int BehindMs, string OldestAction)
 {
+	class'X2TC_CoopSkipAhead'.static.Maybe(BehindMs); // 0.9.6
 	if (!class'X2TC_CoopFixes'.static.IsOn(class'X2TC_CoopFixes'.const.FIX_CATCH_UP))
 	{
 		Restore("switch off");

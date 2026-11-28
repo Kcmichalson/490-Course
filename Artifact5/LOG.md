@@ -6555,3 +6555,143 @@ followed until the partner joined.
   - **How It Was Verified:** syntax check. In-game: not yet. Guess: the
     message survives the loading screen; if not, "joined" still shows
     once the mission opens.
+
+### 2026-11-27 — Session 8 (continued): 0.9.2 run; 0.9.3 written (not built)
+- **Kc:** the friend joined from the menu and sat unresponsive for 60 s,
+  then clicked CANCEL. The next join did nothing. After Kc hosted another
+  save, the friend got "Joining the host's Steam session failed to start".
+  No status showed on either screen. Logs: m4-092-[pc|friend]-1.log.
+  Build ID 8270065.
+- **Test results:**
+  - **Status:** every `Coop status:` line was logged, but nothing showed on
+    screen. The anchored messenger doesn't show there.
+  - **Pacer:** it held 798 bunches, then fed all of them within 0.3 s. The
+    game marks queued bunches as handled at once, so the state check never
+    paced anything. 0.9.1's join working was luck. **Finding:** the queue
+    total isn't a fixed limit (1427 arrived in 0.9.1; 1398 didn't here).
+  - **Stuck join:** the armed JOIN (STEAM) path had no stale-join reset;
+    the old Steam session stayed, so JoinOnlineGame refused.
+- **Changed (0.9.3):**
+  - The pacer feeds 50 bunches per 0.2 s tick (~150 KB/s), by time.
+  - `ClearOldSteamGame`, called before every Steam join.
+  - X2TC_CoopStatus now draws its own text, top right, on the current
+    screen.
+  - Version 0.9.3.
+- **Checks:** syntax check, 0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "Reply very briefly, Does this iteration still need me to
+    test hacking something with the partner's specialist?"
+  - **Provided:** yes; the partner's own hack was never fixed, and the
+    soft-lock fix is untested.
+  - **Prompt:** [screenshot of the "failed to start" message, the 0.9.2
+    run notes, the logs]
+  - **Provided:** the findings and 0.9.3.
+  - **Misreads / rule breaks:** I called 0.9.1's pacing a confirmed fix
+    when the log didn't support it.
+  - **How It Was Verified:** greps of both logs; the syntax check.
+
+### 2026-11-27 — Session 8 (continued): 0.9.3 run; 0.9.4 (status text style)
+- **Kc:** the friend's game crashed a few seconds after joining. The friend
+  saw a warning that a destructible actor wasn't where it should be. Kc had
+  destroyed a sub-relay the turn before (a mission with a turn timer). Logs:
+  m4-093-[pc|friend]-1.log. Build ID 8270065.
+- **Test results:**
+  - **Timed pacing works:** 1461 held bunches (1561 in all, more than any
+    join that failed) were queued over 5.9 s, and the friend loaded and
+    followed. **Finding:** pacing fixed the big join.
+  - **The warning** is a stock redscreen at map load (`VEH_Semi_5x2_On_149`
+    "location (pivot) that does not match up with tile occupancy"), 50 s
+    before the crash. It's a map-art warning. Guess: unrelated.
+  - **Crash:** 15 s after the friend's input came on, while only moving the
+    cursor. Nothing had arrived from the host in that time (by the clock
+    offset, the host's next update came about 20 s after the crash). No
+    assert text in the log.
+  - **Lead (guess):** right after loading, the friend's own game created 2
+    Kismet game states locally ("captured a non-ability context, not sent:
+    XComGameStateContext_Kismet"). Only the two runs that crashed (0.9.1 and
+    0.9.3) have these lines; 0.8.8, 0.9.0 and 0.9.2 don't. In 0.9.1 the
+    crash came 200 s later, so the link is weak. The objective/timer
+    mission's script running on the partner fits Kc's idea.
+- **Changed (0.9.4):** the status text is white, font size 40 (was the
+  default size, green), up to 900 px wide. Version 0.9.4. Syntax check:
+  0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "Game crashed a few seconds after he joined. [...] Please
+    look at the logs. [...] make the log more visible [...] white and 3-4
+    times larger please."
+  - **Provided:** the findings above and 0.9.4; no crash fix (the cause
+    isn't shown).
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** greps of both logs; the clock offset from the
+    host's "connection accepted" and the friend's "connected"; the syntax
+    check.
+
+### 2026-11-27 — Session 8 (continued): 0.9.3 missions run; 0.9.5 (order guard)
+- **Kc's report** (0.9.3, several missions; logs m4-093-[pc|friend]-2.log;
+  build ID 8270065):
+  - **Chosen fixes work:** the cutscene plays, and the taunts play on the
+    partner.
+  - **Partner hacked a spotting tower:** Kc couldn't interact; the CANCEL
+    button was a bit in the way; the reward didn't seem to apply even on a
+    success.
+  - **Relay mission:** destroying the sub-objectives caused no crash.
+  - **"The Horde" Lost mission with the Chosen Hunter:** 15+ Lost at once,
+    about 90 killed. The partner fell so far behind that they gave Kc their
+    soldiers. Kc: an exception; a disclaimer is fine.
+  - **Crate-grab missions:** the ADVENT crate airlift still plays from the
+    wrong place, and the old crate stays.
+  - **Double moves** are still the biggest problem. Right-click to cancel
+    sometimes moved the soldier after a lag spike. Actions feel queued:
+    sometimes on a target that's gone, sometimes passed to another soldier.
+  - **Stale positions:** Kc's soldiers sometimes stand where they were
+    turns ago on the partner's screen, so an enemy melees a target the
+    partner sees as far away.
+  - **Friend:** asks again for a lobby that joins automatically when the
+    host invites (the host always invites first).
+- **Test results:**
+  - **Order guard:** the 3 s check blocked 16 repeats, but one got through
+    4.2 s later (moves 29/30, unit 441, 14 tiles). **Finding:** the repeats
+    come late under lag, so a time window can't catch them.
+  - **Lag:** in 640 updates, the partner was up to 56 s behind, and over
+    10 s behind in 138 of them. Fast mode switched on 153 times. Late
+    updates reached 4226 bunches (~2.5 MB), which takes ~17 s at the paced
+    rate.
+- **Changed (0.9.5):** `GuestOrderPending`: the partner doesn't send a
+  move or ability while its last order has no result yet (no new frame),
+  for up to 15 s. Dropped orders are logged, and the status shows "waiting
+  for the host to play your last order". Version 0.9.5. Syntax check:
+  0 problems. Not built.
+- **Not done (to plan):** catching up when far behind; stale positions;
+  the crate airlift; the partner's hack reward; the lobby.
+- **Session 8 prompt log:**
+  - **Prompt:** [Kc's notes from the 0.9.3 missions, as above]
+  - **Provided:** the findings, 0.9.5, and the plan proposals.
+  - **Misreads / rule breaks:** none.
+  - **How It Was Verified:** greps of m4-093-*-2 logs; the syntax check.
+  - **Prompt:** "Go for it, assuming this includes the status text fix as
+    well."
+  - **Provided:** yes, 0.9.5 includes 0.9.4's status text (each version
+    builds on the last). The catch-up plan was proposed in chat, using
+    `XComReplayMgr.JumpReplayToFrame` (XComReplayMgr.uc L282-309: sets the
+    history index, `OnJumpForwardInHistory`, rebuilds the frame, re-blocks
+    unit tiles, updates the fog). Waiting for Kc's approval; no code.
+  - **How It Was Verified:** read the SDK lines above.
+
+### 2026-11-27 — Session 8 (continued): 0.9.6 skip ahead written (not built)
+- **Planned:** plans/m4-plan.md, "0.9.6: skip ahead".
+- **Changed:**
+  - New class X2TC_CoopSkipAhead.
+  - X2TC_CoopFixes: switch FIX_SKIP_AHEAD, 27 switches in all.
+  - X2TC_CoopFixesScreen: the switch listed after "fast mode while behind".
+  - X2TC_CoopCatchUp.Update calls it.
+  - Version 0.9.6.
+- **Checks:** syntax check, 4 files, 0 problems. Not built.
+- **Session 8 prompt log:**
+  - **Prompt:** "Yes, those are all 1.0+ fixes. Implement the catchup plan"
+  - **Provided:** the code above.
+  - **Misreads / rule breaks:** my first edit script assumed a line comment
+    that Session 9's cleanup had removed. The assert stopped it, but one
+    file (X2TC_CoopFixes.uc) had already been written. I applied the rest
+    in a second run; nothing was written twice.
+  - **How It Was Verified:** syntax check; grep of the helpers used
+    (RoleName, OldestPlayingFrame, LastOwnActionTime). In-game: not yet.

@@ -15,7 +15,8 @@
 
 class X2TC_CoopPacer extends Object dependson(XComGameStateNetworkManager);
 
-const WINDOW = 600; // at most this many unsent bunches in the game's queue
+const WINDOW = 100;        // bunches left in the game's queue at a send
+const FEED_PER_TICK = 50;  // 0.9.3: bunches fed per fast-send tick (0.2 s), ~150 KB/s
 
 var array<XComGameStateNetworkManager.PendingGameData> Held;
 var int HeldTotal;       // bunches held since the queue was last empty here
@@ -32,7 +33,7 @@ function HoldAfterSend(XComGameStateNetworkManager NetworkMgr, int FirstNew)
 	{
 		return;
 	}
-	KeepUntil = (Held.Length > 0) ? FirstNew : FirstNew + Max(0, WINDOW - CountBefore(NetworkMgr, FirstNew));
+	KeepUntil = (Held.Length > 0) ? FirstNew : FirstNew + WINDOW;
 	if (KeepUntil >= NetworkMgr.OutGameData.Length)
 	{
 		return;
@@ -75,8 +76,10 @@ function Feed(XComGameStateNetworkManager NetworkMgr)
 	{
 		return;
 	}
-	Unsent = CountBefore(NetworkMgr, NetworkMgr.OutGameData.Length);
-	while (Unsent < WINDOW && Held.Length > 0)
+	// 0.9.3: by time, not by state. The game marks queued bunches as handled at once
+	// (0.9.2 run: 600 fed right after the hold), so the state can't pace.
+	Unsent = 0;
+	while (Unsent < FEED_PER_TICK && Held.Length > 0)
 	{
 		NetworkMgr.OutGameData.AddItem(Held[0]);
 		Held.Remove(0, 1);

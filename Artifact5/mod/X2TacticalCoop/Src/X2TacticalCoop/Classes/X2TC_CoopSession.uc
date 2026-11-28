@@ -232,7 +232,8 @@ var int PendingMoveSecond;     // host: Seconds when it arrived
 var int MovesReceived;         // host
 var int MovesSent;             // guest
 var int LastGuestMoveUnitID;   // guest: the unit of the last move sent
-var TTile LastGuestMoveDest;   // 0.8.8, guest: that move's last tile
+var TTile LastGuestMoveDest;
+var int LastOwnActionFrames;   // 0.9.4, guest: history frames when its last order was sent   // 0.8.8, guest: that move's last tile
 
 // Guest abilities.
 var bool bAbilityPending;      // host: a guest ability waiting to be applied
@@ -769,11 +770,7 @@ function bool JoinFromInvite(const out OnlineGameSearchResult InviteResult, bool
 	if (bSteamJoinStarted && !IsActive() && class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - SteamJoinStartTime > 5.0)
 	{
 		`log("Coop steam guest: the earlier join never connected; replacing it with the new invite", , 'X2TC');
-		GetOnlineSub().GameInterface.ClearJoinOnlineGameCompleteDelegate(OnSteamJoinComplete);
-		if (GetOnlineSub().GameInterface.GetGameSettings('Game') != none)
-		{
-			GetOnlineSub().GameInterface.DestroyOnlineGame('Game');
-		}
+		ClearOldSteamGame("replaced by a new invite");
 		ResetSession();
 	}
 	if (IsActive() || bSteamJoinStarted)
@@ -791,6 +788,18 @@ function bool JoinFromInvite(const out OnlineGameSearchResult InviteResult, bool
 	return true;
 }
 
+// 0.9.3, guest: forget an earlier Steam join and leave its 'Game' session, if any.
+function ClearOldSteamGame(string Why)
+{
+	GetOnlineSub().GameInterface.ClearJoinOnlineGameCompleteDelegate(OnSteamJoinComplete);
+	bSteamJoinStarted = false;
+	if (GetOnlineSub().GameInterface.GetGameSettings('Game') != none)
+	{
+		`log("Coop steam guest: leaving the old Steam game session (" $ Why $ ")", , 'X2TC');
+		GetOnlineSub().GameInterface.DestroyOnlineGame('Game');
+	}
+}
+
 // Guest: called by X2TC_InviteListener when an invite is accepted while armed.
 // Joins the host's Steam session (JoinOnlineGame, as an accepted invite does,
 // XComPlayerController.uc L219-282); OnSteamJoinComplete connects.
@@ -800,6 +809,12 @@ function OnSteamInviteAccepted(const out OnlineGameSearchResult InviteResult, bo
 
 	bSteamInviteArmed = false;
 	RestoreStockInviteHandlerLater();
+	// 0.9.3: JOIN (STEAM) after a cancelled or stuck join (0.9.2 run: "JoinOnlineGame
+	// refused to start"): drop the old join and Steam game session first.
+	if (!IsActive())
+	{
+		ClearOldSteamGame("before a new join");
+	}
 	`log("Coop steam guest: invite accepted, success=" $ bWasSuccessful @ "has game settings=" $ (InviteResult.GameSettings != none), , 'X2TC');
 	if (!bWasSuccessful || InviteResult.GameSettings == none)
 	{
@@ -3352,6 +3367,25 @@ function LogHitch()
 	LastPollRealTime = Now;
 }
 
+// 0.9.4, guest: true while its last order (move or ability) has no result from the host
+// yet (no new frame since it was sent), for up to 15 s. A click in that time was the
+// double move (0.9.3 run: a repeat 4.2 s later got past the 3 s check) or a queued
+// action on a target that's gone; it's dropped, not sent.
+function bool GuestOrderPending(string What, int UnitID)
+{
+	if (LastOwnActionTime <= 0 || class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds - LastOwnActionTime > 15.0)
+	{
+		return false;
+	}
+	if (`XCOMHISTORY.GetNumGameStates() > LastOwnActionFrames)
+	{
+		return false;
+	}
+	`log("Coop guest:" @ What @ "for unit" @ UnitID @ "not sent: the last order (unit" @ LastOwnActionUnitID $ ") has no result yet", , 'X2TC');
+	class'X2TC_CoopStatus'.static.Show("waiting for the host to play your last order", true);
+	return true;
+}
+
 // Guest: send a captured move (unit and path tiles) to the host.
 function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
 {
@@ -3363,6 +3397,10 @@ function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
 	// and tile count under 1 s apart) made the soldier snap back and move again with its
 	// second action. A repeat to the same last tile within 3 s is dropped.
 	Now = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	if (GuestOrderPending("move", UnitID))
+	{
+		return;
+	}
 	if (Tiles.Length > 0 && UnitID == LastGuestMoveUnitID && Now - LastOwnActionTime < 3.0
 		&& Tiles[Tiles.Length - 1] == LastGuestMoveDest)
 	{
@@ -3386,6 +3424,7 @@ function SendGuestMove(int UnitID, array<TTile> Tiles, int FramesNow)
 	ClearReadySent();
 	LastOwnActionUnitID = UnitID;
 	LastOwnActionTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	LastOwnActionFrames = FramesNow;
 	MovesSent++;
 	LastGuestMoveUnitID = UnitID;
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: captured move" @ MovesSent @ "(unit" @ UnitID $ "," @ Tiles.Length @ "tiles), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
@@ -3742,6 +3781,10 @@ function SendGuestAbility(XComGameStateContext_Ability AbilityContext, int Frame
 	local int i;
 	local vector Loc;
 
+	if (GuestOrderPending(string(AbilityContext.InputContext.AbilityTemplateName), AbilityContext.InputContext.SourceObject.ObjectID))
+	{
+		return;
+	}
 	class'XComGameStateNetworkManager'.static.AddCommandParam_String(string(AbilityContext.InputContext.AbilityTemplateName), Params);
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(AbilityContext.InputContext.SourceObject.ObjectID, Params);
 	class'XComGameStateNetworkManager'.static.AddCommandParam_Int(AbilityContext.InputContext.PrimaryTarget.ObjectID, Params);
@@ -3757,6 +3800,7 @@ function SendGuestAbility(XComGameStateContext_Ability AbilityContext, int Frame
 	ClearReadySent();
 	LastOwnActionUnitID = AbilityContext.InputContext.SourceObject.ObjectID;
 	LastOwnActionTime = class'WorldInfo'.static.GetWorldInfo().RealTimeSeconds;
+	LastOwnActionFrames = FramesNow;
 	AbilitiesSent++;
 	if (class'X2TC_CoopFixes'.static.Verbose()) `log("Coop guest: captured ability" @ AbilitiesSent @ AbilityContext.InputContext.AbilityTemplateName @ "(unit" @ AbilityContext.InputContext.SourceObject.ObjectID $ ", target" @ AbilityContext.InputContext.PrimaryTarget.ObjectID $ "," @ AbilityContext.InputContext.TargetLocations.Length @ "locations), sent; not applied locally (frames=" $ FramesNow $ ")", , 'X2TC');
 }
